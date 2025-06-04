@@ -1,0 +1,8 @@
+  GNU nano 8.0                       .gitignore
+
+
+pysnirf2
+.snakemake
+__pycasche__
+*.pyc
+pysnirf2.log
