@@ -1,0 +1,61 @@
+# Snakefile
+
+configfile: "config/config.yaml"
+
+
+rule all:
+    input:
+        expand([
+            "{root_dir}/derivatives/{derivatives_subfolder}/preprocessed_data/sub-{subject}/"  # preprocessed_dataessed snirf
+            "sub-{subject}_task-{task}_run-{run}_nirs_preprocessed.snirf",
+             
+             "{root_dir}/derivatives/{derivatives_subfolder}/plots/DQR/"  # DQR plots 
+             "sub-{subject}_task-{task}_run-{run}_nirs_DQR.png",
+             
+             "{root_dir}/derivatives/{derivatives_subfolder}/plots/DQR/gvtd/"   # gvtd DQR plots
+             "sub-{subject}_task-{task}_run-{run}_nirs_DQR_gvtd_hist.png",
+             
+             "{root_dir}/derivatives/{derivatives_subfolder}/plots/DQR/slope/"   # slope DQR plots
+             "sub-{subject}_task-{task}_run-{run}_nirs_slope.png",
+             
+            ],
+            root_dir = config["dataset"]["root_dir"],
+            derivatives_subfolder = config["dataset"]["derivatives_subfolder"],
+            subject = config["dataset"]["subject"],
+            task = config["dataset"]["task"],
+            run = config["dataset"]["run"]
+            )
+        
+        
+
+
+rule preprocess:
+    input:
+        # Two input files for each subject/task (note the commas!)
+        "{root_dir}/sub-{subject}/nirs/sub-{subject}_task-{task}_run-{run}_nirs.snirf",
+        "{root_dir}/sub-{subject}/nirs/sub-{subject}_task-{task}_run-{run}_events.tsv"
+    output:
+        "{root_dir}/derivatives/{derivatives_subfolder}/preprocessed_data/sub-{subject}/"
+        "sub-{subject}_task-{task}_run-{run}_nirs_preprocessed.snirf",
+        
+        "{root_dir}/derivatives/{derivatives_subfolder}/plots/DQR/"  # DQR plots 
+        "sub-{subject}_task-{task}_run-{run}_nirs_DQR.png",
+        
+        "{root_dir}/derivatives/{derivatives_subfolder}/plots/DQR/gvtd/"   # gvtd DQR plots
+        "sub-{subject}_task-{task}_run-{run}_nirs_DQR_gvtd_hist.png",
+        
+        "{root_dir}/derivatives/{derivatives_subfolder}/plots/DQR/slope/"   # slope DQR plots
+        "sub-{subject}_task-{task}_run-{run}_nirs_slope.png",
+
+    script:
+        "scripts/preprocess.py"
+
+
+
+#rule test:
+#  input: "a.in"
+#  output: "a.out"
+#  params:
+#    foo=config["preprocess"]["steps"]["prune"]["amp_threshs"] 
+#  script: "scripts/test.py"
+  
