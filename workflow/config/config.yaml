@@ -36,6 +36,12 @@ preprocess:
   int2od:
    enable: true
 
+  calc_slope_b4:   # calc slope before correction applied to od
+   enable: true
+
+  calc_gvtd_b4:    # calc gvtd before correction applied to od
+   enable: true
+
   imu_glm:
    enable: false
    statesPerDataFrame: 89   # FOR WALKING DATA
@@ -47,6 +53,12 @@ preprocess:
    plot_flag_imu: true
 
   tddr:
+   enable: true
+
+  calc_slope_after:
+   enable: true
+
+  calc_gvtd_after :
    enable: true
 
   freq_filter:
@@ -69,11 +81,4 @@ preprocess:
 
   plot_dqr:
    enable: true
-
-  
-
-   
-
- 
-
 
