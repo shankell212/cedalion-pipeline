@@ -93,8 +93,6 @@ events_path = snakemake.input[1]
 #     os.makedirs(der_dir)
 
 
-#"{root_dir}/derivatives/{deriv_subfolder}/preprocessed_data/sub-{subject}/sub-{subject}_task-{task}_run-{run}_nirs_preprocessed_data.snirf"
-
 
 records = cedalion.io.read_snirf( snirf_path ) 
 rec = records[0]
@@ -126,10 +124,8 @@ for step_name, params in config["preprocess"]["steps"].items():
     
     elif step_name == "prune":
         # change from str to pint object
-        #cfg_preprocess["steps"]["prune"]["sd_thresh"] = units(cfg_preprocess["steps"]["prune"]["sd_thresh"])
         cfg_preprocess["steps"]["prune"]["sd_thresh"] = [units(x) for x in cfg_preprocess["steps"]["prune"]["sd_thresh"]]
         cfg_preprocess["steps"]["prune"]["window_length"] = units(cfg_preprocess["steps"]["prune"]["window_length"])
-        
         cfg_preprocess["steps"]["prune"]["amp_thresh"] = [float(x) if isinstance(x,str) else x for x in cfg_preprocess["steps"]["prune"]["amp_thresh"]]
         
         rec = preproc.pruneChannels( rec, params)
@@ -144,14 +140,19 @@ for step_name, params in config["preprocess"]["steps"].items():
             rec["od"] = cedalion.nirs.int2od(rec['amp_pruned'])                
         else:
             rec["od"] = cedalion.nirs.int2od(rec['amp'])
-            del rec.timeseries['amp_pruned']   # delete pruned amp from time series
+            #del rec.timeseries['amp_pruned']   # delete pruned amp from time series
         
-        # Get the slope of 'od' before motion correction and any bandpass filtering # !!! make exra step for if we calc!
+        rec["od_corrected"] = rec["od"]
+    
+        
+    elif step_name in ("calc_slope_b4", "calc_slope_before", "slope_b4", "slope_before"):
+        # Get the slope of 'od' before motion correction and any bandpass filtering 
         slope_base = preproc.quant_slope(rec, "od", True)
-            
+        
+    elif step_name in ("calc_gvtd_b4", "calc_gvtd_before", "gvtd_b4", "gvtd_before"):
         # Calculate GVTD on pruned data
-        amp_masked = preproc.prune_mask_ts(rec['amp'], pruned_chans)  # use chs_pruned to get gvtd w/out pruned data (could also zscore in gvtd func)
-        rec.aux_ts["gvtd"], _ = quality.gvtd(amp_masked) 
+        #amp_masked = preproc.prune_mask_ts(rec['amp'], pruned_chans)  # use chs_pruned to get gvtd w/out pruned data (could also zscore in gvtd func)
+        rec.aux_ts["gvtd"], _ = quality.gvtd(rec['amp_pruned']) 
         rec.aux_ts["gvtd"].name = "gvtd"
     
     # Walking filter 
@@ -163,10 +164,8 @@ for step_name, params in config["preprocess"]["steps"].items():
     #%% MOTION CORRECTION: 
     # tddr
     elif step_name in ("tddr", "motion_correct_tddr"):
-        if 'od_corrected' in rec.timeseries.keys():
-            rec['od_corrected'] = motion_correct.tddr( rec['od_corrected'] )  
-        else:   # do tddr on uncorrected od
-            rec['od_corrected'] = motion_correct.tddr( rec['od'] )  
+        rec['od_corrected'] = motion_correct.tddr( rec['od_corrected'] )  
+
         slope_corrected = preproc.quant_slope(rec, "od_corrected", False)  # Get slopes after correction before bandpass filtering
         rec['od_corrected'] = rec['od_corrected'].where( ~rec['od_corrected'].isnull(), 0)  #1e-18 )  # replace any NaNs after TDDR
         
@@ -180,69 +179,52 @@ for step_name, params in config["preprocess"]["steps"].items():
     
     # splineSG
     elif step_name in ("splineSG", "motion_correct_splineSG"):
-        if 'od_corrected' in rec.timeseries.keys():
-            rec['od_corrected'] = motion_correct.motion_correct_splineSG( rec['od_corrected'], params['p'], params['frame_size'] )  
-        else:   # do tddr on uncorrected od
-            rec['od_corrected'] = motion_correct.motion_correct_splineSG( rec['od'], params['p'], params['frame_size'] )  
-        slope_corrected = preproc.quant_slope(rec, "od_corrected", False)  # Get slopes after correction before bandpass filtering
+        rec['od_corrected'] = motion_correct.motion_correct_splineSG( rec['od_corrected'], params['p'], params['frame_size'] )  
+ 
     
     # !!! add PCA
     # elif step_name in ("PCA", "motion_correct_PCA"):
     
     # pca recurse
     elif step_name in ("PCA_recurse", "motion_correct_PCA_recurse"):
-        if 'od_corrected' in rec.timeseries.keys():
-            rec['od_corrected'] = motion_correct.motion_correct_PCA_recurse( rec['od_corrected'], params['t_motion'], 
+        rec['od_corrected'] = motion_correct.motion_correct_PCA_recurse( rec['od_corrected'], params['t_motion'], 
                                                                                params['t_mask'],  params['stdev_thresh'], params['amp_thresh'],
                                                                                params['nSV'], params['maxIter'])  
-        else:   # do tddr on uncorrected od
-            rec['od_corrected'] = motion_correct.motion_correct_PCA_recurse( rec['od'], params['t_motion'], 
-                                                                               params['t_mask'],  params['stdev_thresh'], params['amp_thresh'],
-                                                                               params['nSV'], params['maxIter'])   
-        slope_corrected = preproc.quant_slope(rec, "od_corrected", False)  # Get slopes after correction before bandpass filtering
     
     
     # wavelet
     elif step_name in ("wavelet", "motion_correct_wavelet"):
-        if 'od_corrected' in rec.timeseries.keys():
-            rec['od_corrected'] = motion_correct.motion_correct_PCA_recurse( rec['od_corrected'], params['iqr'], 
+        rec['od_corrected'] = motion_correct.motion_correct_PCA_recurse( rec['od_corrected'], params['iqr'], 
                                                                                params['wavelet'], params['level'])
-        else:   # do tddr on uncorrected od
-            rec['od_corrected'] = motion_correct.motion_correct_PCA_recurse( rec['od'], params['iqr'], 
-                                                                               params['wavelet'], params['level'])
-        slope_corrected = preproc.quant_slope(rec, "od_corrected", False)  # Get slopes after correction before bandpass filtering
+    
+    
     
     # # if processing step given that does not match or exist  # !!! need to find better way to check for this 
     # else:
     #     # If you get here, that means this step is “enabled” but unrecognized.   # !!! this is only checking the names above
     #     raise ValueError(f"Unknown preprocessing step: {step_name}")
     
-    # put od in od_corrected if no correction was done  # !!! put od_corrected = od where we calc od first, gets rid of if statments 
-    if "od" in rec.timeseries and "od_corrected" not in rec.timeseries:
-        rec["od_corrected"] = rec["od"]
-        slope_corrected = preproc.quant_slope(rec, "od_corrected", True)
-        
-        # GVTD for Corrected od before bandpass filtering  # !!! make a step instead
+    
+
+    # slope for Corrected OD before bandpass filtering  
+    elif step_name in ("calc_slope_af", "calc_slope_after", "slope_after", "slope_af"):
+        slope_corrected = preproc.quant_slope(rec, "od_corrected", False)  # Get slopes after correction before bandpass filtering
+    
+    # GVTD for Corrected OD before bandpass filtering  
+    elif step_name in ("calc_gvtd_af", "calc_gvtd_after", "gvtd_after", "gvtd_af"):
         amp_corrected = rec['od_corrected'].copy()  
         amp_corrected.values = np.exp(-amp_corrected.values)
         amp_corrected_masked = preproc.prune_mask_ts(amp_corrected, pruned_chans)  # get "pruned" amp data post tddr
         rec.aux_ts['gvtd_corrected'], _ = quality.gvtd(amp_corrected_masked)  
         rec.aux_ts['gvtd_corrected'].name = 'gvtd_corrected'
-        
     
     #%%
     
     # Bandpass filter od_tddr
-    if step_name == "freq_filter":
+    elif step_name == "freq_filter":
         # change from str to pint object
         cfg_preprocess["steps"]["freq_filter"]["fmin"] = units(cfg_preprocess["steps"]["freq_filter"]["fmin"])
         cfg_preprocess["steps"]["freq_filter"]["fmax"] = units(cfg_preprocess["steps"]["freq_filter"]["fmax"])
-        
-        # GVTD for Corrected od before bandpass filtering
-        amp_corrected = rec['od_corrected'].copy()  
-        amp_corrected.values = np.exp(-amp_corrected.values)
-        amp_corrected_masked = preproc.prune_mask_ts(amp_corrected, pruned_chans)  # get "pruned" amp data post tddr
-        rec.aux_ts['gvtd_corrected'], _ = quality.gvtd(amp_corrected_masked)    
         
         rec['od_corrected'] = cedalion.sigproc.frequency.freq_filter(rec['od_corrected'], 
                                                                         params['fmin'], 
@@ -277,10 +259,10 @@ for step_name, params in config["preprocess"]["steps"].items():
     
     # Plot DQR
     elif step_name in ("DQR_plot", "plot_DQR", "plot_dqr", "dqr_plot"):
-        lambda0 = amp_masked.wavelength[0].wavelength.values
-        lambda1 = amp_masked.wavelength[1].wavelength.values
-        snr0, _ = quality.snr(amp_masked.sel(wavelength=lambda0), cfg_preprocess['steps']["prune"]['snr_thresh'])
-        snr1, _ = quality.snr(amp_masked.sel(wavelength=lambda1), cfg_preprocess['steps']["prune"]['snr_thresh'])
+        lambda0 = rec['amp_pruned'].wavelength[0].wavelength.values
+        lambda1 = rec['amp_pruned'].wavelength[1].wavelength.values
+        snr0, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda0), cfg_preprocess['steps']["prune"]['snr_thresh'])
+        snr1, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda1), cfg_preprocess['steps']["prune"]['snr_thresh'])
     
         plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, cfg_dataset, config['hrf'] )
         
