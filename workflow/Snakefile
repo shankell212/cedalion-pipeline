@@ -1,4 +1,6 @@
 # Snakefile
+from snakemake.io import glob_wildcards
+
 
 configfile: "config/config.yaml"
 
@@ -28,13 +30,13 @@ rule all:
         
         
 
-
 rule preprocess:
     input:
-        # Two input files for each subject/task (note the commas!)
+        # raw .snirf and events.tsv
         "{root_dir}/sub-{subject}/nirs/sub-{subject}_task-{task}_run-{run}_nirs.snirf",
         "{root_dir}/sub-{subject}/nirs/sub-{subject}_task-{task}_run-{run}_events.tsv"
     output:
+        # preprocessed snirf
         "{root_dir}/derivatives/{derivatives_subfolder}/preprocessed_data/sub-{subject}/"
         "sub-{subject}_task-{task}_run-{run}_nirs_preprocessed.snirf",
         
@@ -51,11 +53,40 @@ rule preprocess:
         "scripts/preprocess.py"
 
 
+def all_preprocessed_runs(wc):
+    ''' Return a list of all preprocessed .snirf files for this subject+task (i.e. all runs)'''
+    # build pattern where {run} is still a wildcard
+    pattern = (
+        f"{wc.root_dir}/{wc.derivatives_subfolder}/preprocessed_data/sub-{wc.subject}/"
+        f"sub-{wc.subject}_task-{wc.task}_run-{{run}}_nirs_preprocessed.snirf"
+    )
+    gw = glob_wildcards(pattern)  
+    full_paths = [pattern.format(run=r) for r in gw.run] # rebuild filepath for each run
+    
+    return full_paths
 
-#rule test:
-#  input: "a.in"
-#  output: "a.out"
-#  params:
-#    foo=config["preprocess"]["steps"]["prune"]["amp_threshs"] 
-#  script: "scripts/test.py"
-  
+
+rule blockaverage:
+    input:
+        preproc_runs = all_preprocessed_runs
+        # preprocessed time series data
+        #"{root_dir}/derivatives/{derivatives_subfolder}/preprocessed_data/sub-{subject}/"
+        #"sub-{subject}_task-{task}_run-{run}_nirs_preprocessed.snirf"
+        #rules.preprocess.output[0]
+        
+        
+    output:
+        # block averaged data containing HRF for each task
+        "{root_dir}/derivatives/{derivatives_subfolder}/blockaverage/sub-{subject}/"
+        "sub-{subject}_task-{task}_run-{run}_nirs_blockaverage.snirf"
+        
+    script:
+        "scripts/blockaverage.py"
+    
+    
+
+
+
+
+
+
