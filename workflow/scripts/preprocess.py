@@ -60,8 +60,6 @@ import yaml
 # !!! change to getting paths here (?)
 # change output to results in snakemake folder?
 
-
-a=1
 config = snakemake.config
 
 # config_path = "C:\\Users\\shank\\Documents\\GitHub\\cedalion-pipeline\\workflow\\config\\config.yaml"
