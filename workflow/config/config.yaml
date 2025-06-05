@@ -1,3 +1,4 @@
+
 dataset:
  root_dir: "D:/fNIRS/DATA/Interactive_Walking_HD"
  derivatives_subfolder: "cedalion"
@@ -5,7 +6,7 @@ dataset:
  task: [ "STS" ]
  run: [ "01" ]
 
-hrf:
+hrf: &CONFIG_HRF
  stim_lst: [ "STS" ]
  t_pre: 2 second
  t_post: 13 second
@@ -78,7 +79,15 @@ preprocess:
    t_delta: "1 second"   # for seq of Gauss basis func; temporal spacing btwn consecutive gaussians
    t_std: "1 second" 
 
-
   plot_dqr:
    enable: true
+
+
+blockaverage:
+ enable: true
+ rec_str: "od_corrected"    # od_corrected or conc
+ trange_hrf_stat: [10, 20]
+ hrf: *CONFIG_HRF
+
+
 
