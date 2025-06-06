@@ -232,13 +232,11 @@ def GLM(rec, rec_str, cfg_GLM, cfg_hrf, pruned_chans):
 
 
 
-def quant_slope(rec, timeseries, dequantify):
-    if dequantify:
-        foo = rec[timeseries].copy()
-        foo = foo.pint.dequantify()
-        slope = foo.polyfit(dim='time', deg=1).sel(degree=1)
-    else:
-        slope = rec[timeseries].polyfit(dim='time', deg=1).sel(degree=1)
+def quant_slope(rec, timeseries):
+    foo = rec[timeseries].copy()
+    foo = foo.pint.dequantify()
+    slope = foo.polyfit(dim='time', deg=1).sel(degree=1)
+
         
     slope = slope.rename({"polyfit_coefficients": "slope"})
     slope = slope.assign_coords(channel = rec[timeseries].channel)

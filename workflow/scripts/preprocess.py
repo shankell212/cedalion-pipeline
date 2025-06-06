@@ -36,10 +36,7 @@ import cedalion.sigproc.frequency as frequency
 import cedalion.sigproc.motion_correct as motion_correct
 import cedalion.xrutils as xrutils
 import cedalion.models.glm as glm
-import cedalion.datasets as datasets
 import xarray as xr
-import matplotlib.pyplot as p
-import cedalion.plots as plots
 import numpy as np
 import pandas as pd
 import pint
@@ -60,222 +57,238 @@ import yaml
 # !!! change to getting paths here (?)
 # change output to results in snakemake folder?
 
-config = snakemake.config
-
-# config_path = "C:\\Users\\shank\\Documents\\GitHub\\cedalion-pipeline\\workflow\\config\\config.yaml"
-
-# with open(config_path, 'r') as file:
-#     config = yaml.safe_load(file)
-
-cfg_dataset = config["dataset"]
-cfg_preprocess = config["preprocess"]
-
-if not cfg_dataset['derivatives_subfolder']:
-    cfg_dataset['derivatives_subfolder'] = ''
-
-
-snirf_path = snakemake.input[0]
-events_path = snakemake.input[1]
-
-
-# snirf_path = f"{cfg_dataset['root_dir']}/sub-{cfg_dataset['subject'][0]}/nirs/sub-{cfg_dataset['subject'][0]}_task-{cfg_dataset['task'][0]}_run-{cfg_dataset['run'][0]}_nirs.snirf"
-# events_path =  f"{cfg_dataset['root_dir']}/sub-{cfg_dataset['subject'][0]}/nirs/sub-{cfg_dataset['subject'][0]}_task-{cfg_dataset['task'][0]}_run-{cfg_dataset['run'][0]}_events.tsv"
-
-
-
-# save_path = f"{cfg_dataset['root_dir']}/derivatives/{cfg_dataset['derivatives_subfolder']}/preprocessed_data/sub-{cfg_dataset['subject'][0]}/"
-# save_file = f"{save_path}sub-{cfg_dataset['subject'][0]}_task-{cfg_dataset['task'][0]}_run-{cfg_dataset['run'][0]}_nirs_preprocessed.snirf"
-
-# der_dir = os.path.join(save_path)
-# if not os.path.exists(der_dir):
-#     os.makedirs(der_dir)
-
-
-
-records = cedalion.io.read_snirf( snirf_path ) 
-rec = records[0]
-
-if not os.path.exists( events_path ):  
-    print( f"Error: File {events_path} does not exist" )
-else:
-    stim_df = pd.read_csv( events_path, sep='\t' )
-    rec.stim = stim_df
+def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out):
     
-
-# get filename for plots
-filename = os.path.basename(snirf_path)
-filnm, _ext = os.path.splitext(filename)
-
-#%% Preprocess
-
-for step_name, params in config["preprocess"]["steps"].items():
-    print(step_name)
-    print(params)
+    if not cfg_dataset['derivatives_subfolder']:
+        cfg_dataset['derivatives_subfolder'] = ''
     
+    records = cedalion.io.read_snirf( snirf_path ) 
+    rec = records[0]
     
-   # If this step is disabled, skip it
-    if not (params.get("enable", False))  and (step_name != "prune"):
-        continue
-   
-    if step_name == "median_filter":
-        rec = preproc.median_filt( rec, params['order'] )
-    
-    elif step_name == "prune":
-        # change from str to pint object
-        cfg_preprocess["steps"]["prune"]["sd_thresh"] = [units(x) for x in cfg_preprocess["steps"]["prune"]["sd_thresh"]]
-        cfg_preprocess["steps"]["prune"]["window_length"] = units(cfg_preprocess["steps"]["prune"]["window_length"])
-        cfg_preprocess["steps"]["prune"]["amp_thresh"] = [float(x) if isinstance(x,str) else x for x in cfg_preprocess["steps"]["prune"]["amp_thresh"]]
+    if not os.path.exists( events_path ):  
+        print( f"Error: File {events_path} does not exist" )
+    else:
+        stim_df = pd.read_csv( events_path, sep='\t' )
+        rec.stim = stim_df
         
-        rec = preproc.pruneChannels( rec, params)
-        chs_pruned = rec.get_mask("chs_pruned")
-        pruned_chans = chs_pruned.where(chs_pruned != 0.58, drop=True).channel.values # get array of channels that were pruned
-
-
-    # Calculate OD 
-    # if flag pruned channels is True, then do rest of preprocessing on pruned amp, if not then do preprocessing on unpruned data
-    elif step_name == "int2od":
-        if cfg_preprocess['steps']['prune']['enable']:
-            rec["od"] = cedalion.nirs.int2od(rec['amp_pruned'])                
-        else:
-            rec["od"] = cedalion.nirs.int2od(rec['amp'])
-            #del rec.timeseries['amp_pruned']   # delete pruned amp from time series
-        
-        rec["od_corrected"] = rec["od"]
     
-        
-    elif step_name in ("calc_slope_b4", "calc_slope_before", "slope_b4", "slope_before"):
-        # Get the slope of 'od' before motion correction and any bandpass filtering 
-        slope_base = preproc.quant_slope(rec, "od", True)
-        
-    elif step_name in ("calc_gvtd_b4", "calc_gvtd_before", "gvtd_b4", "gvtd_before"):
-        # Calculate GVTD on pruned data
-        #amp_masked = preproc.prune_mask_ts(rec['amp'], pruned_chans)  # use chs_pruned to get gvtd w/out pruned data (could also zscore in gvtd func)
-        rec.aux_ts["gvtd"], _ = quality.gvtd(rec['amp_pruned']) 
-        rec.aux_ts["gvtd"].name = "gvtd"
+    # get filename for plots
+    filename = os.path.basename(snirf_path)
+    filnm, _ext = os.path.splitext(filename)
     
-    # Walking filter 
-    elif step_name == 'imu_glm': 
-        #print('Starting imu glm filtering step on walking portion of data.')
-        rec["od_corrected"] = imu_filt.filterWalking(rec, "od", params, filnm, cfg_dataset) 
+    #%% Preprocess
+    
+    for step_name, params in cfg_preprocess["steps"].items():
+        # print(step_name)
+        # print(params)
         
         
-    #%% MOTION CORRECTION: 
-    # tddr
-    elif step_name in ("tddr", "motion_correct_tddr"):
-        rec['od_corrected'] = motion_correct.tddr( rec['od_corrected'] )  
-
-        slope_corrected = preproc.quant_slope(rec, "od_corrected", False)  # Get slopes after correction before bandpass filtering
-        rec['od_corrected'] = rec['od_corrected'].where( ~rec['od_corrected'].isnull(), 0)  #1e-18 )  # replace any NaNs after TDDR
+       # If this step is disabled, skip it
+        if not (params.get("enable", False))  and (step_name != "prune"):
+            continue
+       
+        if step_name == "median_filter":
+            rec = preproc.median_filt( rec, params['order'] )
         
-    # !!! add spline
-    # if step_name in ("spline", "motion_correct_spline"):
-    #     if 'od_corrected' in rec.timeseries.keys():
-    #         rec['od_corrected'] = motion_correct.motion_correct_spline( rec['od_corrected'] )  
-    #     else:   # do tddr on uncorrected od
-    #         rec['od_corrected'] = motion_correct.motion_correct_spline( rec['od'] ) 
+        elif step_name == "prune":
+            # change from str to pint object
+            cfg_preprocess["steps"]["prune"]["sd_thresh"] = [units(x) for x in cfg_preprocess["steps"]["prune"]["sd_thresh"]]
+            cfg_preprocess["steps"]["prune"]["window_length"] = units(cfg_preprocess["steps"]["prune"]["window_length"])
+            cfg_preprocess["steps"]["prune"]["amp_thresh"] = [float(x) if isinstance(x,str) else x for x in cfg_preprocess["steps"]["prune"]["amp_thresh"]]
+            
+            rec = preproc.pruneChannels( rec, params)
+            chs_pruned = rec.get_mask("chs_pruned")
+            pruned_chans = chs_pruned.where(chs_pruned != 0.58, drop=True).channel.values # get array of channels that were pruned
     
-    
-    # splineSG
-    elif step_name in ("splineSG", "motion_correct_splineSG"):
-        rec['od_corrected'] = motion_correct.motion_correct_splineSG( rec['od_corrected'], params['p'], params['frame_size'] )  
- 
-    
-    # !!! add PCA
-    # elif step_name in ("PCA", "motion_correct_PCA"):
-    
-    # pca recurse
-    elif step_name in ("PCA_recurse", "motion_correct_PCA_recurse"):
-        rec['od_corrected'] = motion_correct.motion_correct_PCA_recurse( rec['od_corrected'], params['t_motion'], 
-                                                                               params['t_mask'],  params['stdev_thresh'], params['amp_thresh'],
-                                                                               params['nSV'], params['maxIter'])  
-    
-    
-    # wavelet
-    elif step_name in ("wavelet", "motion_correct_wavelet"):
-        rec['od_corrected'] = motion_correct.motion_correct_PCA_recurse( rec['od_corrected'], params['iqr'], 
-                                                                               params['wavelet'], params['level'])
-    
-    
-    
-    # # if processing step given that does not match or exist  # !!! need to find better way to check for this 
-    # else:
-    #     # If you get here, that means this step is “enabled” but unrecognized.   # !!! this is only checking the names above
-    #     raise ValueError(f"Unknown preprocessing step: {step_name}")
-    
-    
-
-    # slope for Corrected OD before bandpass filtering  
-    elif step_name in ("calc_slope_af", "calc_slope_after", "slope_after", "slope_af"):
-        slope_corrected = preproc.quant_slope(rec, "od_corrected", False)  # Get slopes after correction before bandpass filtering
-    
-    # GVTD for Corrected OD before bandpass filtering  
-    elif step_name in ("calc_gvtd_af", "calc_gvtd_after", "gvtd_after", "gvtd_af"):
-        amp_corrected = rec['od_corrected'].copy()  
-        amp_corrected.values = np.exp(-amp_corrected.values)
-        amp_corrected_masked = preproc.prune_mask_ts(amp_corrected, pruned_chans)  # get "pruned" amp data post tddr
-        rec.aux_ts['gvtd_corrected'], _ = quality.gvtd(amp_corrected_masked)  
-        rec.aux_ts['gvtd_corrected'].name = 'gvtd_corrected'
-    
-    #%%
-    
-    # Bandpass filter od_tddr
-    elif step_name == "freq_filter":
-        # change from str to pint object
-        cfg_preprocess["steps"]["freq_filter"]["fmin"] = units(cfg_preprocess["steps"]["freq_filter"]["fmin"])
-        cfg_preprocess["steps"]["freq_filter"]["fmax"] = units(cfg_preprocess["steps"]["freq_filter"]["fmax"])
         
-        rec['od_corrected'] = cedalion.sigproc.frequency.freq_filter(rec['od_corrected'], 
-                                                                        params['fmin'], 
-                                                                        params['fmax'])  
-    # Convert OD to Conc
-    elif step_name == "od2conc":
+        # Calculate OD 
+        # if flag pruned channels is True, then do rest of preprocessing on pruned amp, if not then do preprocessing on unpruned data
+        elif step_name == "int2od":
+            if cfg_preprocess['steps']['prune']['enable']:
+                rec["od"] = cedalion.nirs.int2od(rec['amp_pruned'])                
+            else:
+                rec["od"] = cedalion.nirs.int2od(rec['amp'])
+                #del rec.timeseries['amp_pruned']   # delete pruned amp from time series
+            
+            rec["od_corrected"] = rec["od"]
+            units_od = rec["od"].pint.units
+        
+         
+        elif step_name in ("calc_slope_b4", "calc_slope_before", "slope_b4", "slope_before"):
+            # Get the slope of 'od' before motion correction and any bandpass filtering 
+            slope_base = preproc.quant_slope(rec, "od")
+            
+        elif step_name in ("calc_gvtd_b4", "calc_gvtd_before", "gvtd_b4", "gvtd_before"):
+            # Calculate GVTD on pruned data
+            #amp_masked = preproc.prune_mask_ts(rec['amp'], pruned_chans)  # use chs_pruned to get gvtd w/out pruned data (could also zscore in gvtd func)
+            rec.aux_ts["gvtd"], _ = quality.gvtd(rec['amp_pruned']) 
+            rec.aux_ts["gvtd"].name = "gvtd"
+        
+        # Walking filter 
+        elif step_name == 'imu_glm': 
+            #print('Starting imu glm filtering step on walking portion of data.')
+            rec["od_corrected"] = imu_filt.filterWalking(rec, "od", params, filnm, cfg_dataset) 
+            
+            
+        #%% MOTION CORRECTION: 
+        # tddr
+        elif step_name in ("tddr", "motion_correct_tddr"):
+            rec['od_corrected'] = motion_correct.tddr( rec['od_corrected'] )  
+    
+            rec['od_corrected'] = rec['od_corrected'].where( ~rec['od_corrected'].isnull(), 0)  #1e-18 )  # replace any NaNs after TDDR
+        
+            
+        # !!! add spline
+        # if step_name in ("spline", "motion_correct_spline"):
+        #     if 'od_corrected' in rec.timeseries.keys():
+        #         rec['od_corrected'] = motion_correct.motion_correct_spline( rec['od_corrected'] )  
+        #     else:   # do tddr on uncorrected od
+        #         rec['od_corrected'] = motion_correct.motion_correct_spline( rec['od'] ) 
+        
+        
+        # splineSG
+        elif step_name in ("splineSG", "motion_correct_splineSG"):
+            rec['od_corrected'] = motion_correct.motion_correct_splineSG( rec['od_corrected'], params['p'], params['frame_size'] )  
      
-        dpf = xr.DataArray(
-            [1, 1],
-            dims="wavelength",
-            coords={"wavelength": rec['amp'].wavelength},
-        )
-        rec['conc'] = cedalion.nirs.od2conc(rec['od_corrected'], rec.geo3d, dpf, spectrum="prahl")
         
-    
-    
-    # GLM filtering step
-    elif step_name == "GLM_filter":
-        # change from str to pint object
-        cfg_preprocess["steps"]["GLM_filter"]["distance_threshold"] = units(cfg_preprocess["steps"]["GLM_filter"]["distance_threshold"])
-        cfg_preprocess["steps"]["GLM_filter"]["t_delta"] = units(cfg_preprocess["steps"]["GLM_filter"]["t_delta"])
-        cfg_preprocess["steps"]["GLM_filter"]["t_std"] = units(cfg_preprocess["steps"]["GLM_filter"]["t_std"])
-        config['hrf']['t_pre'] = units(config['hrf']['t_pre'])
-        config['hrf']['t_post'] = units(config['hrf']['t_post'])
+        # !!! add PCA
+        # elif step_name in ("PCA", "motion_correct_PCA"):
         
-        rec = preproc.GLM(rec, 'conc', params, config['hrf'], pruned_chans) # passing in pruned channels
+        # pca recurse
+        elif step_name in ("PCA_recurse", "motion_correct_PCA_recurse"):
+            rec['od_corrected'] = motion_correct.motion_correct_PCA_recurse( rec['od_corrected'], params['t_motion'], 
+                                                                                   params['t_mask'],  params['stdev_thresh'], params['amp_thresh'],
+                                                                                   params['nSV'], params['maxIter'])  
         
-        rec['od_corrected'] = cedalion.nirs.conc2od(rec['conc'], rec.geo3d, dpf)  # Convert GLM filtered data back to OD
-        rec['od_corrected'] = rec['od_corrected'].transpose('channel', 'wavelength', 'time') # need to transpose to match rec['od'] bc conc2od switches the axes
-    
-    
-    
-    # Plot DQR
-    elif step_name in ("DQR_plot", "plot_DQR", "plot_dqr", "dqr_plot"):
-        lambda0 = rec['amp_pruned'].wavelength[0].wavelength.values
-        lambda1 = rec['amp_pruned'].wavelength[1].wavelength.values
-        snr0, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda0), cfg_preprocess['steps']["prune"]['snr_thresh'])
-        snr1, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda1), cfg_preprocess['steps']["prune"]['snr_thresh'])
-    
-        plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, cfg_dataset, config['hrf'] )
         
-        # if MA correction was performed, plot slope b4 and after
-        #if not np.array_equal(rec["od_corrected"].data, rec["od"].data):    #rec['od_corrected'].data != rec['od'].data:  
-        if not (rec["od_corrected"].data == rec["od"].data).all():
-            plot_dqr.plot_slope(rec, [slope_base, slope_corrected], cfg_preprocess['steps'], filnm, cfg_dataset)    # !!! make step instead
-        
-        print("plotting DQR")  # !!! how to add in plot_group_DQR ?
+        # wavelet
+        elif step_name in ("wavelet", "motion_correct_wavelet"):
+            rec['od_corrected'] = motion_correct.motion_correct_PCA_recurse( rec['od_corrected'], params['iqr'], 
+                                                                                   params['wavelet'], params['level'])
         
 
+        # slope for Corrected OD before bandpass filtering  
+        elif step_name in ("calc_slope_af", "calc_slope_after", "slope_after", "slope_af"):
+            slope_corrected = preproc.quant_slope(rec, "od_corrected")  # Get slopes after correction before bandpass filtering
+        
+        # GVTD for Corrected OD before bandpass filtering  
+        elif step_name in ("calc_gvtd_af", "calc_gvtd_after", "gvtd_after", "gvtd_af"):
+            amp_corrected = rec['od_corrected'].copy()  
+            amp_corrected.values = np.exp(-amp_corrected.values)
+            amp_corrected_masked = preproc.prune_mask_ts(amp_corrected, pruned_chans)  # get "pruned" amp data post tddr
+            rec.aux_ts['gvtd_corrected'], _ = quality.gvtd(amp_corrected_masked)  
+            rec.aux_ts['gvtd_corrected'].name = 'gvtd_corrected'
+        
+        #%%
+        
+        # Bandpass filter od_tddr
+        elif step_name == "freq_filter":
+            # change from str to pint object
+            cfg_preprocess["steps"]["freq_filter"]["fmin"] = units(cfg_preprocess["steps"]["freq_filter"]["fmin"])
+            cfg_preprocess["steps"]["freq_filter"]["fmax"] = units(cfg_preprocess["steps"]["freq_filter"]["fmax"])
+            
+            rec['od_corrected'] = cedalion.sigproc.frequency.freq_filter(rec['od_corrected'], 
+                                                                            params['fmin'], 
+                                                                            params['fmax'])  
+        # Convert OD to Conc
+        elif step_name == "od2conc":
+         
+            dpf = xr.DataArray(
+                [1, 1],
+                dims="wavelength",
+                coords={"wavelength": rec['amp'].wavelength},
+            )
+            rec['conc'] = cedalion.nirs.od2conc(rec['od_corrected'], rec.geo3d, dpf, spectrum="prahl")
+            
+            
+        
+        # GLM filtering step
+        elif step_name == "GLM_filter":
+            # change from str to pint object
+            cfg_preprocess["steps"]["GLM_filter"]["distance_threshold"] = units(cfg_preprocess["steps"]["GLM_filter"]["distance_threshold"])
+            cfg_preprocess["steps"]["GLM_filter"]["t_delta"] = units(cfg_preprocess["steps"]["GLM_filter"]["t_delta"])
+            cfg_preprocess["steps"]["GLM_filter"]["t_std"] = units(cfg_preprocess["steps"]["GLM_filter"]["t_std"])
+            config['hrf']['t_pre'] = units(config['hrf']['t_pre'])
+            config['hrf']['t_post'] = units(config['hrf']['t_post'])
+            
+            rec = preproc.GLM(rec, 'conc', params, config['hrf'], pruned_chans) # passing in pruned channels
+            
+            rec['od_corrected'] = cedalion.nirs.conc2od(rec['conc'], rec.geo3d, dpf)  # Convert GLM filtered data back to OD
+            rec['od_corrected'] = rec['od_corrected'].transpose('channel', 'wavelength', 'time') # need to transpose to match rec['od'] bc conc2od switches the axes
+        
+        
+        
+        # Plot DQR
+        elif step_name in ("DQR_plot", "plot_DQR", "plot_dqr", "dqr_plot"):
+            lambda0 = rec['amp_pruned'].wavelength[0].wavelength.values
+            lambda1 = rec['amp_pruned'].wavelength[1].wavelength.values
+            snr0, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda0), cfg_preprocess['steps']["prune"]['snr_thresh'])
+            snr1, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda1), cfg_preprocess['steps']["prune"]['snr_thresh'])
+        
+            plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, cfg_dataset, config['hrf'] )
+            
+            # if MA correction was performed, plot slope b4 and after
+            if not (rec["od_corrected"].data == rec["od"].data).all():
+                plot_dqr.plot_slope(rec, [slope_base, slope_corrected], cfg_preprocess['steps'], filnm, cfg_dataset)
+            
+            # !!! how to add in plot_group_DQR ?  - make separate rule?
+            
+    
+        # If you get here, that means this step is enabled but unrecognized. 
+        else:
+            raise ValueError(f"Unknown preprocessing step: {step_name}")
+            
+    if not rec['od_corrected'].pint.units:
+        rec['od_corrected'] = rec['od_corrected'].pint.quantify(units_od)  # make sure od has units 
+        
+    # Save preprocessed data as a snirf file
+    cedalion.io.snirf.write_snirf(out, rec)
+    print("Snirf file saved successfuly")
 
-# Save preprocessed data as a snirf file
-cedalion.io.snirf.write_snirf(snakemake.output[0], rec)
 
-#%%
-# cedalion.io.snirf.write_snirf(save_file, rec)
 
+#%% 
+
+def main():
+    try:
+        config = snakemake.config   # set variables to snakemake vars
+        
+        snirf_path = snakemake.input[0]
+        events_path = snakemake.input[1]
+        
+        cfg_dataset = snakemake.params.cfg_dataset
+        cfg_preprocess = snakemake.params.cfg_preprocess
+        
+        out = snakemake.output[0]
+    
+    
+    # Testing func for SINGLE FILE
+    except:
+        config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml" # change if testing
+        
+        with open(config_path, 'r') as file:  # open config file
+            config = yaml.safe_load(file)
+            
+        cfg_dataset = config['dataset']
+        cfg_preprocess = config['preprocess']
+        
+        subj = cfg_dataset['subject'][0]   # sub idx you want to test
+        task = cfg_dataset['task'][0]
+        run = cfg_dataset['run'][0]
+    
+        snirf_path = f"{cfg_dataset['root_dir']}/sub-{subj}/nirs/sub-{subj}_task-{task}_run-{run}_nirs.snirf"
+        events_path =  f"{cfg_dataset['root_dir']}/sub-{subj}/nirs/sub-{subj}_task-{task}_run-{run}_events.tsv"
+    
+        save_path = f"{cfg_dataset['root_dir']}/derivatives/{cfg_dataset['derivatives_subfolder']}/preprocessed_data/sub-{subj}/"
+        out = f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_preprocessed.snirf"
+        
+        der_dir = os.path.join(save_path)
+        if not os.path.exists(der_dir):
+            os.makedirs(der_dir)
+    
+    preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out)
+    
+    
+if __name__ == "__main__":
+    main()
+    
