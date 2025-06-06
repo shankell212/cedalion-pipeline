@@ -4,25 +4,28 @@ from snakemake.io import glob_wildcards
 
 configfile: "config/config.yaml"
 
+ROOT = config['dataset']["root_dir"]
+DERIV = config['dataset']["derivatives_subfolder"]
 
 rule all:
     input:
         expand([
-            "{root_dir}/derivatives/{derivatives_subfolder}/preprocessed_data/sub-{subject}/"  # preprocessed_dataessed snirf
-            "sub-{subject}_task-{task}_run-{run}_nirs_preprocessed.snirf",
+            (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/"   # preprocessed_dataessed snirf
+            f"sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.snirf"),
              
-             "{root_dir}/derivatives/{derivatives_subfolder}/plots/DQR/"  # DQR plots 
-             "sub-{subject}_task-{task}_run-{run}_nirs_DQR.png",
+             (f"{ROOT}/derivatives/{DERIV}/plots/DQR/"  # DQR plots 
+             f"sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR.png"),
              
-             "{root_dir}/derivatives/{derivatives_subfolder}/plots/DQR/gvtd/"   # gvtd DQR plots
-             "sub-{subject}_task-{task}_run-{run}_nirs_DQR_gvtd_hist.png",
+             (f"{ROOT}/derivatives/{DERIV}/plots/DQR/gvtd/"   # gvtd DQR plots
+             f"sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR_gvtd_hist.png"),
              
-             "{root_dir}/derivatives/{derivatives_subfolder}/plots/DQR/slope/"   # slope DQR plots
-             "sub-{subject}_task-{task}_run-{run}_nirs_slope.png",
+             (f"{ROOT}/derivatives/{DERIV}/plots/DQR/slope/"   # slope DQR plots
+             f"sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_slope.png"),
+             
+             (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/"  # blockaverage data
+             f"sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl")
              
             ],
-            root_dir = config["dataset"]["root_dir"],
-            derivatives_subfolder = config["dataset"]["derivatives_subfolder"],
             subject = config["dataset"]["subject"],
             task = config["dataset"]["task"],
             run = config["dataset"]["run"]
@@ -33,53 +36,47 @@ rule all:
 rule preprocess:
     input:
         # raw .snirf and events.tsv
-        "{root_dir}/sub-{subject}/nirs/sub-{subject}_task-{task}_run-{run}_nirs.snirf",
-        "{root_dir}/sub-{subject}/nirs/sub-{subject}_task-{task}_run-{run}_events.tsv"
+        f"{ROOT}/sub-{{subject}}/nirs/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs.snirf",
+        f"{ROOT}/sub-{{subject}}/nirs/sub-{{subject}}_task-{{task}}_run-{{run}}_events.tsv"
     output:
-        # preprocessed snirf
-        "{root_dir}/derivatives/{derivatives_subfolder}/preprocessed_data/sub-{subject}/"
-        "sub-{subject}_task-{task}_run-{run}_nirs_preprocessed.snirf",
-        
-        "{root_dir}/derivatives/{derivatives_subfolder}/plots/DQR/"  # DQR plots 
-        "sub-{subject}_task-{task}_run-{run}_nirs_DQR.png",
-        
-        "{root_dir}/derivatives/{derivatives_subfolder}/plots/DQR/gvtd/"   # gvtd DQR plots
-        "sub-{subject}_task-{task}_run-{run}_nirs_DQR_gvtd_hist.png",
-        
-        "{root_dir}/derivatives/{derivatives_subfolder}/plots/DQR/slope/"   # slope DQR plots
-        "sub-{subject}_task-{task}_run-{run}_nirs_slope.png",
-
+        (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.snirf"), # preprocessed snirf
+        (f"{ROOT}/derivatives/{DERIV}/plots/DQR/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR.png"),   # DQR plots
+        (f"{ROOT}/derivatives/{DERIV}/plots/DQR/gvtd/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR_gvtd_hist.png"), # gvtd DQR plots
+        (f"{ROOT}/derivatives/{DERIV}/plots/DQR/slope/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_slope.png"),  # slope DQR plots
+    params:
+        cfg_preprocess = config['preprocess'],
+        cfg_dataset = config['dataset']
+    log:
+        "logs/preprocess/sub-{subject}_task-{task}_run-{run}_nirs_preprocessed.log"   # empty bc have to use shell and not script
     script:
         "scripts/preprocess.py"
 
 
 def all_preprocessed_runs(wc):
-    ''' Return a list of all preprocessed .snirf files for this subject+task (i.e. all runs)'''
-    # build pattern where {run} is still a wildcard
-    pattern = (
-        f"{wc.root_dir}/{wc.derivatives_subfolder}/preprocessed_data/sub-{wc.subject}/"
-        f"sub-{wc.subject}_task-{wc.task}_run-{{run}}_nirs_preprocessed.snirf"
-    )
-    gw = glob_wildcards(pattern)  
-    full_paths = [pattern.format(run=r) for r in gw.run] # rebuild filepath for each run
+    ''' Return a list of all preprocessed .snirf files for this subject+task (i.e. all runs)'''  
     
-    return full_paths
+    run_paths =  [
+        f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{wc.subject}/"
+        f"sub-{wc.subject}_task-{wc.task}_run-{run}_nirs_preprocessed.snirf"
+        for run in config["dataset"]["run"]
+    ]
+    return run_paths
+    
+
 
 
 rule blockaverage:
     input:
-        preproc_runs = all_preprocessed_runs
-        # preprocessed time series data
-        #"{root_dir}/derivatives/{derivatives_subfolder}/preprocessed_data/sub-{subject}/"
-        #"sub-{subject}_task-{task}_run-{run}_nirs_preprocessed.snirf"
-        #rules.preprocess.output[0]
-        
-        
+        preproc_runs = all_preprocessed_runs   # list of all run files for curr sub and task 
     output:
         # block averaged data containing HRF for each task
-        "{root_dir}/derivatives/{derivatives_subfolder}/blockaverage/sub-{subject}/"
-        "sub-{subject}_task-{task}_run-{run}_nirs_blockaverage.snirf"
-        
+        (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl")
+    params:
+        cfg_blockaverage = config['blockaverage'],
+        cfg_dataset = config['dataset'],
+        cfg_hrf = config['hrf']
+    log:
+        "logs/blockaverage/sub-{subject}_task-{task}_nirs_blockaverage.log"   # empty bc have to use shell and not script
     script:
         "scripts/blockaverage.py"
     

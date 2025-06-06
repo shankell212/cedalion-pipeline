@@ -1,15 +1,16 @@
 
 dataset:
- root_dir: "D:/fNIRS/DATA/Interactive_Walking_HD"
- derivatives_subfolder: "cedalion"
- subject: [ "01", "02", "03", "05"]
- task: [ "STS" ]
- run: [ "01" ]
+ #root_dir: "/projectnb/nphfnirs/ns/Shannon/Data/Interactive_Walking_HD"
+ root_dir: "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS"
+ derivatives_subfolder: "Shannon/cedalion"
+ subject: ["577", "580", "581"] # [ "01", "02", "03", "05"]
+ task: [ "BS" ]
+ run: [ "01", "02", "03" ]   # !!! SHOULD we just have snakemake auto read the number of runs? what if a sub only has 2 runs but all others have 3
 
-hrf: &CONFIG_HRF
- stim_lst: [ "STS" ]
- t_pre: 2 second
- t_post: 13 second
+hrf: #&CONFIG_HRF
+ stim_lst: [ "right", "left" ]
+ t_pre: "2 second"   # can we make this a lsit for diff trial types for GLM
+ t_post: "16 second"
 
 
 preprocess: 
@@ -55,6 +56,7 @@ preprocess:
 
   tddr:
    enable: true
+   
 
   calc_slope_after:
    enable: true
@@ -71,7 +73,7 @@ preprocess:
    enable: true
 
   GLM_filter:
-   enable: true
+   enable: false
    drift_order: 1
    distance_threshold: "20 mm"     # for ssr
    short_channel_method: "mean"
@@ -85,9 +87,9 @@ preprocess:
 
 blockaverage:
  enable: true
- rec_str: "od_corrected"    # od_corrected or conc
+ rec_str: "od_02"    # od_02 or conc   od_corrected
  trange_hrf_stat: [10, 20]
- hrf: *CONFIG_HRF
+ #hrf: *CONFIG_HRF
 
 
 
