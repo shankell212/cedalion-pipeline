@@ -46,8 +46,8 @@ rule preprocess:
     params:
         cfg_preprocess = config['preprocess'],
         cfg_dataset = config['dataset']
-    log:
-        "logs/preprocess/sub-{subject}_task-{task}_run-{run}_nirs_preprocessed.log"   # empty bc have to use shell and not script
+    #log:
+        #"logs/preprocess/sub-{subject}_task-{task}_run-{run}_nirs_preprocessed.log"   # empty bc have to use shell and not script
     script:
         "scripts/preprocess.py"
 
@@ -75,8 +75,8 @@ rule blockaverage:
         cfg_blockaverage = config['blockaverage'],
         cfg_dataset = config['dataset'],
         cfg_hrf = config['hrf']
-    log:
-        "logs/blockaverage/sub-{subject}_task-{task}_nirs_blockaverage.log"   # empty bc have to use shell and not script
+    #log:
+        #"logs/blockaverage/sub-{subject}_task-{task}_nirs_blockaverage.log"   # empty bc have to use shell and not script
     script:
         "scripts/blockaverage.py"
     
