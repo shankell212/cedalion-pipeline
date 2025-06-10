@@ -51,15 +51,17 @@ import module_preprocess as preproc
 
 import pdb
 import yaml
+import json
 
 #%% Load in data for current subject/task/run
 
 # !!! change to getting paths here (?)
 # change output to results in snakemake folder?
 
-def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out):
+def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out_snirf, out_json):
+    print(out_json)
     
-    if not cfg_dataset['derivatives_subfolder']:
+    if not cfg_dataset['derivatives_subfolder']:   # !!! do we need this?
         cfg_dataset['derivatives_subfolder'] = ''
     
     records = cedalion.io.read_snirf( snirf_path ) 
@@ -83,6 +85,7 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
         # print(params)
         
         
+        
        # If this step is disabled, skip it
         if not (params.get("enable", False))  and (step_name != "prune"):
             continue
@@ -97,7 +100,7 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             cfg_preprocess["steps"]["prune"]["amp_thresh"] = [float(x) if isinstance(x,str) else x for x in cfg_preprocess["steps"]["prune"]["amp_thresh"]]
             
             rec = preproc.pruneChannels( rec, params)
-            chs_pruned = rec.get_mask("chs_pruned")
+            chs_pruned = rec.get_mask("chs_pruned") # !!! get rid of saving in mask -- wont save in snirf, just saving in sidecar for now
             pruned_chans = chs_pruned.where(chs_pruned != 0.58, drop=True).channel.values # get array of channels that were pruned
     
         
@@ -200,7 +203,6 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             )
             rec['conc'] = cedalion.nirs.od2conc(rec['od_corrected'], rec.geo3d, dpf, spectrum="prahl")
             
-            
         
         # GLM filtering step
         elif step_name == "GLM_filter":
@@ -232,7 +234,6 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
                 plot_dqr.plot_slope(rec, [slope_base, slope_corrected], cfg_preprocess['steps'], filnm, cfg_dataset)
             
             # !!! how to add in plot_group_DQR ?  - make separate rule?
-            
     
         # If you get here, that means this step is enabled but unrecognized. 
         else:
@@ -240,9 +241,21 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             
     if not rec['od_corrected'].pint.units:
         rec['od_corrected'] = rec['od_corrected'].pint.quantify(units_od)  # make sure od has units 
-        
+    idx_sat = np.where(chs_pruned == 0.92)[0]
+    amp = rec['amp'].mean('time').min('wavelength') # take the minimum across wavelengths
+    idx_amp = np.where(amp < cfg_preprocess["steps"]["prune"]["amp_thresh"][0])[0]
+    data_quality = {       
+        #"chs_pruned": chs_pruned,
+        "bad_chans_sat": idx_sat.tolist(),
+        "bad_chans_amp": idx_amp.tolist()
+        }
+    
+    # Save data quality dict as a sidecar json file
+    with open(out_json, 'w') as fp:
+        json.dump(data_quality, fp)
+    
     # Save preprocessed data as a snirf file
-    cedalion.io.snirf.write_snirf(out, rec)
+    cedalion.io.snirf.write_snirf(out_snirf, rec)
     print("Snirf file saved successfuly")
 
 
@@ -259,12 +272,14 @@ def main():
         cfg_dataset = snakemake.params.cfg_dataset
         cfg_preprocess = snakemake.params.cfg_preprocess
         
-        out = snakemake.output[0]
+        out_snirf = snakemake.output[0]
+        out_json = snakemake.output[1]
     
     
     # Testing func for SINGLE FILE
     except:
-        config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml" # change if testing
+        #config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml" # change if testing
+        config_path = "C:\\Users\\shank\\Documents\\GitHub\\cedalion-pipeline\\workflow\\config\\config.yaml"
         
         with open(config_path, 'r') as file:  # open config file
             config = yaml.safe_load(file)
@@ -280,13 +295,14 @@ def main():
         events_path =  f"{cfg_dataset['root_dir']}/sub-{subj}/nirs/sub-{subj}_task-{task}_run-{run}_events.tsv"
     
         save_path = f"{cfg_dataset['root_dir']}/derivatives/{cfg_dataset['derivatives_subfolder']}/preprocessed_data/sub-{subj}/"
-        out = f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_preprocessed.snirf"
+        out_snirf = f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_preprocessed.snirf"
+        out_json = f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_dataquality.json"
         
         der_dir = os.path.join(save_path)
         if not os.path.exists(der_dir):
             os.makedirs(der_dir)
     
-    preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out)
+    preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out_snirf, out_json)
     
     
 if __name__ == "__main__":
