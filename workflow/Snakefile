@@ -23,7 +23,9 @@ rule all:
              f"sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_slope.png"),
              
              (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/"  # blockaverage data
-             f"sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl")
+             f"sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl"), 
+             
+             (f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl") # groupaverage
              
             ],
             subject = config["dataset"]["subject"],
@@ -40,12 +42,15 @@ rule preprocess:
         f"{ROOT}/sub-{{subject}}/nirs/sub-{{subject}}_task-{{task}}_run-{{run}}_events.tsv"
     output:
         (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.snirf"), # preprocessed snirf
+        (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_dataquality.json"), # data qual sidecar
         (f"{ROOT}/derivatives/{DERIV}/plots/DQR/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR.png"),   # DQR plots
         (f"{ROOT}/derivatives/{DERIV}/plots/DQR/gvtd/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR_gvtd_hist.png"), # gvtd DQR plots
-        (f"{ROOT}/derivatives/{DERIV}/plots/DQR/slope/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_slope.png"),  # slope DQR plots
+        (f"{ROOT}/derivatives/{DERIV}/plots/DQR/slope/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_slope.png")  # slope DQR plots
+    
     params:
         cfg_preprocess = config['preprocess'],
-        cfg_dataset = config['dataset']
+        cfg_dataset = config['dataset'],
+        
     #log:
         #"logs/preprocess/sub-{subject}_task-{task}_run-{run}_nirs_preprocessed.log"   # empty bc have to use shell and not script
     script:
@@ -60,17 +65,30 @@ def all_preprocessed_runs(wc):
         f"sub-{wc.subject}_task-{wc.task}_run-{run}_nirs_preprocessed.snirf"
         for run in config["dataset"]["run"]
     ]
-    return run_paths
+    
+    data_quality_paths = [
+        f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{wc.subject}/"
+        f"sub-{wc.subject}_task-{wc.task}_run-{run}_nirs_dataquality.json"
+        for run in config["dataset"]["run"]
+    ]
+    
+    return {
+        "preproc":  run_paths,
+        "quality":  data_quality_paths
+    }
     
 
 
 
 rule blockaverage:
     input:
-        preproc_runs = all_preprocessed_runs   # list of all run files for curr sub and task 
+        preproc  = lambda wc: all_preprocessed_runs(wc)["preproc"],
+        quality  = lambda wc: all_preprocessed_runs(wc)["quality"]
+        #all_preprocessed_runs   # list of all run files for curr sub and task 
     output:
         # block averaged data containing HRF for each task
-        (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl")
+        (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl"),
+        (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json")
     params:
         cfg_blockaverage = config['blockaverage'],
         cfg_dataset = config['dataset'],
@@ -79,9 +97,58 @@ rule blockaverage:
         #"logs/blockaverage/sub-{subject}_task-{task}_nirs_blockaverage.log"   # empty bc have to use shell and not script
     script:
         "scripts/blockaverage.py"
+    #shell: r""" python "scripts/blockaverage.py" --in {input.preproc} --qc {input.quality} --out {output}"""
+    
+    
+    
+    
+def all_blockaverage_files(wc):
+    ''' Return a list of all blockaverage .pkl files for this subject+task (i.e. all subs)'''  
+    
+    blockavg_paths =  [
+        f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{subject}/"
+        f"sub-{subject}_task-{wc.task}_nirs_blockaverage.pkl"
+        for subject in config["dataset"]["subject"]
+    ]
+    
+    data_quality_paths = [
+        f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{subject}/"
+        f"sub-{subject}_task-{wc.task}_nirs_dataquality.json"
+        for subject in config["dataset"]["subject"]
+    ]
+    
+    return {
+        "blcokavg":  blockavg_paths,
+        "quality":  data_quality_paths
+    }
+    
+    return blockavg_paths
     
     
 
+
+
+rule groupaverage:
+    input: 
+        blockavg_subs  = lambda wc: all_blockaverage_files(wc)["blcokavg"], # block avg data
+        quality  = lambda wc: all_blockaverage_files(wc)["quality"]    # quality metrics
+        #blockavg_subs = all_blockaverage_files
+    output:
+        # group averaged data
+        (f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl")
+    params:
+        cfg_groupaverage = config["groupaverage"],
+        cfg_dataset = config['dataset'],
+        cfg_hrf = config['hrf'],
+        flag_prune_channels = config['preprocess']['steps']['prune']['enable'],
+        mse_amp_thresh = config['preprocess']['steps']['prune']['amp_thresh']
+    #run:
+        #print(snakemake.input.blockavg_subs)
+    script:
+        "scripts/groupaverage.py"
+        
+        
+        
 
 
 
