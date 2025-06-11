@@ -3,7 +3,7 @@ dataset:
   #root_dir: "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS"
   root_dir: "D:/fNIRS/DATA/Interactive_Walking_HD"
   derivatives_subfolder: "cedalion"
-  subject: ["01", "02"]            # , "03", "05"]
+  subject: ["01", "02", "03", "05", "06", "07"]
   task: ["STS"]                    # , "BS"
   run: ["01"]                      # , "02", "03"
 
@@ -70,7 +70,7 @@ preprocess:
       enable: true
 
     GLM_filter:
-      enable: false
+      enable: true
       drift_order: 1
       distance_threshold: "20 mm"
       short_channel_method: "mean"
