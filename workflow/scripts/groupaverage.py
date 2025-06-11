@@ -103,6 +103,8 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
             # blockaverage_weighted.loc[dict(channel=blockaverage_weighted.isel(channel=idx_amp).channel.data)] = cfg_mse['blockaverage_val']
             # blockaverage_weighted.loc[dict(channel=blockaverage_weighted.isel(channel=idx_sat).channel.data)] = cfg_mse['blockaverage_val']
     
+            # !!! maybe have the above func have a helper func that is called variance_clean  
+    
             # set bad values in mse_t to the bad value threshold
             idx_bad = np.where(mse_t == 0)[0]
             idx_bad1 = idx_bad[idx_bad<n_chs]
