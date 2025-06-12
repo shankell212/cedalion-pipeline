@@ -55,9 +55,6 @@ import json
 
 #%% Load in data for current subject/task/run
 
-# !!! change to getting paths here (?)
-# change output to results in snakemake folder?
-
 def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out_snirf, out_json):
     print(out_json)
     
@@ -87,7 +84,7 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
         
         
        # If this step is disabled, skip it
-        if not (params.get("enable", False))  and (step_name != "prune"):
+        if not (params.get("enable", False))  and (step_name != "prune"): 
             continue
        
         if step_name == "median_filter":
@@ -100,7 +97,7 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             cfg_preprocess["steps"]["prune"]["amp_thresh"] = [float(x) if isinstance(x,str) else x for x in cfg_preprocess["steps"]["prune"]["amp_thresh"]]
             
             rec = preproc.pruneChannels( rec, params)
-            chs_pruned = rec.get_mask("chs_pruned") # !!! get rid of saving in mask -- wont save in snirf, just saving in sidecar for now
+            chs_pruned = rec.get_mask("chs_pruned") #
             pruned_chans = chs_pruned.where(chs_pruned != 0.58, drop=True).channel.values # get array of channels that were pruned
     
         
@@ -134,11 +131,12 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             
             
         #%% MOTION CORRECTION: 
+        # !!! each step could run on teh last added time series. 
         # tddr
         elif step_name in ("tddr", "motion_correct_tddr"):
             rec['od_corrected'] = motion_correct.tddr( rec['od_corrected'] )  
     
-            rec['od_corrected'] = rec['od_corrected'].where( ~rec['od_corrected'].isnull(), 0)  #1e-18 )  # replace any NaNs after TDDR
+            rec['od_corrected'] = rec['od_corrected'].where( ~rec['od_corrected'].isnull(), 0)  #1e-18 )  # replace any NaNs after TDDR # !!! make a step?
         
             
         # !!! add spline
@@ -261,7 +259,6 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
 
 
 #%% 
-
 def main():
     try:
         config = snakemake.config   # set variables to snakemake vars
@@ -275,36 +272,8 @@ def main():
         out_snirf = snakemake.output[0]
         out_json = snakemake.output[1]
     
-    
-    # Testing func for SINGLE FILE
+        
+        preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out_snirf, out_json)
+     
     except:
-        #config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml" # change if testing
-        config_path = "C:\\Users\\shank\\Documents\\GitHub\\cedalion-pipeline\\workflow\\config\\config.yaml"
-        
-        with open(config_path, 'r') as file:  # open config file
-            config = yaml.safe_load(file)
-            
-        cfg_dataset = config['dataset']
-        cfg_preprocess = config['preprocess']
-        
-        subj = cfg_dataset['subject'][0]   # sub idx you want to test
-        task = cfg_dataset['task'][0]
-        run = cfg_dataset['run'][0]
-    
-        snirf_path = f"{cfg_dataset['root_dir']}/sub-{subj}/nirs/sub-{subj}_task-{task}_run-{run}_nirs.snirf"
-        events_path =  f"{cfg_dataset['root_dir']}/sub-{subj}/nirs/sub-{subj}_task-{task}_run-{run}_events.tsv"
-    
-        save_path = f"{cfg_dataset['root_dir']}/derivatives/{cfg_dataset['derivatives_subfolder']}/preprocessed_data/sub-{subj}/"
-        out_snirf = f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_preprocessed.snirf"
-        out_json = f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_dataquality.json"
-        
-        der_dir = os.path.join(save_path)
-        if not os.path.exists(der_dir):
-            os.makedirs(der_dir)
-    
-    preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out_snirf, out_json)
-    
-    
-if __name__ == "__main__":
-    main()
-    
+        print("error executing snakemake.")
