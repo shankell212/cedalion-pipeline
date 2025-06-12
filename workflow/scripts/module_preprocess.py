@@ -120,7 +120,7 @@ def pruneChannels( rec, cfg_prune ):
 
     # get indices for where amp_mask_sat = false   
     amp_mask_false = np.where(amp_mask_sat == False)[0]
-    chs_pruned[amp_mask_false] = 0.92 # saturated channels  # was 0.0
+    chs_pruned[amp_mask_false] = 0.92 # saturated channels  # was 0.0  # !!! create vars for these values
 
     # get indices for where amp_mask_low = false
     amp_mask_false = np.where(amp_mask_low == False)[0]
@@ -189,11 +189,12 @@ def GLM(rec, rec_str, cfg_GLM, cfg_hrf, pruned_chans):
     
     rec_pruned = rec_pruned.where( ~rec_pruned.isnull(), 0)  #1e-18 )   # set nan to 0
 
-    #### build design matrix
+    # separate long and short channels using pruned data. 
     ts_long, ts_short = cedalion.nirs.split_long_short_channels(
-        rec[rec_str], rec.geo3d, distance_threshold= cfg_GLM['distance_threshold']  # !!! change to rec_pruned once NaN prob fixed
+        rec_pruned, rec.geo3d, distance_threshold= cfg_GLM['distance_threshold']  # !!! change to rec_pruned once NaN prob fixed
     )
     
+    #### build design matrix 
     dm = (
     glm.design_matrix.hrf_regressors(
         rec[rec_str], rec.stim, glm.GaussianKernels(cfg_hrf['t_pre'], cfg_hrf['t_post'], cfg_GLM['t_delta'], cfg_GLM['t_std'])

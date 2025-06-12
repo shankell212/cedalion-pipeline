@@ -1,0 +1,99 @@
+
+dataset:
+ root_dir: "/projectnb/nphfnirs/ns/Shannon/Data/Interactive_Walking_HD"
+ #root_dir: "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS"
+ derivatives_subfolder: "Shannon/cedalion"
+ subject: [ "01", "02", "03", "04", "05"] #["577", "580", "581"] # [ "01", "02", "03", "05"]
+ task: ["STS"] #[ "BS" ]
+ run: [ "01" ]  #, "02", "03" ]   # !!! SHOULD we just have snakemake parse thru the number of runs? what if a sub only has 2 runs but all others have 3
+    # ^^ also have scenario where we don't want to include all runs 
+    # might also want to exclude task, run, or subj
+    # tuple excl (subj,task,run)
+    # in future, will want to do session
+    
+hrf: #&CONFIG_HRF
+ stim_lst: ['STS'] #[ "right", "left" ]
+ t_pre: "5 second"   # can we make this a lsit for diff trial types for GLM
+ t_post: "33 second"
+
+
+preprocess: 
+ steps:
+  median_filter:
+   enable: true
+   order: 1
+   
+  prune:
+   enable: false  # false, does not update timeseries but does return mask
+   snr_thresh: 5      
+   sd_thresh:
+    - "1 mm"
+    - "60 mm" 
+   amp_thresh: 
+    - 1e-3
+    - 0.84 
+   perc_time_clean_thresh: 0.6 # for sci x psp mask
+   sci_threshold: 0.6
+   psp_threshold: 0.1
+   window_length: "5 second"   # for both sci and psp
+   flag_use_sci: true
+   flag_use_psp: false
+
+  int2od:
+   enable: true
+
+  calc_slope_b4:   # calc slope before correction applied to od
+   enable: true
+
+  calc_gvtd_b4:    # calc gvtd before correction applied to od
+   enable: true
+
+  imu_glm:
+   enable: false
+   statesPerDataFrame: 89   # FOR WALKING DATA
+   hWin: [-3,5,1 ]           # will be put into np.arange func UPDATE THAT
+   statesPerDataFrame: 89
+   n_components: [3, 2]  # [gyro, accel]   
+   butter_order: 4       # butterworth filter order
+   Fc: 0.1              # cutoff freq (Hz)
+   plot_flag_imu: true
+
+  tddr:
+   enable: true
+   
+
+  calc_slope_after:
+   enable: true
+
+  calc_gvtd_after :
+   enable: true
+
+  freq_filter:
+   enable: true
+   fmin: "0.01 Hz"
+   fmax: "0.5 Hz"
+
+  od2conc:
+   enable: true
+
+  GLM_filter:
+   enable: true
+   drift_order: 1
+   distance_threshold: "20 mm"     # for ssr
+   short_channel_method: "mean"
+   noise_model: "ols"    # !!! ADD choice of basis func 
+   t_delta: "1 second"   # for seq of Gauss basis func; temporal spacing btwn consecutive gaussians
+   t_std: "1 second" 
+
+  plot_dqr:
+   enable: true
+
+
+blockaverage:
+ enable: true
+ rec_str: "od_02"    # od_02 or conc   od_corrected
+ trange_hrf_stat: [10, 20]
+ #hrf: *CONFIG_HRF
+
+
+

@@ -30,7 +30,7 @@ import pdb
 
 #%%
 
-def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_quality_files, out_pkl, out_json):
+def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_quality_files, out_pkl, out_json, out_blkavg_nc, out_epoch_nc):
     print(f'run_files: {run_files}')
     print(f'data_quality_files: {data_quality_files}')
     # update units 
@@ -68,16 +68,17 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
             
         # check if ts has dimenstion chromo
         if 'chromo' in ts.dims:
-            ts = ts.transpose('chromo', 'channel', 'time')
+            ts = ts.transpose('chromo', 'channel', 'time')  # !!! try transpose(..., 'channel', 'time') to get rid of if statement
         else:
             ts = ts.transpose('wavelength', 'channel', 'time')
+            
         ts = ts.assign_coords(samples=('time', np.arange(len(ts.time))))
         ts['time'] = ts.time.pint.quantify(units.s)     
         
         # get the epochs
         epochs_tmp = ts.cd.to_epochs(
                                     stim,  # stimulus dataframe
-                                    set(stim[stim.trial_type.isin(cfg_hrf['stim_lst'])].trial_type), # select events
+                                    set(stim[stim.trial_type.isin(cfg_hrf['stim_lst'])].trial_type), # select events  
                                     before = cfg_hrf['t_pre'],  # seconds before stimulus
                                     after = cfg_hrf['t_post'],  # seconds after stimulus
                                 )
@@ -95,7 +96,7 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
     # Block Average
     baseline = epochs_all.sel(reltime=(epochs_all.reltime < 0)).mean('reltime')
     epochs = epochs_all - baseline  # baseline subtract
-    blockaverage = epochs.groupby('trial_type').mean('epoch') # mean across all epochs
+    blockaverage = epochs.groupby('trial_type').mean('epoch') # mean across all epochs   
 
     # create new rec variable that only includes blockaverage for all rusn for this sub/task
     rec["blockaverage"] = blockaverage
@@ -114,10 +115,17 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
     for key in list(rec.aux_ts.keys()):
         del rec.aux_ts[key]
     
-    # Save data a pickle for now  # !!! Change to snirf in future when its debugged
+    # SAVE data a pickle for now  # !!! Change to snirf in future when its debugged
     with open(out_pkl, "wb") as f:        # if output is a single string, it wraps it in an output object and need to index in
         pickle.dump(rec, f, protocol=pickle.HIGHEST_PROTOCOL)
-        
+    
+    # SAVE data as netcdf in addition to snirf
+    blockaverage.to_netcdf(path=out_blkavg_nc)
+    blockaverage.close()
+    
+    epochs.to_netcdf(path=out_epoch_nc)
+    epochs.close()
+    
     print("Block average data saved successfully")
     
     # Flatten list of bad channels and take only unique chan values
@@ -132,7 +140,7 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
         "bad_chans_amp": bad_chans_amp
         }
     
-    # Save data quality dict as a sidecar json file
+    # SAVE data quality dict as a sidecar json file   # !!! change to just keeping in xarray as a dim?
     with open(out_json, 'w') as fp:
         json.dump(data_quality, fp)
     
@@ -155,7 +163,6 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
 
 def main():
     try:
-
         config = snakemake.config
         
         cfg_dataset = snakemake.params.cfg_dataset
@@ -164,45 +171,16 @@ def main():
         run_files = snakemake.input.preproc  #.preproc_runs
         data_quality_files = snakemake.input.quality
         
-        out_pkl = snakemake.output[0]
-        out_json = snakemake.output[1]
+        out_pkl = snakemake.output.pickle
+        out_json = snakemake.output.jason
+        out_blkavg_nc = snakemake.output.bl_nc
+        out_epoch_nc = snakemake.output.ep_nc
+        
+        blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_quality_files, out_pkl, out_json, out_blkavg_nc, out_epoch_nc)
         
     except:
-        #config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
-        config_path = "C:\\Users\\shank\\Documents\\GitHub\\cedalion-pipeline\\workflow\\config\\config.yaml"  # change if debugging
-        
-        with open(config_path, 'r') as file:
-            config = yaml.safe_load(file)
-        
-        cfg_dataset = config['dataset']
-        cfg_blockaverage = config['blockaverage']
-        cfg_hrf = config['hrf']
-        
-        subj = cfg_dataset['subject'][0]   # sub idx you want to test
-        task = cfg_dataset['task'][0]
-        run = cfg_dataset['run']
-        
-        preproc_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "preprocessed_data")
-        
-        run_files = [os.path.join(preproc_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_run-{r}_nirs_preprocessed.snirf") for r in run]
-        
-        data_quality_files = [os.path.join(preproc_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_run-{r}_nirs_dataquality.json") for r in run]
-        
-        # run_files = ["/projectnb/nphfnirs/ns/Shannon/Data/Interactive_Walking_HD/derivatives/cedalion/preprocessed_data/sub-01/sub-01_task-STS_run-01_nirs_preprocessed.snirf"]
-        
-        save_path = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "blockaverage", f"sub-{subj}")
-        out_pkl = os.path.join(save_path,f"sub-{subj}_task-{task}_nirs_blockaverage.pkl")
-        out_json = os.path.join(save_path,f"sub-{subj}_task-{task}_nirs_dataquality.json")
-        
-        der_dir = os.path.join(save_path)
-        if not os.path.exists(der_dir):
-            os.makedirs(der_dir)
-            
-    blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_quality_files, out_pkl, out_json)
-
-if __name__ == "__main__":
-    main()
-    
+        print("error executing snakemake.")
+       
     
 
 
