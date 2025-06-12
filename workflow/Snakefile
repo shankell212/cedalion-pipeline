@@ -118,7 +118,7 @@ def all_blockaverage_files(wc):
     ]
     
     return {
-        "blcokavg":  blockavg_paths,
+        "blockavg":  blockavg_paths,
         "quality":  data_quality_paths
     }
     
@@ -130,7 +130,7 @@ def all_blockaverage_files(wc):
 
 rule groupaverage:
     input: 
-        blockavg_subs  = lambda wc: all_blockaverage_files(wc)["blcokavg"], # block avg data
+        blockavg_subs  = lambda wc: all_blockaverage_files(wc)["blockavg"], # block avg data
         quality  = lambda wc: all_blockaverage_files(wc)["quality"]    # quality metrics
         #blockavg_subs = all_blockaverage_files
     output:
@@ -140,6 +140,7 @@ rule groupaverage:
         cfg_groupaverage = config["groupaverage"],
         cfg_dataset = config['dataset'],
         cfg_hrf = config['hrf'],
+        cfg_blockaverage = config["blockaverage"],
         flag_prune_channels = config['preprocess']['steps']['prune']['enable'],
         mse_amp_thresh = config['preprocess']['steps']['prune']['amp_thresh']
     #run:
