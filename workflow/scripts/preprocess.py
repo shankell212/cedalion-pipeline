@@ -55,8 +55,7 @@ import json
 
 #%% Load in data for current subject/task/run
 
-def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out_snirf, out_json):
-    print(out_json)
+def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out_files):
     
     if not cfg_dataset['derivatives_subfolder']:   # !!! do we need this?
         cfg_dataset['derivatives_subfolder'] = ''
@@ -80,8 +79,6 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
     for step_name, params in cfg_preprocess["steps"].items():
         # print(step_name)
         # print(params)
-        
-        
         
        # If this step is disabled, skip it
         if not (params.get("enable", False))  and (step_name != "prune"): 
@@ -225,11 +222,11 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             snr0, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda0), cfg_preprocess['steps']["prune"]['snr_thresh'])
             snr1, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda1), cfg_preprocess['steps']["prune"]['snr_thresh'])
         
-            plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, cfg_dataset, config['hrf'] )
+            plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, cfg_dataset, config['hrf'], out_files['out_dqr'], out_files['out_gvtd'] )
             
             # if MA correction was performed, plot slope b4 and after
             if not (rec["od_corrected"].data == rec["od"].data).all():
-                plot_dqr.plot_slope(rec, [slope_base, slope_corrected], cfg_preprocess['steps'], filnm, cfg_dataset)
+                plot_dqr.plot_slope(rec, [slope_base, slope_corrected], cfg_preprocess['steps'], filnm, cfg_dataset, out_files['out_slope'])
             
             # !!! how to add in plot_group_DQR ?  - make separate rule?
     
@@ -249,31 +246,35 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
         }
     
     # Save data quality dict as a sidecar json file
-    with open(out_json, 'w') as fp:
+    with open(out_files['out_json'], 'w') as fp:
         json.dump(data_quality, fp)
     
     # Save preprocessed data as a snirf file
-    cedalion.io.snirf.write_snirf(out_snirf, rec)
+    cedalion.io.snirf.write_snirf(out_files['out_snirf'], rec)
     print("Snirf file saved successfuly")
 
 
 
 #%% 
 def main():
-    try:
-        config = snakemake.config   # set variables to snakemake vars
-        
-        snirf_path = snakemake.input[0]
-        events_path = snakemake.input[1]
-        
-        cfg_dataset = snakemake.params.cfg_dataset
-        cfg_preprocess = snakemake.params.cfg_preprocess
-        
-        out_snirf = snakemake.output[0]
-        out_json = snakemake.output[1]
+    config = snakemake.config   # set variables to snakemake vars
     
-        
-        preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out_snirf, out_json)
-     
-    except:
-        print("error executing snakemake.")
+    snirf_path = snakemake.input.snirf
+    events_path = snakemake.input.events
+    
+    cfg_dataset = snakemake.params.cfg_dataset
+    cfg_preprocess = snakemake.params.cfg_preprocess
+    
+    
+    out_files = {
+        "out_snirf" : snakemake.output.snirf,
+        "out_json": snakemake.output.sidecar,
+        "out_dqr": snakemake.output.dqr_plot,
+        "out_gvtd": snakemake.output.gvtd_plot,
+        "out_slope": snakemake.output.slope_plot
+        }
+    preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out_files)
+ 
+    
+if __name__ == "__main__":
+    main()

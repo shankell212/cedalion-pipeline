@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Thu Jun 12 07:23:40 2025
+Created on Mon Jun 16 06:32:13 2025
 
 @author: smkelley
 """
+#%% Load modules
 
 import yaml
 import os
 import sys
-sys.path.append('/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/')
+sys.path.append('/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/')  # CHANGE
 import preprocess as preproc
-
+import blockaverage as blockavg
+import groupaverage as groupavg
+import image_recon as img_recon
 
 #%%
 
 #config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml" # CHANGE if testing
-#config_path = "C:\\Users\\shank\\Documents\\GitHub\\cedalion-pipeline\\workflow\\config\\config.yaml"
 config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test.yaml" # CHANGE if testing
 
+#config_path = "C:\\Users\\shank\\Documents\\GitHub\\cedalion-pipeline\\workflow\\config\\config.yaml"
 
 with open(config_path, 'r') as file:  # open config file
     config = yaml.safe_load(file)
@@ -26,7 +29,9 @@ with open(config_path, 'r') as file:  # open config file
 cfg_dataset = config['dataset']
 cfg_preprocess = config['preprocess']
 
-subj = "03"  #cfg_dataset['subject'][0]   # sub idx you want to test
+#%% preproc
+
+subj = "03"  #cfg_dataset['subject'][0]   # sub idx you want to test  # !!! change to loop ?
 task = cfg_dataset['task'][0]
 run = cfg_dataset['run'][0]
 

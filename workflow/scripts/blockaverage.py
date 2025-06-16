@@ -30,7 +30,7 @@ import pdb
 
 #%%
 
-def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_quality_files, out_pkl, out_json, out_blkavg_nc, out_epoch_nc):
+def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_quality_files, out_pkl, out_json):  #, out_blkavg_nc, out_epoch_nc):
     print(f'run_files: {run_files}')
     print(f'data_quality_files: {data_quality_files}')
     # update units 
@@ -119,12 +119,12 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
     with open(out_pkl, "wb") as f:        # if output is a single string, it wraps it in an output object and need to index in
         pickle.dump(rec, f, protocol=pickle.HIGHEST_PROTOCOL)
     
-    # SAVE data as netcdf in addition to snirf
-    blockaverage.to_netcdf(path=out_blkavg_nc)
-    blockaverage.close()
+    # # SAVE data as netcdf in addition to snirf
+    # blockaverage.to_netcdf(path=out_blkavg_nc)
+    # blockaverage.close()
     
-    epochs.to_netcdf(path=out_epoch_nc)
-    epochs.close()
+    # epochs.to_netcdf(path=out_epoch_nc)
+    # epochs.close()
     
     print("Block average data saved successfully")
     
@@ -162,25 +162,24 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
 #%%
 
 def main():
-    try:
-        config = snakemake.config
-        
-        cfg_dataset = snakemake.params.cfg_dataset
-        cfg_blockaverage = snakemake.params.cfg_blockaverage
-        cfg_hrf = snakemake.params.cfg_hrf
-        run_files = snakemake.input.preproc  #.preproc_runs
-        data_quality_files = snakemake.input.quality
-        
-        out_pkl = snakemake.output.pickle
-        out_json = snakemake.output.jason
-        out_blkavg_nc = snakemake.output.bl_nc
-        out_epoch_nc = snakemake.output.ep_nc
-        
-        blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_quality_files, out_pkl, out_json, out_blkavg_nc, out_epoch_nc)
-        
-    except:
-        print("error executing snakemake.")
-       
-    
 
+    config = snakemake.config
+    
+    cfg_dataset = snakemake.params.cfg_dataset
+    cfg_blockaverage = snakemake.params.cfg_blockaverage
+    cfg_hrf = snakemake.params.cfg_hrf
+    run_files = snakemake.input.preproc  #.preproc_runs
+    data_quality_files = snakemake.input.quality
+    
+    out_pkl = snakemake.output.pickle
+    out_json = snakemake.output.jason
+    #out_blkavg_nc = snakemake.output.bl_nc
+    #out_epoch_nc = snakemake.output.ep_nc
+    
+    blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_quality_files, out_pkl, out_json)  #, out_blkavg_nc, out_epoch_nc)
+    
+   
+    
+if __name__ == "__main__":
+    main()
 

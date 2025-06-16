@@ -16,8 +16,10 @@ import blockaverage as blockavg
 
 #%%
 
-config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
+#config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
 #config_path = "C:\\Users\\shank\\Documents\\GitHub\\cedalion-pipeline\\workflow\\config\\config.yaml"  # change if debugging
+config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test.yaml" # CHANGE if testing
+
 
 with open(config_path, 'r') as file:
     config = yaml.safe_load(file)

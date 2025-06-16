@@ -29,9 +29,9 @@ import pdb
 
 #%%
 
-def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, flag_prune_channels, blockavg_files, data_quality_files, blockavg_files_nc, epoch_files_nc, out):
+def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, flag_prune_channels, blockavg_files, data_quality_files, out):
+    print("group avreaging: \n")
     print(blockavg_files)
-    print(blockavg_files_nc)
     
     n_subjects = len(blockavg_files)     # !!! will wan to put this in a log ?
     
@@ -52,7 +52,7 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
             cfg_mse["blockaverage_val"] = float(cfg_mse["blockaverage_val"])
     mse_amp_thresh = [float(x) if isinstance(x,str) else x for x in cfg_groupaverage['mse_amp_thresh']] # convert str to float if str
     cfg_mse['mse_amp_thresh'] = min(mse_amp_thresh) # get minimum amplitude threshold
-                              
+                            
     
     # Loop over subjects
     blockaverage_subj = None
@@ -70,10 +70,9 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
         epochs = rec_blockavg['epochs']
         
         # Load in net cdf files
-        blockaverage2 = xr.load_dataarray(blockavg_files_nc)
-        epochs2 = xr.load_dataarray(epoch_files_nc)
+        #blockaverage2 = xr.load_dataarray(blockavg_files_nc)
+        #epochs2 = xr.load_dataarray(epoch_files_nc)
         
-        pdb.set_trace()
         blockaverage_weighted = blockaverage.copy()
         
         n_epochs = len(epochs.epoch)
@@ -229,12 +228,9 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
     #                      total_stderr_blockaverage, mse_mean_within_subject, mse_weighted_between_subjects)
     #     plot_mse_hist(rec, rec_str, trial_type, cfg_dataset, blockaverage_mse_subj, cfg_blockavg['mse_val_for_bad_data'], cfg_blockavg['mse_min_thresh'])  # !!! not sure if these r working correctly tbh
     
-    if flag_prune_channels: # !!! change to just not calc if pruning
-        blockaverage_save = blockaverage_mean
-    else:
-        blockaverage_save = blockaverage_mean_weighted 
     
-    groupavg_results = {'group_blockaverage': blockaverage_save, # group_blockaverage  rename
+    groupavg_results = {'group_blockaverage_weighted': blockaverage_mean_weighted, # weighted group avg   
+                'group_blockaverage': blockaverage_mean,  # unweighted group aaverage
                'total_stderr_blockaverage': total_stderr_blockaverage,
                'blockaverage_subj': blockaverage_subj,  # always unweighted   - load into img recon
                'blockaverage_mse_subj': blockaverage_mse_subj, # - load into img recon
@@ -253,26 +249,24 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
 #%%
 
 def main():
-    try:
-        config = snakemake.config
-        
-        cfg_dataset = snakemake.params.cfg_dataset  # get params
-        cfg_blockaverage = snakemake.params.cfg_blockaverage
-        cfg_hrf = snakemake.params.cfg_hrf
-        cfg_groupaverage = snakemake.params.cfg_groupaverage
-        cfg_groupaverage['mse_amp_thresh'] = snakemake.params.mse_amp_thresh
-        flag_prune_channels = snakemake.params.flag_prune_channels
-        
-        blockavg_files = snakemake.input.blockavg_subs  #.preproc_runs
-        data_quality_files = snakemake.input.quality
-        blockavg_files_nc = snakemake.input.blockavg_nc
-        epoch_files_nc = snakemake.input.epochs_nc
-        
-        out = snakemake.output[0]
-        
-        groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, flag_prune_channels, blockavg_files, data_quality_files, blockavg_files_nc, epoch_files_nc, out)
-        
-    except:
-        print("error executing snakemake.")
+    config = snakemake.config
+    
+    cfg_dataset = snakemake.params.cfg_dataset  # get params
+    cfg_blockaverage = snakemake.params.cfg_blockaverage
+    cfg_hrf = snakemake.params.cfg_hrf
+    cfg_groupaverage = snakemake.params.cfg_groupaverage
+    cfg_groupaverage['mse_amp_thresh'] = snakemake.params.mse_amp_thresh
+    flag_prune_channels = snakemake.params.flag_prune_channels
+    
+    blockavg_files = snakemake.input.blockavg_subs  #.preproc_runs
+    data_quality_files = snakemake.input.quality
+    #blockavg_files_nc = snakemake.input.blockavg_nc
+    #epoch_files_nc = snakemake.input.epochs_nc
+    
+    out = snakemake.output[0]
+    
+    groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, flag_prune_channels, blockavg_files, data_quality_files, out)
+    
             
-
+if __name__ == "__main__":
+    main()
