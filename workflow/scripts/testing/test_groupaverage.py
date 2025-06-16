@@ -13,8 +13,9 @@ import groupaverage as groupavg
 
 #%%
 
-config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
+#config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
 #config_path = "C:\\Users\\shank\\Documents\\GitHub\\cedalion-pipeline\\workflow\\config\\config.yaml"
+config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test.yaml" # CHANGE if testing
 
 with open(config_path, 'r') as file:
     config = yaml.safe_load(file)
@@ -45,3 +46,4 @@ if not os.path.exists(der_dir):
     os.makedirs(der_dir)
         
 groupavg.groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, flag_prune_channels, blockavg_files, data_quality_files, blockavg_files_nc, epoch_files_nc, out)
+
