@@ -256,6 +256,7 @@ def main():
         cfg_hrf = snakemake.params.cfg_hrf
         cfg_groupaverage = snakemake.params.cfg_groupaverage
         cfg_groupaverage['mse_amp_thresh'] = snakemake.params.mse_amp_thresh
+        flag_prune_channels = snakemake.params.flag_prune_channels
         
         blockavg_files = snakemake.input.blockavg_subs  #.preproc_runs
         data_quality_files = snakemake.input.quality

@@ -34,7 +34,8 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, cfg_hrf):
     #
     # Plot GVTD
     #
-    ax[0][0].plot( rec.aux_ts["gvtd"].time, rec.aux_ts["gvtd"], color='b', label="GVTD")
+    if "gvtd" in rec.aux_ts.keys():
+        ax[0][0].plot( rec.aux_ts["gvtd"].time, rec.aux_ts["gvtd"], color='b', label="GVTD")
     if 'gvtd_corrected' in rec.aux_ts.keys():
         ax[0][0].plot( rec.aux_ts["gvtd"].time, rec.aux_ts["gvtd_corrected"], color='#ff4500', label="GVTD corrected")
     ax[0][0].set_xlabel("time / s")
