@@ -269,9 +269,9 @@ def main():
     out_files = {
         "out_snirf" : snakemake.output.snirf,
         "out_json": snakemake.output.sidecar,
-        "out_dqr": snakemake.output.dqr_plot,
-        "out_gvtd": snakemake.output.gvtd_plot,
-        "out_slope": snakemake.output.slope_plot
+        #"out_dqr": snakemake.output.dqr_plot,
+        #"out_gvtd": snakemake.output.gvtd_plot,
+        #"out_slope": snakemake.output.slope_plot
         }
     preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out_files)
  

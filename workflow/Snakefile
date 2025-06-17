@@ -12,9 +12,6 @@ rule all:
         expand([
             #(f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.snirf"), # preprocessed_dataessed snirf
             #(f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_dataquality.json"), # preproc dataqual
-            #(f"{ROOT}/derivatives/{DERIV}/plots/DQR/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR.png"), # DQR plots
-            #(f"{ROOT}/derivatives/{DERIV}/plots/DQR/gvtd/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR_gvtd_hist.png"), # gvtd DQR plot
-            #(f"{ROOT}/derivatives/{DERIV}/plots/DQR/slope/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_slope.png"),  # slope DQR plots
             #(f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl"),  # blockaverage data
             #(f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json"),  # blockaverage dataqual
             (f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl") # groupaverage  
@@ -37,9 +34,11 @@ rule preprocess:
     output:
         snirf = (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.snirf"), # preprocessed snirf
         sidecar = (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_dataquality.json"), # data qual sidecar
-        dqr_plot = (f"{ROOT}/derivatives/{DERIV}/plots/DQR/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR.png"),   # DQR plots
-        gvtd_plot = (f"{ROOT}/derivatives/{DERIV}/plots/DQR/gvtd/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR_gvtd_hist.png"), # gvtd DQR plots
-        slope_plot = (f"{ROOT}/derivatives/{DERIV}/plots/DQR/slope/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_slope.png")  # slope DQR plots
+        
+        # !!! figure out how to get these updated with each run of rule
+        #dqr_plot = (f"{ROOT}/derivatives/{DERIV}/plots/DQR/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR.png"),   # DQR plots
+        #gvtd_plot = (f"{ROOT}/derivatives/{DERIV}/plots/DQR/gvtd/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR_gvtd_hist.png"), # gvtd DQR plots
+        #slope_plot = (f"{ROOT}/derivatives/{DERIV}/plots/DQR/slope/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_slope.png")  # slope DQR plots
     
     params:
         cfg_preprocess = config['preprocess'],
