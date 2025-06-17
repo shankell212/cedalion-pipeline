@@ -264,7 +264,7 @@ def main():
     #epoch_files_nc = snakemake.input.epochs_nc
     
     out = snakemake.output[0]
-    
+
     groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, flag_prune_channels, blockavg_files, data_quality_files, out)
     
             

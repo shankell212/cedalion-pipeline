@@ -80,7 +80,7 @@ preprocess:
       t_std: "1 second"
 
     plot_dqr:
-      enable: true
+      enable: false
 
 blockaverage:
   enable: true
