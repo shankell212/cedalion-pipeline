@@ -10,35 +10,36 @@ DERIV = config['dataset']["derivatives_subfolder"]
 rule all:
     input:
         expand([
-            (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/"   # preprocessed_dataessed snirf
-            f"sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.snirf"),
-            
-             (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/"  # blockaverage data
-             f"sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl"), 
-             
-             (f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl") # groupaverage
+            #(f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.snirf"), # preprocessed_dataessed snirf
+            #(f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_dataquality.json"), # preproc dataqual
+            #(f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl"),  # blockaverage data
+            #(f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json"),  # blockaverage dataqual
+            (f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl") # groupaverage  
              
             ],
             subject = config["dataset"]["subject"],
             task = config["dataset"]["task"],
             run = config["dataset"]["run"]
             )
+            
+            # !!! only need to list final result file
         
         
 
 rule preprocess:
     input:
         # raw .snirf and events.tsv
-        f"{ROOT}/sub-{{subject}}/nirs/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs.snirf",
-        f"{ROOT}/sub-{{subject}}/nirs/sub-{{subject}}_task-{{task}}_run-{{run}}_events.tsv"
+        snirf = f"{ROOT}/sub-{{subject}}/nirs/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs.snirf",
+        events = f"{ROOT}/sub-{{subject}}/nirs/sub-{{subject}}_task-{{task}}_run-{{run}}_events.tsv"
     output:
-        (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.snirf"), # preprocessed snirf
-        (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_dataquality.json"), # data qual sidecar
+        snirf = (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.snirf"), # preprocessed snirf
+        sidecar = (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_dataquality.json"), # data qual sidecar
         
         # !!! figure out how to get these updated with each run of rule
-        #(f"{ROOT}/derivatives/{DERIV}/plots/DQR/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR.png"),   # DQR plots
-        #(f"{ROOT}/derivatives/{DERIV}/plots/DQR/gvtd/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR_gvtd_hist.png"), # gvtd DQR plots
-        #(f"{ROOT}/derivatives/{DERIV}/plots/DQR/slope/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_slope.png")  # slope DQR plots
+        #dqr_plot = (f"{ROOT}/derivatives/{DERIV}/plots/DQR/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR.png"),   # DQR plots
+        #gvtd_plot = (f"{ROOT}/derivatives/{DERIV}/plots/DQR/gvtd/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR_gvtd_hist.png"), # gvtd DQR plots
+        #slope_plot = (f"{ROOT}/derivatives/{DERIV}/plots/DQR/slope/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_slope.png")  # slope DQR plots
+
     
     params:
         cfg_preprocess = config['preprocess'],
@@ -47,6 +48,7 @@ rule preprocess:
     #log:
         #"logs/preprocess/sub-{subject}_task-{task}_run-{run}_nirs_preprocessed.log"   # empty bc have to use shell and not script
     script:
+        #"scripts/test.py"
         "scripts/preprocess.py"
 
 
@@ -80,8 +82,10 @@ rule blockaverage:
         #all_preprocessed_runs   # list of all run files for curr sub and task 
     output:
         # block averaged data containing HRF for each task
-        (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl"),
-        (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json")
+        pickle = (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl"),
+        jason = (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json"), 
+        #bl_nc = (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.nc"),
+        #ep_nc = (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_epochs.nc")
     params:
         cfg_blockaverage = config['blockaverage'],
         cfg_dataset = config['dataset'],
@@ -99,23 +103,33 @@ def all_blockaverage_files(wc):
     ''' Return a list of all blockaverage .pkl files for this subject+task (i.e. all subs)'''  
     
     blockavg_paths =  [
-        f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{subject}/"
-        f"sub-{subject}_task-{wc.task}_nirs_blockaverage.pkl"
+        f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{subject}/sub-{subject}_task-{wc.task}_nirs_blockaverage.pkl"
         for subject in config["dataset"]["subject"]
     ]
     
     data_quality_paths = [
-        f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{subject}/"
-        f"sub-{subject}_task-{wc.task}_nirs_dataquality.json"
+        f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{subject}/sub-{subject}_task-{wc.task}_nirs_dataquality.json"
         for subject in config["dataset"]["subject"]
     ]
     
+    #blockavg_nc_paths = [
+     #   f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{subject}/sub-{subject}_task-{wc.task}_nirs_blockaverage.nc"
+      #  for subject in config["dataset"]["subject"]
+    #]
+    
+    #epoch_nc_paths = [
+     #   f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{subject}/sub-{subject}_task-{wc.task}_nirs_epochs.nc"
+     #   for subject in config["dataset"]["subject"]
+    #]
+    
+    
     return {
-        "blcokavg":  blockavg_paths,
-        "quality":  data_quality_paths
+        "blockavg":  blockavg_paths,
+        "quality":  data_quality_paths, 
+        #"blockavg_nc": blockavg_nc_paths, 
+        #"epochs_nc": epoch_nc_paths
     }
     
-    return blockavg_paths
     
     
 
@@ -123,17 +137,18 @@ def all_blockaverage_files(wc):
 
 rule groupaverage:
     input: 
-        blockavg_subs  = lambda wc: all_blockaverage_files(wc)["blcokavg"], # block avg data
+        blockavg_subs  = lambda wc: all_blockaverage_files(wc)["blockavg"], # block avg data
         quality  = lambda wc: all_blockaverage_files(wc)["quality"]    # quality metrics
-        #blockavg_subs = all_blockaverage_files
+        #blockavg_nc  = lambda wc: all_blockaverage_files(wc)["blockavg_nc"]    # blockaverage data net cdf
+        #epochs_nc  = lambda wc: all_blockaverage_files(wc)["epochs_nc"]  # epochs data net cdf
     output:
         # group averaged data
-        (f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl")
+        (f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl")   
     params:
         cfg_groupaverage = config["groupaverage"],
         cfg_dataset = config['dataset'],
         cfg_hrf = config['hrf'],
-        cfg_blockaverage  = config["blockaverage"],
+        cfg_blockaverage = config['blockaverage'],
         flag_prune_channels = config['preprocess']['steps']['prune']['enable'],
         mse_amp_thresh = config['preprocess']['steps']['prune']['amp_thresh']
     #run:
@@ -142,9 +157,12 @@ rule groupaverage:
         "scripts/groupaverage.py"
         
         
+# !!! store xarrays in netcdf file instead of pkl if snirf not enabled - similar to hdf file 
+    # can store dataqual stuff to coordinate dim of xarray   
+
+
+
+# f'Xs_task_cov_alpha_spatial_{cfg_img_recon["alpha_spatial"]:.0e}_alpha_meas_{cfg_img_recon["alpha_meas"]:.0e}_{direct_name}_{Cmeas_name}_{SB_name}.pkl.gz'
+
         
-
-
-
-
-
+        

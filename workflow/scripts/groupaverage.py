@@ -30,6 +30,7 @@ import pdb
 #%%
 
 def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, flag_prune_channels, blockavg_files, data_quality_files, out):
+    print("group avreaging: \n")
     print(blockavg_files)
     
     n_subjects = len(blockavg_files)     # !!! will wan to put this in a log ?
@@ -51,7 +52,7 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
             cfg_mse["blockaverage_val"] = float(cfg_mse["blockaverage_val"])
     mse_amp_thresh = [float(x) if isinstance(x,str) else x for x in cfg_groupaverage['mse_amp_thresh']] # convert str to float if str
     cfg_mse['mse_amp_thresh'] = min(mse_amp_thresh) # get minimum amplitude threshold
-                              
+                            
     
     # Loop over subjects
     blockaverage_subj = None
@@ -67,7 +68,11 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
             rec_blockavg = pickle.load(f)
         blockaverage = rec_blockavg['blockaverage']
         epochs = rec_blockavg['epochs']
-  
+        
+        # Load in net cdf files
+        #blockaverage2 = xr.load_dataarray(blockavg_files_nc)
+        #epochs2 = xr.load_dataarray(epoch_files_nc)
+        
         blockaverage_weighted = blockaverage.copy()
         
         n_epochs = len(epochs.epoch)
@@ -87,6 +92,7 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
             #pdb.set_trace()
             foo_t = foo_t.transpose('measurement', 'reltime', 'epoch')  # !!! this does not have trial type?
             mse_t = (foo_t**2).sum('epoch') / (n_epochs - 1)**2 # this is squared to get variance of the mean, aka MSE of the mean
+            
             # ^ this gets the variance  across epochs
             
             # pdb.set_trace()
@@ -136,7 +142,7 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
                 mse_t = mse_t.unstack('measurement').transpose('chromo','channel','reltime')  
             else:
                 if 'reltime' in mse_t.dims:
-                    mse_t = mse_t.unstack('measurement').transpose('wavelength','channel','reltime')
+                    mse_t = mse_t.unstack('measurement').transpose('wavelength','channel','reltime')  # !!! xrutils.other_dim
                 else:
                     mse_t = mse_t.unstack('measurement').transpose('wavelength','channel')
                 
@@ -222,12 +228,9 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
     #                      total_stderr_blockaverage, mse_mean_within_subject, mse_weighted_between_subjects)
     #     plot_mse_hist(rec, rec_str, trial_type, cfg_dataset, blockaverage_mse_subj, cfg_blockavg['mse_val_for_bad_data'], cfg_blockavg['mse_min_thresh'])  # !!! not sure if these r working correctly tbh
     
-    if flag_prune_channels:
-        blockaverage_save = blockaverage_mean
-    else:
-        blockaverage_save = blockaverage_mean_weighted 
     
-    groupavg_results = {'group_blockaverage': blockaverage_save, # group_blockaverage  rename
+    groupavg_results = {'group_blockaverage_weighted': blockaverage_mean_weighted, # weighted group avg   
+                'group_blockaverage': blockaverage_mean,  # unweighted group aaverage
                'total_stderr_blockaverage': total_stderr_blockaverage,
                'blockaverage_subj': blockaverage_subj,  # always unweighted   - load into img recon
                'blockaverage_mse_subj': blockaverage_mse_subj, # - load into img recon
@@ -243,58 +246,27 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
     
 
 
-
-
 #%%
 
 def main():
-    try:
-        config = snakemake.config
-        
-        cfg_dataset = snakemake.params.cfg_dataset  # get params
-        cfg_blockaverage = snakemake.params.cfg_blockaverage
-        cfg_hrf = snakemake.params.cfg_hrf
-        cfg_groupaverage = snakemake.params.cfg_groupaverage
-        cfg_groupaverage['mse_amp_thresh'] = snakemake.params.mse_amp_thresh
-        flag_prune_channels = snakemake.params.flag_prune_channels
-        
-        blockavg_files = snakemake.input.blockavg_subs  #.preproc_runs
-        data_quality_files = snakemake.input.quality
-        
-        out = snakemake.output[0]
-        
-    except:
-        #config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
-        config_path = "C:\\Users\\shank\\Documents\\GitHub\\cedalion-pipeline\\workflow\\config\\config.yaml"
-        
-        with open(config_path, 'r') as file:
-            config = yaml.safe_load(file)
-        
-        cfg_dataset = config['dataset']
-        cfg_blockaverage = config['blockaverage']
-        cfg_hrf = config['hrf']
-        cfg_groupaverage = config['groupaverage']
-        flag_prune_channels = config['preprocess']['steps']['prune']['enable']
-        cfg_groupaverage['mse_amp_thresh'] = config['preprocess']['steps']['prune']['amp_thresh']
-        
-        
-        subjects = cfg_dataset['subject']
-        task = cfg_dataset['task'][0]
-                
-        blockavg_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "blockaverage")  #, f"sub-{subj}")
-        blockavg_files = [os.path.join(blockavg_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_nirs_blockaverage.pkl") for subj in subjects ]
-        data_quality_files = [os.path.join(blockavg_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_nirs_dataquality.json") for subj in subjects ]
-        
-        
-        save_path = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "groupaverage")
-        out = os.path.join(save_path, f"task-{task}_nirs_groupaverage.pkl")
-        
-        der_dir = os.path.join(save_path)
-        if not os.path.exists(der_dir):
-            os.makedirs(der_dir)
-            
-    groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, flag_prune_channels, blockavg_files, data_quality_files, out)
+    config = snakemake.config
+    
+    cfg_dataset = snakemake.params.cfg_dataset  # get params
+    cfg_blockaverage = snakemake.params.cfg_blockaverage
+    cfg_hrf = snakemake.params.cfg_hrf
+    cfg_groupaverage = snakemake.params.cfg_groupaverage
+    cfg_groupaverage['mse_amp_thresh'] = snakemake.params.mse_amp_thresh
+    flag_prune_channels = snakemake.params.flag_prune_channels
+    
+    blockavg_files = snakemake.input.blockavg_subs  #.preproc_runs
+    data_quality_files = snakemake.input.quality
+    #blockavg_files_nc = snakemake.input.blockavg_nc
+    #epoch_files_nc = snakemake.input.epochs_nc
+    
+    out = snakemake.output[0]
 
+    groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, flag_prune_channels, blockavg_files, data_quality_files, out)
+    
+            
 if __name__ == "__main__":
     main()
-    

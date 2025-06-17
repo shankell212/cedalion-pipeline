@@ -80,7 +80,7 @@ preprocess:
       t_std: "1 second"
 
     plot_dqr:
-      enable: false
+      enable: true
 
 blockaverage:
   enable: true
@@ -133,3 +133,4 @@ image_recon:
   
   
   
+

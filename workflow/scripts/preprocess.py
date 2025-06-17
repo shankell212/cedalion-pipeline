@@ -55,11 +55,7 @@ import json
 
 #%% Load in data for current subject/task/run
 
-# !!! change to getting paths here (?)
-# change output to results in snakemake folder?
-
-def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out_snirf, out_json):
-    print(out_json)
+def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out_files):
     
     if not cfg_dataset['derivatives_subfolder']:   # !!! do we need this?
         cfg_dataset['derivatives_subfolder'] = ''
@@ -84,10 +80,8 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
         # print(step_name)
         # print(params)
         
-        
-        
        # If this step is disabled, skip it
-        if not (params.get("enable", False))  and (step_name != "prune"):
+        if not (params.get("enable", False))  and (step_name != "prune"): 
             continue
        
         if step_name == "median_filter":
@@ -100,7 +94,7 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             cfg_preprocess["steps"]["prune"]["amp_thresh"] = [float(x) if isinstance(x,str) else x for x in cfg_preprocess["steps"]["prune"]["amp_thresh"]]
             
             rec = preproc.pruneChannels( rec, params)
-            chs_pruned = rec.get_mask("chs_pruned") # !!! get rid of saving in mask -- wont save in snirf, just saving in sidecar for now
+            chs_pruned = rec.get_mask("chs_pruned") #
             pruned_chans = chs_pruned.where(chs_pruned != 0.58, drop=True).channel.values # get array of channels that were pruned
     
         
@@ -134,11 +128,12 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             
             
         #%% MOTION CORRECTION: 
+        # !!! each step could run on teh last added time series. 
         # tddr
         elif step_name in ("tddr", "motion_correct_tddr"):
             rec['od_corrected'] = motion_correct.tddr( rec['od_corrected'] )  
     
-            rec['od_corrected'] = rec['od_corrected'].where( ~rec['od_corrected'].isnull(), 0)  #1e-18 )  # replace any NaNs after TDDR
+            rec['od_corrected'] = rec['od_corrected'].where( ~rec['od_corrected'].isnull(), 0)  #1e-18 )  # replace any NaNs after TDDR # !!! make a step?
         
             
         # !!! add spline
@@ -227,11 +222,11 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             snr0, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda0), cfg_preprocess['steps']["prune"]['snr_thresh'])
             snr1, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda1), cfg_preprocess['steps']["prune"]['snr_thresh'])
         
-            plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, cfg_dataset, config['hrf'] )
+            plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, cfg_dataset, config['hrf'], out_files['out_dqr'], out_files['out_gvtd'] )
             
             # if MA correction was performed, plot slope b4 and after
             if not (rec["od_corrected"].data == rec["od"].data).all():
-                plot_dqr.plot_slope(rec, [slope_base, slope_corrected], cfg_preprocess['steps'], filnm, cfg_dataset)
+                plot_dqr.plot_slope(rec, [slope_base, slope_corrected], cfg_preprocess['steps'], filnm, cfg_dataset, out_files['out_slope'])
             
             # !!! how to add in plot_group_DQR ?  - make separate rule?
     
@@ -251,60 +246,35 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
         }
     
     # Save data quality dict as a sidecar json file
-    with open(out_json, 'w') as fp:
+    with open(out_files['out_json'], 'w') as fp:
         json.dump(data_quality, fp)
     
     # Save preprocessed data as a snirf file
-    cedalion.io.snirf.write_snirf(out_snirf, rec)
+    cedalion.io.snirf.write_snirf(out_files['out_snirf'], rec)
     print("Snirf file saved successfuly")
 
 
 
 #%% 
-
 def main():
-    try:
-        config = snakemake.config   # set variables to snakemake vars
-        
-        snirf_path = snakemake.input[0]
-        events_path = snakemake.input[1]
-        
-        cfg_dataset = snakemake.params.cfg_dataset
-        cfg_preprocess = snakemake.params.cfg_preprocess
-        
-        out_snirf = snakemake.output[0]
-        out_json = snakemake.output[1]
+    config = snakemake.config   # set variables to snakemake vars
+    
+    snirf_path = snakemake.input.snirf
+    events_path = snakemake.input.events
+    
+    cfg_dataset = snakemake.params.cfg_dataset
+    cfg_preprocess = snakemake.params.cfg_preprocess
     
     
-    # Testing func for SINGLE FILE
-    except:
-        #config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml" # change if testing
-        config_path = "C:\\Users\\shank\\Documents\\GitHub\\cedalion-pipeline\\workflow\\config\\config.yaml"
-        
-        with open(config_path, 'r') as file:  # open config file
-            config = yaml.safe_load(file)
-            
-        cfg_dataset = config['dataset']
-        cfg_preprocess = config['preprocess']
-        
-        subj = cfg_dataset['subject'][0]   # sub idx you want to test
-        task = cfg_dataset['task'][0]
-        run = cfg_dataset['run'][0]
-    
-        snirf_path = f"{cfg_dataset['root_dir']}/sub-{subj}/nirs/sub-{subj}_task-{task}_run-{run}_nirs.snirf"
-        events_path =  f"{cfg_dataset['root_dir']}/sub-{subj}/nirs/sub-{subj}_task-{task}_run-{run}_events.tsv"
-    
-        save_path = f"{cfg_dataset['root_dir']}/derivatives/{cfg_dataset['derivatives_subfolder']}/preprocessed_data/sub-{subj}/"
-        out_snirf = f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_preprocessed.snirf"
-        out_json = f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_dataquality.json"
-        
-        der_dir = os.path.join(save_path)
-        if not os.path.exists(der_dir):
-            os.makedirs(der_dir)
-    
-    preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out_snirf, out_json)
-    
+    out_files = {
+        "out_snirf" : snakemake.output.snirf,
+        "out_json": snakemake.output.sidecar,
+        #"out_dqr": snakemake.output.dqr_plot,
+        #"out_gvtd": snakemake.output.gvtd_plot,
+        #"out_slope": snakemake.output.slope_plot
+        }
+    preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out_files)
+ 
     
 if __name__ == "__main__":
     main()
-    
