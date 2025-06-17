@@ -137,8 +137,8 @@ def img_recon_func(cfg_dataset, cfg_img_recon, groupaverage_path, out):
                                                         cfg_sbf = cfg_sb, alpha_spatial = cfg_img_recon['alpha_spatial'], 
                                                         alpha_meas = cfg_img_recon['alpha_meas'],F = F, D = D, G = G)
                                                         
-
-            X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag, W, DIRECT = cfg_img_recon['DIRECT'], SB= cfg_img_recon['SB'], G=G)
+            pdb.set_trace()
+            X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag, W, DIRECT = cfg_img_recon['DIRECT'], SB= cfg_sb['enable'], G=G)
             
 
             # weighted average -- same as chan space - but now is vertex space

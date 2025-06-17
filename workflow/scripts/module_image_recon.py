@@ -106,7 +106,9 @@ def calculate_W(A, alpha_meas=0.1, alpha_spatial=0.01, BRAIN_ONLY = False, DIREC
     
     
     if DIRECT:
-        C_meas = np.diag(C_meas)  # !!! this is not in other script
+        if C_meas_flag:
+            C_meas = np.diag(C_meas)
+
         W_xr, D, F = _calculate_W_direct(A, alpha_meas=alpha_meas, alpha_spatial=alpha_spatial, 
                                         BRAIN_ONLY=BRAIN_ONLY, 
                                         C_meas_flag=C_meas_flag, C_meas=C_meas, D=D, F=F)
@@ -151,7 +153,8 @@ def _calculate_W_direct(A, alpha_meas=0.1, alpha_spatial=0.01, BRAIN_ONLY=False,
             D = D.values
             F = F.values
             
-        lambda_meas = alpha_meas * max(np.diag(F))
+        max_eig = np.max(np.linalg.eigvals(F))
+        lambda_meas = alpha_meas * max_eig
         
         if C_meas_flag:  
             # !!! np.diag(Cmeas) here                                                             
@@ -217,16 +220,19 @@ def _calculate_W_indirect(A, alpha_meas=0.1, alpha_spatial=0.01, BRAIN_ONLY=Fals
 #%% do image recon
 def _get_image_brain_scalp_direct(y, W, A, SB=False, G=None):
     
+    y = y.stack(measurement=['channel', 'wavelength']).sortby('wavelength')
     try:
         X = W.values @ y.values
     except:
         X = W @ y
-
+        X = X.values
+        
     split = len(X)//2
-
+    
     if SB:
         X = sbf.go_from_kernel_space_to_image_space_direct(X, G)
-            
+
+    
     else:
         if len(X.shape) == 1:
             X = X.reshape([2, split]).T
@@ -247,7 +253,7 @@ def _get_image_brain_scalp_direct(y, W, A, SB=False, G=None):
             t = y.reltime
             t_name = 'reltime'
         X = xr.DataArray(X, 
-                         dims = ('vertex', 'chromo', t_name),
+                         dims = ('vertex',  t_name, 'chromo',),
                          coords = {'chromo': ['HbO', 'HbR'],
                                    t_name: t},
                          )
@@ -262,13 +268,14 @@ def _get_image_brain_scalp_direct(y, W, A, SB=False, G=None):
 
 def _get_image_brain_scalp_indirect(y, W, A, SB=False, G=None):
     
-     split = len(y)//2
+    # FIXME need to allow this to accomodate timeseries
+     # split = len(y.measurement)//2
                   
      W_indirect_wl0 = W.isel(wavelength=0)
      W_indirect_wl1 = W.isel(wavelength=1)
      
-     y_wl0 = y[:split]
-     y_wl1 = y[split:]
+     y_wl0 = y.isel(wavelength=0) #[:split]
+     y_wl1 = y.isel(wavelength=1) #[split:]
 
      try:
         X_wl0 = W_indirect_wl0.values @ y_wl0.values
@@ -282,29 +289,26 @@ def _get_image_brain_scalp_indirect(y, W, A, SB=False, G=None):
          X_wl0 = sbf.go_from_kernel_space_to_image_space_indirect(X_wl0, G)
          X_wl1 = sbf.go_from_kernel_space_to_image_space_indirect(X_wl1, G)
          
-         
-     
-     if len(X_wl0.shape) == 1:
-         X_od = np.vstack([X_wl0, X_wl1]).T
+      
+     X_od = np.stack([X_wl0, X_wl1], axis=1)  
+    
+     if len(X_od.shape) == 2:
          X_od = xr.DataArray(X_od, 
                           dims = ('vertex', 'wavelength'),
                           coords = {'wavelength': W.wavelength}
                           )
      else:
-        X_od = np.stack([X_wl0, X_wl1], axis=2)
-        pdb.set_trace()
-        X_od = X_od.transpose(0,2,1)  # make it (vertex, wavelength, time)
-        if 'time' in y.dims:
-            t = y.time
-            t_name = 'time'
-        elif 'reltime' in y.dims:
-            t = y.reltime
-            t_name = 'reltime'
-        X_od = xr.DataArray(X_od, 
-                        dims = ('vertex', 'wavelength', t_name),
-                        coords = {'wavelength': W.wavelength,
-                                t_name: t},
-                        )
+         if 'time' in y.dims:
+             t = y.time
+             t_name = 'time'
+         elif 'reltime' in y.dims:
+             t = y.reltime
+             t_name = 'reltime'
+         X_od = xr.DataArray(X_od, 
+                          dims = ('vertex', 'wavelength', t_name),
+                          coords = {'wavelength': W.wavelength,
+                                    t_name: t},
+                          )
 
      if 'parcel' in A.coords:
         X_od = X_od.assign_coords({"parcel" : ("vertex", A.coords['parcel'].values)})
@@ -400,15 +404,14 @@ def get_image_noise(C_meas, X, W, SB=False, DIRECT=True, G=None):
 
         cov_img_diag = einv.values**2 @ cov_img_diag
 
-    if not hasattr(X, 'time') and not hasattr(X, 'reltime'):    
-        noise = X.copy()
+    
+    if hasattr(X, 'time'):
+        noise = X.isel(time=0).copy()
+    elif hasattr(X, 'reltime'):
+        noise = X.isel(reltime=0).copy()
     else:
-        if hasattr(X, 'time'):
-            noise = X.isel(time=0, drop=True)
-        elif hasattr(X, 'reltime'):
-            noise = X.isel(reltime=0, drop=True)
-        else:
-            raise ValueError("X must have either 'time' or 'reltime' dimension")
+        noise = X.copy()
+        
     noise.values = cov_img_diag
 
     return noise
@@ -782,12 +785,8 @@ def save_image_results(X_matrix, X_matrix_name, save_path, trial_type_img, cfg_i
     
 
 #%%
-def plot_image_recon( X, head, shape, iax,clim=(0,1), flag_hbx='hbo_brain', view_position='superior', p0 = None, title_str = None, off_screen= True ):
-    # pos_names = ['superior', 'left']
+def plot_image_recon( X, head, shape, iax, clim=(0,1), flag_hbx='hbo_brain', view_position='superior', p0 = None, title_str = None, off_screen= True ):
 
-    #
-    # Plot the results
-    #
     cmap = p.get_cmap("jet", 256)
     new_cmap_colors = np.vstack((cmap(np.linspace(0, 1, 256))))
     custom_cmap = ListedColormap(new_cmap_colors)
@@ -834,32 +833,24 @@ def plot_image_recon( X, head, shape, iax,clim=(0,1), flag_hbx='hbo_brain', view
     if flag_hbx == 'hbo_brain': # hbo brain 
         surf = cdc.VTKSurface.from_trimeshsurface(head.brain)
         surf = pv.wrap(surf.mesh)
-        #clim=(-0.6*X_hbo_brain.max(), 0.7*X_hbo_brain.max())
-        clim=(-X_hbo_brain.max(), X_hbo_brain.max())
         p0.add_mesh(surf, scalars=X_hbo_brain, cmap=custom_cmap, clim=clim, show_scalar_bar=show_scalar_bar, nan_color=(0.9,0.9,0.9), smooth_shading=True )
         p0.camera_position = pos
 
     elif flag_hbx == 'hbr_brain': # hbr brain
         surf = cdc.VTKSurface.from_trimeshsurface(head.brain)
         surf = pv.wrap(surf.mesh)   
-        #clim=(-0.6*X_hbr_brain.max(), 0.7*X_hbr_brain.max())
-        clim=(-X_hbr_brain.max(), X_hbr_brain.max())
         p0.add_mesh(surf, scalars=X_hbr_brain, cmap=custom_cmap, clim=clim, show_scalar_bar=show_scalar_bar, nan_color=(0.9,0.9,0.9), smooth_shading=True )
         p0.camera_position = pos
 
     elif flag_hbx == 'hbo_scalp': # hbo scalp
         surf = cdc.VTKSurface.from_trimeshsurface(head.scalp)
         surf = pv.wrap(surf.mesh)
-        #clim=(-0.6*X_hbo_brain.max(), 0.7*X_hbo_brain.max())
-        clim=(-X_hbo_brain.max(), X_hbo_brain.max())
         p0.add_mesh(surf, scalars=X_hbo_scalp, cmap=custom_cmap, clim=clim, show_scalar_bar=show_scalar_bar, nan_color=(0.9,0.9,0.9), smooth_shading=True )
         p0.camera_position = pos
 
     elif flag_hbx == 'hbr_scalp': # hbr scalp
         surf = cdc.VTKSurface.from_trimeshsurface(head.scalp)
         surf = pv.wrap(surf.mesh)
-        #clim=(-0.6*X_hbr_brain.max(), 0.7*X_hbr_brain.max())
-        clim=(-X_hbr_brain.max(), X_hbr_brain.max())
         p0.add_mesh(surf, scalars=X_hbr_scalp, cmap=custom_cmap, clim=clim, show_scalar_bar=show_scalar_bar, nan_color=(0.9,0.9,0.9), smooth_shading=True )
         p0.camera_position = pos
 
@@ -877,59 +868,3 @@ def plot_image_recon( X, head, shape, iax,clim=(0,1), flag_hbx='hbo_brain', view
 
     return p0
 
-
-
-def get_Adot_parcels( Adot = None ):
-
-    # reduce parcels to 17 network parcels plus 'Background+Freesurfer...'
-    # get the unique 17 network parcels and remove non-brain parcels
-    unique_parcels = Adot.groupby('parcel').sum('vertex').parcel
-    unique_parcels = unique_parcels.sel(parcel=unique_parcels.parcel != 'scalp')
-    unique_parcels = unique_parcels.sel(parcel=unique_parcels.parcel != 'Background+FreeSurfer_Defined_Medial_Wall_LH')
-    unique_parcels = unique_parcels.sel(parcel=unique_parcels.parcel != 'Background+FreeSurfer_Defined_Medial_Wall_RH')
-
-
-    parcel_list = []
-    for parcel in unique_parcels.values:
-        parcel_list.append( parcel.split('_')[0] + '_' + parcel.split('_')[-1] )
-    unique_parcels_lev1 = np.unique(parcel_list)
-
-    parcel_list_lev2 = []
-    for parcel in unique_parcels.values:
-        if parcel.split('_')[1].isdigit():
-            parcel_list_lev2.append( parcel.split('_')[0] + '_' + parcel.split('_')[-1] )
-        else:
-            parcel_list_lev2.append( parcel.split('_')[0] + '_' + parcel.split('_')[1] + '_' + parcel.split('_')[-1] )
-    unique_parcels_lev2 = np.unique(parcel_list_lev2)
-
-
-    Adot_parcels = Adot.isel(wavelength=0).groupby('parcel').sum('vertex')
-    Adot_parcels = Adot_parcels.sel(parcel=Adot_parcels.parcel != 'scalp')
-    Adot_parcels = Adot_parcels.sel(parcel=Adot_parcels.parcel != 'Background+FreeSurfer_Defined_Medial_Wall_LH')
-    Adot_parcels = Adot_parcels.sel(parcel=Adot_parcels.parcel != 'Background+FreeSurfer_Defined_Medial_Wall_RH')
-
-
-    Adot_parcels_lev1 = np.zeros( (Adot.shape[0], len(unique_parcels_lev1)) )
-    for ii in range( 0, len(unique_parcels_lev1) ):
-        idx1 = [i for i, x in enumerate(parcel_list) if x == unique_parcels_lev1.tolist()[ii]]
-        Adot_parcels_lev1[:,ii] = np.sum(Adot_parcels.isel(parcel=idx1).values, axis=1)
-
-    Adot_parcels_lev1_xr = xr.DataArray(
-        Adot_parcels_lev1,
-        dims=['channel','parcel'],
-        coords={'channel': Adot.channel, 'parcel': unique_parcels_lev1}
-    )
-
-
-    Adot_parcels_lev2 = np.zeros( (Adot.shape[0], len(unique_parcels_lev2)) )
-    for ii in range( 0, len(unique_parcels_lev2) ):
-        idx1 = [i for i, x in enumerate(parcel_list_lev2) if x == unique_parcels_lev2.tolist()[ii]]
-        Adot_parcels_lev2[:,ii] = np.sum(Adot_parcels.isel(parcel=idx1).values,axis=1)
-
-    Adot_parcels_lev2_xr = xr.DataArray(
-        Adot_parcels_lev2,
-        dims=['channel','parcel'],
-        coords={'channel': Adot.channel, 'parcel': unique_parcels_lev2}
-    )
-
-    return Adot_parcels_lev1_xr, Adot_parcels_lev2_xr, unique_parcels_lev1, unique_parcels_lev2

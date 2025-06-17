@@ -72,3 +72,34 @@ out = (
 img_recon.img_recon_func(cfg_dataset, cfg_img_recon, groupaverage_path, out)
 
 
+
+
+#%% Rule code snakemake 
+
+
+
+# rule imagerecon:
+#     input:
+#         # group averaged data
+#         (f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl")    # - taking subject blockaverage and subj mse from dict
+#     output:
+#         (f"{ROOT}/derivatives/{DERIV}/image_results/{params.recon_filename}")
+#         #(f"{ROOT}/derivatives/{DERIV}/image_results/Xs_{{task}}_alpha_spatial_{config['image_recon']["alpha_spatial"]:.0e}.pkl.gz")   
+#     params:
+#         cfg_img_recon = config['image_recon'],
+#         cfg_dataset = config['dataset'],
+#         recon_filename = (
+#             f"Xs_{{task}}"
+#             + f"_cov_alpha_spatial_{config['image_recon']['alpha_spatial']}"
+#             + f"_alpha_meas_{config['image_recon']['alpha_meas']}"
+#             + ("_direct" if config["image_recon"]["DIRECT"]["enable"] else "_indirect")
+#             + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
+#             + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
+#             + ".pkl.gz"
+#         )
+#     script:
+#         "scripts/image_recon.py"
+        
+        
+        
+        
