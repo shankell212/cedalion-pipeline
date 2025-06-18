@@ -3,27 +3,72 @@ from snakemake.io import glob_wildcards
 
 
 configfile: "config/config.yaml"
+#configfile: "scripts/testing/config_test.yaml"
+
 
 ROOT = config['dataset']["root_dir"]
 DERIV = config['dataset']["derivatives_subfolder"]
 
-rule all:
+#subject = config["dataset"]["subject"]
+#task = config["dataset"]["task"]
+#run = config["dataset"]["run"]
+
+def get_imagerecon_output():
+    return (
+        f"{ROOT}/derivatives/{DERIV}/image_results/"
+        f"Xs_{{task}}"
+        f"_cov_alpha_spatial_{config['image_recon']['alpha_spatial']}"
+        f"_alpha_meas_{config['image_recon']['alpha_meas']}"
+        + ("_direct" if config["image_recon"]["DIRECT"]["enable"] else "_indirect")
+        + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
+        + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
+        + ".pkl.gz"
+    )
+
+
+rule all_default:
+    input:
+        expand(get_imagerecon_output(), task=config["dataset"]["task"])
+        #[get_imagerecon_output(t) for t in config["dataset"]["task"]]
+        #expand(get_imagerecon_output, task = config["dataset"]["task"])
+        
+        #[get_imagerecon_output(c) for c in config["hrf"]["stim_lst"]]
+        #expand(get_imagerecon_output(condition), condition=config["hrf"]["stim_lst"])
+
+
+
+rule all_preprocess:
     input:
         expand([
-            #(f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.snirf"), # preprocessed_dataessed snirf
-            #(f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_dataquality.json"), # preproc dataqual
-            #(f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl"),  # blockaverage data
-            #(f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json"),  # blockaverage dataqual
-            (f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl") # groupaverage  
-             
+            (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.snirf"),  #  preprocessed_dataessed snirf
+            (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_dataquality.json"), # data qual sidecar 
             ],
             subject = config["dataset"]["subject"],
             task = config["dataset"]["task"],
             run = config["dataset"]["run"]
             )
             
-            # !!! only need to list final result file
-        
+rule all_blockaverage:
+    input:
+        expand([
+            (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl"),  # blockaverage data
+            (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json"),  # blockaverage dataqual
+            ],
+            subject = config["dataset"]["subject"],
+            task = config["dataset"]["task"],
+            run = config["dataset"]["run"]
+            )      
+                      
+rule all_groupaverage:
+    input:
+        expand([  # blockaverage dataqual
+            (f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl") # groupaverage
+            ],
+            subject = config["dataset"]["subject"],
+            task = config["dataset"]["task"],
+            run = config["dataset"]["run"]
+            )      
+            
         
 
 rule preprocess:
@@ -51,53 +96,6 @@ rule preprocess:
         #"scripts/test.py"
         "scripts/preprocess.py"
 
-
-def all_preprocessed_runs(wc):
-    ''' Return a list of all preprocessed .snirf files for this subject+task (i.e. all runs)'''  
-    
-    run_paths =  [
-        f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{wc.subject}/"
-        f"sub-{wc.subject}_task-{wc.task}_run-{run}_nirs_preprocessed.snirf"
-        for run in config["dataset"]["run"]
-    ]
-    
-    data_quality_paths = [
-        f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{wc.subject}/"
-        f"sub-{wc.subject}_task-{wc.task}_run-{run}_nirs_dataquality.json"
-        for run in config["dataset"]["run"]
-    ]
-    
-    return {
-        "preproc":  run_paths,
-        "quality":  data_quality_paths
-    }
-    
-
-
-
-rule blockaverage:
-    input:
-        preproc  = lambda wc: all_preprocessed_runs(wc)["preproc"],
-        quality  = lambda wc: all_preprocessed_runs(wc)["quality"]
-        #all_preprocessed_runs   # list of all run files for curr sub and task 
-    output:
-        # block averaged data containing HRF for each task
-        pickle = (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl"),
-        jason = (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json"), 
-        #bl_nc = (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.nc"),
-        #ep_nc = (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_epochs.nc")
-    params:
-        cfg_blockaverage = config['blockaverage'],
-        cfg_dataset = config['dataset'],
-        cfg_hrf = config['hrf']
-    #log:
-        #"logs/blockaverage/sub-{subject}_task-{task}_nirs_blockaverage.log"   # empty bc have to use shell and not script
-    script:
-        "scripts/blockaverage.py"
-    #shell: r""" python "scripts/blockaverage.py" --in {input.preproc} --qc {input.quality} --out {output}"""
-    
-    
-    
     
 def all_blockaverage_files(wc):
     ''' Return a list of all blockaverage .pkl files for this subject+task (i.e. all subs)'''  
@@ -130,9 +128,6 @@ def all_blockaverage_files(wc):
         #"epochs_nc": epoch_nc_paths
     }
     
-    
-    
-
 
 
 rule groupaverage:
@@ -164,5 +159,20 @@ rule groupaverage:
 
 # f'Xs_task_cov_alpha_spatial_{cfg_img_recon["alpha_spatial"]:.0e}_alpha_meas_{cfg_img_recon["alpha_meas"]:.0e}_{direct_name}_{Cmeas_name}_{SB_name}.pkl.gz'
 
+rule imagerecon:
+    input:
+        # group averaged data
+        (f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl")    # - taking subject blockaverage and subj mse from dict
+    output:
+        get_imagerecon_output()
+        #results = lambda wc: get_imagerecon_output(wc.task)
+        #results = [get_imagerecon_output(c) for c in config["hrf"]["stim_lst"]] #expand(get_imagerecon_output, task=config["hrf"]["stim_lst"])
+        
+    params:
+        cfg_img_recon = config['image_recon'],
+        cfg_dataset = config['dataset'], 
+        cfg_hrf = config['hrf']
+    script:
+        "scripts/image_recon.py"
         
         
