@@ -1,15 +1,15 @@
 dataset:
-  root_dir: "/projectnb/nphfnirs/ns/Shannon/Data/Interactive_Walking_HD"
+  root_dir: '/projectnb/nphfnirs/ns/Shannon/Data/Interactive_Walking_HD'   #test_250616'   #Interactive_Walking_HD"
   #root_dir: "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS"
   #root_dir: "D:/fNIRS/DATA/Interactive_Walking_HD"
   derivatives_subfolder: "cedalion/test"
   #subject: ["547", "568", "577", "580", "581", "583","586", "587", "588", "592", "613"]  #, "618","619", "621", "633", "638", "639", "640"]
-  subject: ["01", "02", "03", "04", "05", "06"] #, "07", "08", "09", "10", "11", "12", "13", "15", "19", "20", "21", "22", "23", "24", "25", "26", "28"]
+  subject: ["01"] #, "02", "03", "04", "05", "06"] #, "07", "08", "09", "10", "11", "12", "13", "15", "19", "20", "21", "22", "23", "24", "25", "26", "28"]  # ['nc261'] #
   task: ["STS"]                    # , "BS"
-  run: ["01"] #, "02", "03"]         # !!! SHOULD we just have snakemake parse thru the number of runs? what if a sub only has 2 runs but all others have 3
+  run: ["01"]  #, "02", "03"]         # !!! SHOULD we just have snakemake parse thru the number of runs? what if a sub only has 2 runs but all others have 3
     
 hrf:  # !!! make these constants instead?
-  stim_lst: ["STS"] # ["right", "left"]  #["STS"]  # make this in script instead of adding?  # auto but then add exlusion
+  stim_lst: ['STS']  # ['ST', 'DT'] # ["right", "left"]  #["STS"]  # make this in script instead of adding?  # auto but then add exlusion
   t_pre: "5 second"  #"2 second"  # can we make this a lsit for diff trial types for GLM
   t_post: "33 second" #"16 second" 
 
@@ -124,6 +124,11 @@ image_recon:
   alpha_spatial: 1e-3
   spectrum: 'prahl'
   mse_min_thresh: 1e-6   # where is this used
+  plot_image:
+    enable: true
+    flag_hbo_list: ['hbo', 'hbr']
+    flag_brain_list: ['brain', 'scalp']  # 'brain', 'scalp' - if you want to plot either
+    flag_img_list:  ['mag', 'tstat', 'noise']
 
 
   
