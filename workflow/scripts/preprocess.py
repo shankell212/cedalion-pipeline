@@ -45,6 +45,11 @@ from cedalion.physunits import units
 
 # import my own functions from a different directory
 import sys
+#sys.path.append('scripts/modules/')
+script_dir = os.path.dirname(os.path.abspath(__file__))
+modules_path = os.path.join(script_dir, 'modules')
+sys.path.append(modules_path)
+
 import module_plot_DQR as plot_dqr
 import module_imu_glm_filter as imu_filt
 import module_preprocess as preproc
