@@ -48,7 +48,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
             groupavg_results = pickle.load(f)
       
         blockaverage_mean = groupavg_results['group_blockaverage_weighted']  #groupavg_results['group_blockaverage_weighted']
-        #blockaverage = groupavg_results['group_blockaverage']
+        blockaverage = groupavg_results['group_blockaverage']
         blockaverage_stderr = groupavg_results['total_stderr_blockaverage']
         blockaverage_subj = groupavg_results['blockaverage_subj']
         blockaverage_mse_subj = groupavg_results['blockaverage_mse_subj']
@@ -121,10 +121,10 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
         
         for subj in ind_subj_blockavg.subj:
             print(f'Calculating subject = {subj.values}')
-
+            #pdb.set_trace()
             od_hrf = ind_subj_blockavg.sel(subj=subj, trial_type=trial_type) 
             # od_hrf = od_hrf.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
-
+           
             od_mse = ind_subj_mse.sel(subj=subj, trial_type=trial_type).drop_vars(['subj', 'trial_type'])
             
             od_hrf_mag = od_hrf.sel(reltime=slice(cfg_img_recon['t_win'][0], cfg_img_recon['t_win'][1])).mean('reltime')
