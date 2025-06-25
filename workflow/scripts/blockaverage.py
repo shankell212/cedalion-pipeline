@@ -37,10 +37,12 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
     cfg_hrf['t_pre']= units(cfg_hrf['t_pre'])
     cfg_hrf['t_post']= units(cfg_hrf['t_post'])
     
-    # loop through files
-    chs_pruned_runs = []
+    # Loop through files
+    idx_sat_runs = []
+    idx_amp_runs = []
     bad_chans_sat_runs = []
     bad_chans_amp_runs = []
+    
     for file_idx, run in enumerate(run_files):
     
         # Check if rec_str exists for current subject
@@ -53,8 +55,8 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
             
         
         # if file path/ current run does not exist for this file, continue without it  (i.e. subj dropped out)
-        if not os.path.isfile(run):  # !!! do not need tis check anymore?
-            continue   
+        # if not os.path.isfile(run):  # !!! do not need tis check anymore?
+        #     continue   
         
         # Load in snirf for curr subj and run
         records = cedalion.io.read_snirf( run ) 
@@ -88,7 +90,9 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
             epochs_all = xr.concat([epochs_all, epochs_tmp], dim='epoch')  # concatinate epochs from all runs
     
         # Concatinate all data data qual stuff
+        idx_sat_runs.append(data_quality_run['idx_sat'])
         bad_chans_sat_runs.append(data_quality_run['bad_chans_sat'])
+        idx_amp_runs.append(data_quality_run['idx_amp'])
         bad_chans_amp_runs.append(data_quality_run['bad_chans_amp'])
         
         # DONE LOOP OVER FILES
@@ -129,14 +133,20 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
     print("Block average data saved successfully")
     
     # Flatten list of bad channels and take only unique chan values
-    bad_chans_sat_flat = [x for xs in bad_chans_sat_runs for x in xs] # flatten list of bad chans for all runs
+    idx_sat_flat = [x for xs in idx_sat_runs for x in xs] # flatten list of bad chans indices for all runs
+    idx_amp_flat = [x for xs in idx_amp_runs for x in xs]
+    bad_chans_sat_flat = [x for xs in bad_chans_sat_runs for x in xs]
     bad_chans_amp_flat = [x for xs in bad_chans_amp_runs for x in xs]
     
-    bad_chans_sat = list(set(bad_chans_sat_flat)) # get unique channel values only # !!! FIXME: want to not mark a chan bad thats only bad in 1 run in future
+    idx_sat = list(set(idx_sat_flat)) # get unique channel values only # !!! FIXME: want to not mark a chan bad thats only bad in 1 run in future
+    idx_amp = list(set(idx_amp_flat))
+    bad_chans_sat = list(set(bad_chans_sat_flat))
     bad_chans_amp = list(set(bad_chans_amp_flat))
     
     data_quality = {       
+        "idx_sat": idx_sat,
         "bad_chans_sat": bad_chans_sat,
+        "idx_amp": idx_amp,
         "bad_chans_amp": bad_chans_amp
         }
     
@@ -172,7 +182,7 @@ def main():
     data_quality_files = snakemake.input.quality
     
     out_pkl = snakemake.output.pickle
-    out_json = snakemake.output.jason
+    out_json = snakemake.output.json
     #out_blkavg_nc = snakemake.output.bl_nc
     #out_epoch_nc = snakemake.output.ep_nc
     

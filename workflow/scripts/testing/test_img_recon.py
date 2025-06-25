@@ -18,8 +18,8 @@ import image_recon as img_recon
 #%% Load config and test function 
 import importlib
 importlib.reload(img_recon)
-
-#config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
+# 
+# config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
 config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test.yaml"
 
 

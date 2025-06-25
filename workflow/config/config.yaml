@@ -77,29 +77,27 @@ preprocess:
       t_std: "1 second"
 
     plot_dqr:
-      enable: false
+      enable: true
 
 blockaverage:
-  enable: true
   rec_str: "od_02"   # od_02 or conc   od_corrected  - what you want to block average
   trange_hrf_stat: [10, 20]  # !!! use plot_name for this var
   
 # !!! add GLM rule that can be used instead of block average
 
 groupaverage:
-  enable: true    # !!! I don't think I'm actually using this lol -- how would I?
+  mse_amp_thresh: 1e-3 #1.1e-6
   mse_conc:
    mse_val_for_bad_data: "1e7 micromolar**2"
    mse_min_thresh: "1e0 micromolar**2"
    blockaverage_val: "0 micromolar**2"
   mse_od:
    mse_val_for_bad_data: 1e1
-   mse_min_thresh: 1e-6
+   mse_min_thresh: 1e-3 #1e-6
    blockaverage_val: 0
    
    
 image_recon:
-  enable: true
   DIRECT: 
     enable: false  # true = direct, false = indirect
   Cmeas: 
@@ -107,7 +105,7 @@ image_recon:
   BRAIN_ONLY:      # reconstruct brain only OR scalp and brain
     enable: false
   spatial_basis:           
-    enable: false 
+    enable: true 
     mask_threshold: -2
     threshold_brain: "1 mm"
     threshold_scalp: "5 mm"
@@ -117,8 +115,8 @@ image_recon:
   probe_dir: "/projectnb/nphfnirs/ns/Shannon/Data/probes/NN22_WHHD/12NN/"
   snirf_name_probe: "fullhead_56x144_NN22_System1.snirf"
   head_model: 'ICBM152'
-  alpha_meas: 1e-2
-  alpha_spatial: 1e-3
+  alpha_meas: 1e4
+  alpha_spatial: 1e-2
   spectrum: 'prahl'
   mse_min_thresh: 1e-6   # where is this used
   plot_image:    # currently this is commented out --- not creating images here

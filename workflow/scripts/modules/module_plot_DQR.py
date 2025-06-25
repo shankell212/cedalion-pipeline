@@ -20,7 +20,7 @@ from scipy.signal.windows import gaussian
 import pdb
 
 
-def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, cfg_hrf, out_dqr, out_gvtd):
+def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, cfg_hrf): #, out_dqr, out_gvtd):
     a=1
     # make sure save folder exists, if not, create it
     der_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'],'plots', 'DQR')
@@ -199,8 +199,8 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, cfg_hrf, out_
     
     p.suptitle(fig_title)
 
-    #p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'],'plots', 'DQR', filenm + "_DQR.png") )
-    p.savefig(out_dqr)
+    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'],'plots', 'DQR', filenm + "_DQR.png") )
+    #p.savefig(out_dqr)
     p.close()
 
     
@@ -225,8 +225,8 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, cfg_hrf, out_
         
         thresh_b4, thresh_corrected = make_gvtd_hist_compare_corrected(rec.aux_ts['gvtd'], rec.aux_ts['gvtd_corrected'], plot_thresh=True, stat_type='histogram_mode', n_std=10)
         p.suptitle(filenm)
-        #p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR','gvtd', filenm + "_DQR_gvtd_hist.png") )
-        p.savefig(out_gvtd)
+        p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR','gvtd', filenm + "_DQR_gvtd_hist.png") )
+        #p.savefig(out_gvtd)
         p.close()
     
 
@@ -379,7 +379,7 @@ def make_gvtd_hist(gvtd_time_trace, plot_thresh=True, stat_type=None, n_std=None
 
 
 
-def plot_slope(rec = None, slope = None, cfg_preprocess=None, filenm = None, cfg_dataset = None, out_file=None):
+def plot_slope(rec = None, slope = None, cfg_preprocess=None, filenm = None, cfg_dataset = None):  #, out_file=None):
     '''
     Plot slope before and after correction on a scalp plot.
     '''
@@ -441,8 +441,8 @@ def plot_slope(rec = None, slope = None, cfg_preprocess=None, filenm = None, cfg
     
     p.suptitle(fig_title)
 
-    #p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'slope', filenm + "_slope.png") )
-    p.savefig(out_file)
+    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'slope', filenm + "_slope.png") )
+    #p.savefig(out_file)
     p.close()
     
     return
