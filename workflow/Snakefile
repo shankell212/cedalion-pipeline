@@ -9,9 +9,6 @@ configfile: "config/config.yaml"
 ROOT = config['dataset']["root_dir"]
 DERIV = config['dataset']["derivatives_subfolder"]
 
-#subject = config["dataset"]["subject"]
-#task = config["dataset"]["task"]
-#run = config["dataset"]["run"]
 
 def get_imagerecon_output():
     return (
@@ -29,12 +26,6 @@ def get_imagerecon_output():
 rule all_default:
     input:
         expand(get_imagerecon_output(), task=config["dataset"]["task"])
-        #[get_imagerecon_output(t) for t in config["dataset"]["task"]]
-        #expand(get_imagerecon_output, task = config["dataset"]["task"])
-        
-        #[get_imagerecon_output(c) for c in config["hrf"]["stim_lst"]]
-        #expand(get_imagerecon_output(condition), condition=config["hrf"]["stim_lst"])
-
 
 
 rule all_preprocess:
@@ -89,12 +80,59 @@ rule preprocess:
     params:
         cfg_preprocess = config['preprocess'],
         cfg_dataset = config['dataset'],
+        cfg_hrf = config['hrf'],
+        mse_amp_thresh = config['groupaverage']['mse_amp_thresh']
         
     #log:
         #"logs/preprocess/sub-{subject}_task-{task}_run-{run}_nirs_preprocessed.log"   # empty bc have to use shell and not script
     script:
         #"scripts/test.py"
         "scripts/preprocess.py"
+
+
+
+def all_preprocessed_runs(wc):
+    ''' Return a list of all preprocessed .snirf files for this subject+task (i.e. all runs)'''  
+    
+    run_paths =  [
+        f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{wc.subject}/"
+        f"sub-{wc.subject}_task-{wc.task}_run-{run}_nirs_preprocessed.snirf"
+        for run in config["dataset"]["run"]
+    ]
+    
+    data_quality_paths = [
+        f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{wc.subject}/"
+        f"sub-{wc.subject}_task-{wc.task}_run-{run}_nirs_dataquality.json"
+        for run in config["dataset"]["run"]
+    ]
+    
+    return {
+        "preproc":  run_paths,
+        "quality":  data_quality_paths
+    }
+    
+    
+
+rule blockaverage:
+    input:
+        preproc  = lambda wc: all_preprocessed_runs(wc)["preproc"],
+        quality  = lambda wc: all_preprocessed_runs(wc)["quality"]
+        #all_preprocessed_runs   # list of all run files for curr sub and task 
+    output:
+        # block averaged data containing HRF for each task
+        pickle = (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl"),
+        json = (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json")
+    params:
+        cfg_blockaverage = config['blockaverage'],
+        cfg_dataset = config['dataset'],
+        cfg_hrf = config['hrf']
+    #log:
+        #"logs/blockaverage/sub-{subject}_task-{task}_nirs_blockaverage.log"   # empty bc have to use shell and not script
+    script:
+        "scripts/blockaverage.py"
+    #shell: r""" python "scripts/blockaverage.py" --in {input.preproc} --qc {input.quality} --out {output}"""
+    
+    
 
     
 def all_blockaverage_files(wc):
@@ -156,8 +194,6 @@ rule groupaverage:
     # can store dataqual stuff to coordinate dim of xarray   
 
 
-
-# f'Xs_task_cov_alpha_spatial_{cfg_img_recon["alpha_spatial"]:.0e}_alpha_meas_{cfg_img_recon["alpha_meas"]:.0e}_{direct_name}_{Cmeas_name}_{SB_name}.pkl.gz'
 
 rule imagerecon:
     input:

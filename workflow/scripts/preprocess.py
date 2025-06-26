@@ -60,7 +60,7 @@ import json
 
 #%% Load in data for current subject/task/run
 
-def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out_files):
+def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, cfg_hrf, mse_amp_thresh, out_files):
     
     if not cfg_dataset['derivatives_subfolder']:   # !!! do we need this?
         cfg_dataset['derivatives_subfolder'] = ''
@@ -210,10 +210,10 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             cfg_preprocess["steps"]["GLM_filter"]["distance_threshold"] = units(cfg_preprocess["steps"]["GLM_filter"]["distance_threshold"])
             cfg_preprocess["steps"]["GLM_filter"]["t_delta"] = units(cfg_preprocess["steps"]["GLM_filter"]["t_delta"])
             cfg_preprocess["steps"]["GLM_filter"]["t_std"] = units(cfg_preprocess["steps"]["GLM_filter"]["t_std"])
-            config['hrf']['t_pre'] = units(config['hrf']['t_pre'])
-            config['hrf']['t_post'] = units(config['hrf']['t_post'])
+            cfg_hrf['t_pre'] = units(cfg_hrf['t_pre'])
+            cfg_hrf['t_post'] = units(cfg_hrf['t_post'])
             
-            rec = preproc.GLM(rec, 'conc', params, config['hrf'], pruned_chans) # passing in pruned channels
+            rec = preproc.GLM(rec, 'conc', params, cfg_hrf, pruned_chans) # passing in pruned channels
             
             rec['od_corrected'] = cedalion.nirs.conc2od(rec['conc'], rec.geo3d, dpf)  # Convert GLM filtered data back to OD
             rec['od_corrected'] = rec['od_corrected'].transpose('channel', 'wavelength', 'time') # need to transpose to match rec['od'] bc conc2od switches the axes
@@ -227,11 +227,11 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             snr0, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda0), cfg_preprocess['steps']["prune"]['snr_thresh'])
             snr1, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda1), cfg_preprocess['steps']["prune"]['snr_thresh'])
         
-            plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, cfg_dataset, config['hrf'], out_files['out_dqr'], out_files['out_gvtd'] )
+            plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, cfg_dataset, cfg_hrf) #, out_files['out_dqr'], out_files['out_gvtd'] )
             
             # if MA correction was performed, plot slope b4 and after
             if not (rec["od_corrected"].data == rec["od"].data).all():
-                plot_dqr.plot_slope(rec, [slope_base, slope_corrected], cfg_preprocess['steps'], filnm, cfg_dataset, out_files['out_slope'])
+                plot_dqr.plot_slope(rec, [slope_base, slope_corrected], cfg_preprocess['steps'], filnm, cfg_dataset) #, out_files['out_slope'])
             
             # !!! how to add in plot_group_DQR ?  - make separate rule?
     
@@ -241,13 +241,23 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             
     if not rec['od_corrected'].pint.units:
         rec['od_corrected'] = rec['od_corrected'].pint.quantify(units_od)  # make sure od has units 
+        
+    if isinstance(mse_amp_thresh,str):
+        mse_amp_thresh = float(mse_amp_thresh)
+    
     idx_sat = np.where(chs_pruned == 0.92)[0]
+    sat_ch_coords = chs_pruned.channel[idx_sat].values  # get channel coords
     amp = rec['amp'].mean('time').min('wavelength') # take the minimum across wavelengths
-    idx_amp = np.where(amp < cfg_preprocess["steps"]["prune"]["amp_thresh"][0])[0]
+    #idx_amp = np.where(amp < cfg_preprocess["steps"]["prune"]["amp_thresh"][0])[0]
+    idx_amp = np.where(amp < mse_amp_thresh)[0]   # COMES FROM GROUP AVG CFG
+    amp_ch_coords = chs_pruned.channel[idx_amp].values
+
     data_quality = {       
-        #"chs_pruned": chs_pruned,
-        "bad_chans_sat": idx_sat.tolist(),
-        "bad_chans_amp": idx_amp.tolist()
+        #"chs_pruned": chs_pruned,  # !!! cannot save matrix or xarray as json
+        "idx_sat": idx_sat.tolist(),
+        "bad_chans_sat": sat_ch_coords.tolist(),
+        "bad_chans_amp": amp_ch_coords.tolist(),
+        "idx_amp": idx_amp.tolist()
         }
     
     # Save data quality dict as a sidecar json file
@@ -269,6 +279,8 @@ def main():
     
     cfg_dataset = snakemake.params.cfg_dataset
     cfg_preprocess = snakemake.params.cfg_preprocess
+    cfg_hrf = snakemake.params.cfg_hrf
+    mse_amp_thresh = snakemake.params.mse_amp_thresh
     
     
     out_files = {
@@ -278,7 +290,7 @@ def main():
         #"out_gvtd": snakemake.output.gvtd_plot,
         #"out_slope": snakemake.output.slope_plot
         }
-    preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, out_files)
+    preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, cfg_hrf, mse_amp_thresh, out_files)
  
     
 if __name__ == "__main__":
