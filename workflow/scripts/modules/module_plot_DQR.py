@@ -69,7 +69,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, cfg_hrf): #, 
     norm = clrs.BoundaryNorm(bounds, cmap.N)
         
     cb_ticks_labels = [(0.08,'SDS'), (0.24,'Low Signal'), (0.4,'Poor SNR'), (0.58,'Good SNR'), (0.76,'SCI/PSP'), (0.92,'Saturated')]
-
+    #pdb.set_trace()
     idx_good = np.where(chs_pruned.values == 0.58)[0]
     plots.scalp_plot( 
             rec["amp"],

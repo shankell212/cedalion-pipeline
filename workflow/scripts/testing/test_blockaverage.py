@@ -45,13 +45,14 @@ for subj in subjects:
         
         run_files = [os.path.join(preproc_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_run-{r}_nirs_preprocessed.snirf") for r in run]
         
-        data_quality_files = [os.path.join(preproc_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_run-{r}_nirs_dataquality.json") for r in run]
+        data_quality_files = [os.path.join(preproc_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_run-{r}_nirs_dataquality_geo.sidecar") for r in run]
         
         # run_files = ["/projectnb/nphfnirs/ns/Shannon/Data/Interactive_Walking_HD/derivatives/cedalion/preprocessed_data/sub-01/sub-01_task-STS_run-01_nirs_preprocessed.snirf"]
         
         save_path = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "blockaverage", f"sub-{subj}")
         out_pkl = os.path.join(save_path,f"sub-{subj}_task-{task}_nirs_blockaverage.pkl")
         out_json = os.path.join(save_path,f"sub-{subj}_task-{task}_nirs_dataquality.json")
+        out_geo = os.path.join(save_path,f"sub-{subj}_task-{task}_nirs_geo.sidecar")
         #out_blkavg_nc = os.path.join(save_path, f"sub-{subj}_task-{task}_nirs_blockaverage.nc")
         #out_epoch_nc = os.path.join(save_path, f"sub-{subj}_task-{task}_nirs_epochs.nc")
         
@@ -59,5 +60,5 @@ for subj in subjects:
                 
         print(f"Processing sub-{subj}, task-{task} ...")
         
-        blockavg.blockaverage_func(cfg_dataset, cfg_blockaverage_loop, cfg_hrf_loop, run_files, data_quality_files, out_pkl, out_json)
+        blockavg.blockaverage_func(cfg_dataset, cfg_blockaverage_loop, cfg_hrf_loop, run_files, data_quality_files, out_pkl, out_json, out_geo)
         
