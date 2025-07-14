@@ -30,7 +30,7 @@ import pdb
 
 #%%
 
-def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_quality_files, out_pkl, out_json):  #, out_blkavg_nc, out_epoch_nc):
+def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_quality_files, out_pkl, out_json, out_geo):  #, out_blkavg_nc, out_epoch_nc):
     print(f'run_files: {run_files}')
     print(f'data_quality_files: {data_quality_files}')
     # update units 
@@ -58,15 +58,23 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
         # if not os.path.isfile(run):  # !!! do not need tis check anymore?
         #     continue   
         
-        # Load in snirf for curr subj and run
-        records = cedalion.io.read_snirf( run ) 
-        rec = records[0]
+        # # Load in snirf for curr subj and run
+        # records = cedalion.io.read_snirf( run ) 
+        # rec = records[0]
+        with gzip.open(run, 'rb') as f:
+            record = pickle.load(f)
+            rec = record[0]
         ts = rec[cfg_blockaverage['rec_str']].copy()
         stim = rec.stim.copy() # select the stim for the given file
         
         # Load in json data qual
-        with open(data_quality_files[file_idx], 'r') as fp:
-            data_quality_run = json.load(fp)
+        # with open(data_quality_files[file_idx], 'r') as fp:
+        #     data_quality_run = json.load(fp)
+        with gzip.open(data_quality_files[file_idx], 'rb') as f:
+            data_quality_run = pickle.load(f)
+            
+        geo2d = data_quality_run['geo2d']
+        geo3d = data_quality_run['geo3d']
             
         # check if ts has dimenstion chromo
         if 'chromo' in ts.dims:
@@ -87,9 +95,9 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
         if file_idx == 0:
             epochs_all = epochs_tmp
         else:
-            epochs_all = xr.concat([epochs_all, epochs_tmp], dim='epoch')  # concatinate epochs from all runs
+            epochs_all = xr.concat([epochs_all, epochs_tmp], dim='epoch')  # concatenate epochs from all runs
     
-        # Concatinate all data data qual stuff
+        # Concatenate all data data qual stuff
         idx_sat_runs.append(data_quality_run['idx_sat'])
         bad_chans_sat_runs.append(data_quality_run['bad_chans_sat'])
         idx_amp_runs.append(data_quality_run['idx_amp'])
@@ -100,28 +108,41 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
     # Block Average
     baseline = epochs_all.sel(reltime=(epochs_all.reltime < 0)).mean('reltime')
     epochs = epochs_all - baseline  # baseline subtract
-    blockaverage = epochs.groupby('trial_type').mean('epoch') # mean across all epochs   
-
-    # create new rec variable that only includes blockaverage for all rusn for this sub/task
-    rec["blockaverage"] = blockaverage
-    rec['epochs'] = epochs
+    blockaverage = epochs.groupby('trial_type').mean('epoch') # mean across all epochs 
     
-    # remove all other keys except blockaverage timeseries
-    for key in list(rec.timeseries.keys()):
-        if key == "blockaverage" or key == "epochs":
-            continue
-        del rec.timeseries[key]
+    # # create new rec variable that only includes blockaverage for all rusn for this sub/task
+    # rec["blockaverage"] = blockaverage
+    # rec['epochs'] = epochs
     
-    rec.stim.duration = 1
-    rec.stim.onset = 1
-    rec.stim.value = 1
+    # # remove all other keys except blockaverage timeseries
+    # for key in list(rec.timeseries.keys()):
+    #     if key == "blockaverage" or key == "epochs":
+    #         continue
+    #     del rec.timeseries[key]
+    
+    # rec.stim.duration = 1
+    # rec.stim.onset = 1
+    # rec.stim.value = 1
         
-    for key in list(rec.aux_ts.keys()):
-        del rec.aux_ts[key]
+    # for key in list(rec.aux_ts.keys()):
+    #     del rec.aux_ts[key]
+    
+    # Save geometric 2d and 3d positions to sidecar file
+    geo_sidecar = {
+        'geo2d': geo2d,
+        'geo3d': geo3d
+        }
+    file = gzip.GzipFile(out_geo, 'wb')
+    file.write(pickle.dumps(geo_sidecar))
+    
+    results = {
+        'blockaverage': blockaverage,
+        'epochs': epochs
+        }
     
     # SAVE data a pickle for now  # !!! Change to snirf in future when its debugged
     with open(out_pkl, "wb") as f:        # if output is a single string, it wraps it in an output object and need to index in
-        pickle.dump(rec, f, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump(results, f, protocol=pickle.HIGHEST_PROTOCOL)
     
     # # SAVE data as netcdf in addition to snirf
     # blockaverage.to_netcdf(path=out_blkavg_nc)
@@ -183,10 +204,11 @@ def main():
     
     out_pkl = snakemake.output.pickle
     out_json = snakemake.output.json
+    out_geo = snakemake.output.geo
     #out_blkavg_nc = snakemake.output.bl_nc
     #out_epoch_nc = snakemake.output.ep_nc
     
-    blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_quality_files, out_pkl, out_json)  #, out_blkavg_nc, out_epoch_nc)
+    blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_quality_files, out_pkl, out_json, out_geo)  #, out_blkavg_nc, out_epoch_nc)
     
    
     
