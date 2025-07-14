@@ -20,7 +20,7 @@ importlib.reload(preproc)
 
 #config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml" # CHANGE if testing
 #config_path = "C:\\Users\\shank\\Documents\\GitHub\\cedalion-pipeline\\workflow\\config\\config.yaml"
-config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test.yaml" # CHANGE if testing
+config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml" # CHANGE if testing
 
 
 with open(config_path, 'r') as file:  # open config file
@@ -47,23 +47,20 @@ for subj in subjects:
             events_path =  f"{cfg_dataset['root_dir']}/sub-{subj}/nirs/sub-{subj}_task-{task}_run-{run}_events.tsv"
             
             save_path = f"{cfg_dataset['root_dir']}/derivatives/{cfg_dataset['derivatives_subfolder']}/preprocessed_data/sub-{subj}/"
-            out_snirf = f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_preprocessed.snirf"
-            out_json = f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_dataquality.json"
+            
+            #out_snirf = f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_preprocessed.snirf"
+            #out_json = f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_dataquality.json"
             
             out_files = {
                 "out_snirf" : f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_preprocessed.snirf",
-                "out_json": f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_dataquality.json",
-                "out_dqr": f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_DQR.png",
-                "out_gvtd": f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_DQR_gvtd_hist.png",
-                "out_slope": f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_slope.png"
+                "out_sidecar": f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_dataquality_geo.sidecar",
+                #"out_dqr": f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_DQR.png",
+                #"out_gvtd": f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_DQR_gvtd_hist.png",
+                #"out_slope": f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_slope.png"
                 }
             
             os.makedirs(save_path, exist_ok=True)  # make directory if it doesn't already exist
-            
-            # der_dir = os.path.join(save_path)
-            # if not os.path.exists(der_dir):
-            #     os.makedirs(der_dir)
-            
+
             print(f"Processing sub-{subj}, task-{task}, run-{run}...")
             
             preproc.preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess_loop, cfg_hrf_loop, mse_amp_thresh_loop, out_files)

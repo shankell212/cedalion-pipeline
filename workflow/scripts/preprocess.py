@@ -53,10 +53,13 @@ sys.path.append(modules_path)
 import module_plot_DQR as plot_dqr
 import module_imu_glm_filter as imu_filt
 import module_preprocess as preproc
+import module_image_recon as img_recon 
 
 import pdb
 import yaml
 import json
+import pickle
+import gzip
 
 #%% Load in data for current subject/task/run
 
@@ -82,14 +85,18 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
     #%% Preprocess
     
     for step_name, params in cfg_preprocess["steps"].items():
-        # print(step_name)
+        print(step_name)
         # print(params)
         
        # If this step is disabled, skip it
         if not (params.get("enable", False))  and (step_name != "prune"): 
             continue
        
-        if step_name == "median_filter":
+        if step_name == "bs_preproc":   # !!! only for BS data 
+            Adot, meas_list, geo3d, amp = img_recon.load_probe(params['probe_dir'], snirf_name=params['snirf_name_probe'])
+            rec['amp'] = rec['amp'].sel(channel=Adot.channel)
+
+        elif step_name == "median_filter":
             rec = preproc.median_filt( rec, params['order'] )
         
         elif step_name == "prune":
@@ -98,8 +105,9 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             cfg_preprocess["steps"]["prune"]["window_length"] = units(cfg_preprocess["steps"]["prune"]["window_length"])
             cfg_preprocess["steps"]["prune"]["amp_thresh"] = [float(x) if isinstance(x,str) else x for x in cfg_preprocess["steps"]["prune"]["amp_thresh"]]
             
-            rec = preproc.pruneChannels( rec, params)
-            chs_pruned = rec.get_mask("chs_pruned") #
+            rec, chs_pruned = preproc.pruneChannels( rec, params)
+            # pdb.set_trace()
+            # chs_pruned = rec.get_mask("chs_pruned") #
             pruned_chans = chs_pruned.where(chs_pruned != 0.58, drop=True).channel.values # get array of channels that were pruned
     
         
@@ -226,6 +234,9 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             lambda1 = rec['amp_pruned'].wavelength[1].wavelength.values
             snr0, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda0), cfg_preprocess['steps']["prune"]['snr_thresh'])
             snr1, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda1), cfg_preprocess['steps']["prune"]['snr_thresh'])
+            
+            snr0 = np.nanmedian(snr0.values)
+            snr1 = np.nanmedian(snr1.values)
         
             plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, cfg_dataset, cfg_hrf) #, out_files['out_dqr'], out_files['out_gvtd'] )
             
@@ -244,7 +255,7 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
         
     if isinstance(mse_amp_thresh,str):
         mse_amp_thresh = float(mse_amp_thresh)
-    
+    #pdb.set_trace()
     idx_sat = np.where(chs_pruned == 0.92)[0]
     sat_ch_coords = chs_pruned.channel[idx_sat].values  # get channel coords
     amp = rec['amp'].mean('time').min('wavelength') # take the minimum across wavelengths
@@ -253,19 +264,32 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
     amp_ch_coords = chs_pruned.channel[idx_amp].values
 
     data_quality = {       
-        #"chs_pruned": chs_pruned,  # !!! cannot save matrix or xarray as json
+        "chs_pruned": chs_pruned,  # !!! cannot save matrix or xarray as json
         "idx_sat": idx_sat.tolist(),
         "bad_chans_sat": sat_ch_coords.tolist(),
         "bad_chans_amp": amp_ch_coords.tolist(),
-        "idx_amp": idx_amp.tolist()
+        "idx_amp": idx_amp.tolist(),
+        'slope_base': slope_base,   # for group DQR plot
+        'slope_corrected': slope_corrected,  # for Group DQR plot
+        'gvtd_base': rec.aux_ts['gvtd'],
+        'gvtd_corrected': rec.aux_ts['gvtd_corrected'],
+        'snr0': snr0,
+        'snr1': snr1,
+        'geo2d': rec.geo2d,
+        'geo3d': rec.geo3d
         }
     
     # Save data quality dict as a sidecar json file
-    with open(out_files['out_json'], 'w') as fp:
-        json.dump(data_quality, fp)
+    # with open(out_files['out_json'], 'w') as fp:
+    #     json.dump(data_quality, fp)
+    file = gzip.GzipFile(out_files['out_sidecar'], 'wb')
+    file.write(pickle.dumps(data_quality))
     
-    # Save preprocessed data as a snirf file
-    cedalion.io.snirf.write_snirf(out_files['out_snirf'], rec)
+    # # Save preprocessed data as a snirf file
+    # cedalion.io.snirf.write_snirf(out_files['out_snirf'], rec)
+    file = gzip.GzipFile(out_files['out_snirf'], 'wb')
+    file.write(pickle.dumps([rec]))
+    
     print("Snirf file saved successfuly")
 
 
@@ -285,7 +309,7 @@ def main():
     
     out_files = {
         "out_snirf" : snakemake.output.snirf,
-        "out_json": snakemake.output.sidecar,
+        "out_sidecar": snakemake.output.sidecar,
         #"out_dqr": snakemake.output.dqr_plot,
         #"out_gvtd": snakemake.output.gvtd_plot,
         #"out_slope": snakemake.output.slope_plot

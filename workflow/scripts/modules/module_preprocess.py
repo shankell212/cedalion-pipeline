@@ -159,7 +159,7 @@ def pruneChannels( rec, cfg_prune ):
     elif cfg_prune['flag_use_psp']:
         sci_x_psp_mask = psp_mask
     else:
-        return rec, chs_pruned, sci, psp
+        return rec, chs_pruned #, sci, psp
 
     perc_time_clean = sci_x_psp_mask.sum(dim="time") / len(sci.time)
     perc_time_mask = xrutils.mask(perc_time_clean, True)
@@ -176,10 +176,10 @@ def pruneChannels( rec, cfg_prune ):
 
     # modify xarray of channel labels with value of 0.95 for channels that are pruned by SCI and/or PSP
     chs_pruned.loc[drop_list] = 0.76     # was 0.95
-
-    rec.set_mask('chs_pruned', chs_pruned)
+    # pdb.set_trace()
+    # rec.set_mask('chs_pruned', chs_pruned)
     
-    return rec
+    return rec, chs_pruned
 
 
 def GLM(rec, rec_str, cfg_GLM, cfg_hrf, pruned_chans):

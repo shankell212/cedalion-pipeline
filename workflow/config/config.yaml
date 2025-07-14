@@ -42,7 +42,7 @@ preprocess:
       enable: true
 
     imu_glm:       # FOR WALKING DATA
-      enable: false
+      enable: true
       statesPerDataFrame: 89
       hWin: [-3, 5, 1]   # will be put into np.arange func UPDATE THAT
       n_components: [3, 2]  # [gyro, accel] 
@@ -93,7 +93,7 @@ groupaverage:
    blockaverage_val: "0 micromolar**2"
   mse_od:
    mse_val_for_bad_data: 1e1
-   mse_min_thresh: 1e-3 #1e-6
+   mse_min_thresh: 1e-6
    blockaverage_val: 0
    
    
@@ -111,7 +111,7 @@ image_recon:
     threshold_scalp: "5 mm"
     sigma_brain: "1 mm"
     sigma_scalp: "5 mm"
-  t_win: [4, 7]
+  t_win: [10, 20]
   probe_dir: "/projectnb/nphfnirs/ns/Shannon/Data/probes/NN22_WHHD/12NN/"
   snirf_name_probe: "fullhead_56x144_NN22_System1.snirf"
   head_model: 'ICBM152'

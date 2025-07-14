@@ -58,9 +58,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
     
     else:
         print(f"Error: File '{groupaverage_path}' not found!")
-            
-    blockaverage_all = blockaverage_mean.copy()
-    
+                
     # Load in a random rec so that we have geo2d and geo3d      # !!! NEED to save to a sidecar file or something
     results_rec = os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'preprocessed_data')
     filname_rec = "sub-" + cfg_dataset["subject"][0] + "/sub-" + cfg_dataset["subject"][0] + "_task-" + cfg_dataset['task'][0] + "_run-01_nirs_preprocessed.snirf" # !!! hard coding for meantime
@@ -93,7 +91,12 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
     einv = cedalion.xrutils.pinv(ec)
     
     #%% run image recon
-
+    #pdb.set_trace()
+    
+    # Make Adot and blockaverage channel order the same
+    blockaverage_subj = blockaverage_subj.sel(channel=Adot.channel.values)
+    blockaverage_mse_subj = blockaverage_mse_subj.sel(channel=Adot.channel.values)
+    
     """
     do the image reconstruction of each subject independently 
     - this is the unweighted subject block average magnitude 
@@ -103,10 +106,9 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
     """
     threshold = -2 # log10 absolute  # !!! this is hard coded, add to config????
     wl_idx = 1
-    M = sbf.get_sensitivity_mask(Adot, threshold, wl_idx)
 
-    ind_subj_blockavg = groupavg_results['blockaverage_subj']  
-    ind_subj_mse = groupavg_results['blockaverage_mse_subj']
+    ind_subj_blockavg = blockaverage_subj
+    ind_subj_mse = blockaverage_mse_subj
 
     F = None
     D = None
@@ -192,7 +194,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
         X_mse_btw_within_sum_subj = all_subj_X_mse + X_mse_weighted_between_subjects
         denom = (1/X_mse_btw_within_sum_subj).sum('subj')
         
-        X_hrf_mag_mean_weighted = (X_hrf_mag_mean / X_mse_btw_within_sum_subj).sum('subj')
+        X_hrf_mag_mean_weighted = (all_subj_X_hrf_mag / X_mse_btw_within_sum_subj).sum('subj')  
         X_hrf_mag_mean_weighted = X_hrf_mag_mean_weighted / denom
         
         mse_total = 1/denom

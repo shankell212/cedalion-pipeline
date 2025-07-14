@@ -20,7 +20,7 @@ import importlib
 importlib.reload(img_recon)
 # 
 # config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
-config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test.yaml"
+config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml"
 
 
 with open(config_path, 'r') as file:
