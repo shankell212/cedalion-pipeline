@@ -55,32 +55,44 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
     cfg_mse['mse_amp_thresh'] = min(mse_amp_thresh) # get minimum amplitude threshold
                             
     
+    #%%
     # # # 
-    
-        
+    #pdb.set_trace()
     # Loop thru trial tpes
-  
+    pdb.set_trace()
     for idxt, trial_type in enumerate(cfg_hrf['stim_lst']): 
-
+        
         # Loop over subjects
         blockaverage_subj = None
         for subj_idx, subj in enumerate(blockavg_files):
+            
+            
             # Load in json data qual
             with open(data_quality_files[subj_idx], 'r') as fp:
                 data_quality_sub = json.load(fp)
+            
+            print(f'sub = {subj}')
+            print(data_quality_files[subj_idx])
+            # with gzip.open(data_quality_files[subj_idx], 'rb') as f:
+            #     data_quality_sub = pickle.load(f)
+            
+            # data_qual_file = os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'],'preprocessed_data',f'sub-{cfg_dataset["subject"][subj_idx]}', f'sub-{cfg_dataset["subject"][subj_idx]}_task-BS_run-03_nirs_dataquality_geo.sidecar')
+            # with gzip.open(data_qual_file, 'rb') as f:
+            #     data_quality_sub = pickle.load(f)
+            
             idx_amp = np.array(data_quality_sub['idx_amp'])
             idx_sat = np.array(data_quality_sub['idx_sat'])
             bad_chans_sat = np.array(data_quality_sub['bad_chans_sat'])
             bad_chans_amp = np.array(data_quality_sub['bad_chans_amp'])
             
+           
             # Load in current sub's blockaverage file
             with open(subj, 'rb') as f:
                 results = pickle.load(f)
             blockaverage = results['blockaverage']
-            epochs = results['epochs']
+            epochs_tmp = results['epochs']
         
-            #pdb.set_trace()
-            epochs = epochs.where(epochs.trial_type == trial_type, drop=True)
+            epochs = epochs_tmp.where(epochs_tmp.trial_type == trial_type, drop=True)
             blockaverage1 = blockaverage.sel(trial_type=trial_type)  # select current trial type
             blockaverage1 = blockaverage1.expand_dims('trial_type')  # readd trial type coord
             blockaverage = blockaverage1.copy()
@@ -94,18 +106,15 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
             # Load in net cdf files
             #blockaverage2 = xr.load_dataarray(blockavg_files_nc)
             #epochs2 = xr.load_dataarray(epoch_files_nc)
-            
-            #pdb.set_trace()
-            
+                        
             blockaverage_weighted = blockaverage.copy()
             n_epochs = len(epochs.epoch)
             n_chs = len(epochs.channel)
 
             mse_t_lst = []            
-            
             #pdb.set_trace()
             # de-mean the epochs
-            epochs_zeromean = epochs - blockaverage  # !!! CHANGE TO SEL TRIAL TYPE
+            epochs_zeromean = epochs - blockaverage  
         
             if 'chromo' in blockaverage.dims:
                 epochs_zeromean = epochs_zeromean.stack(measurement=['channel','chromo']).sortby('chromo')
@@ -120,8 +129,6 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
             epochs_zeromean = epochs_zeromean.transpose('trial_type', 'measurement', 'reltime', 'epoch')            
             
             mse_t = (epochs_zeromean**2).sum('epoch') / (n_epochs - 1)**2 # this is squared to get variance of the mean, aka MSE of the mean
-
-            #pdb.set_trace()
             
             # set bad values in mse_t to the bad value threshold
             # idx_bad = np.where(mse_t == 0)[0]
@@ -130,8 +137,9 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
             
             bad_mask = mse_t.sel(trial_type=trial_type).data == 0
             bad_any = bad_mask.any(axis=1)
-            # pdb.set_trace()
+        
             bad_chans_mse = mse_t.channel[bad_any].values
+          
             
             # mse_t[:,idx_amp,:] = cfg_mse['mse_val_for_bad_data']
             # mse_t[:,idx_amp+n_chs,:] = cfg_mse['mse_val_for_bad_data']
@@ -151,9 +159,11 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
             # blockaverage.loc[trial_type, channels.isel(channel=idx_bad1),:,:] = cfg_mse['blockaverage_val']
             # blockaverage.loc[trial_type, channels.isel(channel=idx_bad2),:,:] = cfg_mse['blockaverage_val']
             
-            mse_t[:, mse_t.channel.isin(bad_chans_amp), :] = cfg_mse['mse_val_for_bad_data']
-            mse_t[:, mse_t.channel.isin(bad_chans_sat), :] = cfg_mse['mse_val_for_bad_data']
-            mse_t[:, mse_t.channel.isin(bad_chans_mse), :] = cfg_mse['mse_val_for_bad_data']
+            # pdb.set_trace()
+            # mse_t[:, mse_t.channel.isin(bad_chans_amp), :] = cfg_mse['mse_val_for_bad_data']
+            # mse_t[:, mse_t.channel.isin(bad_chans_sat), :] = cfg_mse['mse_val_for_bad_data']
+            # mse_t[:, mse_t.channel.isin(bad_chans_mse), :] = cfg_mse['mse_val_for_bad_data']
+            # mse_t.loc[dict(trial_type=trial_type, channel=bad_chans_sat)] = cfg_mse['mse_val_for_bad_data']
             
             blockaverage_weighted.loc[dict(trial_type=trial_type, channel=bad_chans_sat)] = cfg_mse['blockaverage_val']
             blockaverage_weighted.loc[dict(trial_type=trial_type, channel=bad_chans_amp)] = cfg_mse['blockaverage_val']
@@ -171,13 +181,18 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
                 mse_t = mse_t.unstack('measurement').transpose('trial_type', 'chromo','channel','reltime')
             else:
                 mse_t = mse_t.unstack('measurement').transpose('trial_type','channel','wavelength','reltime')
-
+            
+            # replace mse_t values after unstacking
+            mse_t.loc[dict(trial_type=trial_type, channel=bad_chans_sat)] = cfg_mse['mse_val_for_bad_data']
+            mse_t.loc[dict(trial_type=trial_type, channel=bad_chans_amp)] = cfg_mse['mse_val_for_bad_data']
+            mse_t.loc[dict(trial_type=trial_type, channel=bad_chans_mse)] = cfg_mse['mse_val_for_bad_data']
+                        
             source_coord = blockaverage_weighted['source']
             mse_t = mse_t.assign_coords(source=('channel',source_coord.data))
             detector_coord = blockaverage_weighted['detector']
             mse_t = mse_t.assign_coords(detector=('channel',detector_coord.data))
             
-            mse_t = xr.where(mse_t < cfg_mse['mse_min_thresh'], cfg_mse['mse_min_thresh'], mse_t)  # !!! maybe can be removed when we have the between subject mse
+            #mse_t = xr.where(mse_t < cfg_mse['mse_min_thresh'], cfg_mse['mse_min_thresh'], mse_t)  # !!! maybe can be removed when we have the between subject mse
 
             # gather the blockaverage across subjects
             if blockaverage_subj is None:
@@ -213,7 +228,7 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
     
             
         # DONE LOOP OVER SUBJECTS
-            
+        #pdb.set_trace()
         # get the unweighted average
         blockaverage_mean = blockaverage_subj.mean('subj')
     
@@ -234,11 +249,10 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
         blockaverage_mean_weighted = blockaverage_mean_weighted / denom
         
         mse_total = 1/denom
-        
+      
         total_stderr_blockaverage = np.sqrt( mse_total )
         total_stderr_blockaverage = total_stderr_blockaverage.assign_coords(trial_type=blockaverage_mean_weighted.trial_type)
         
-        #pdb.set_trace()
         if all_trial_blockaverage_mean is None:
             
             all_trial_blockaverage_mean = blockaverage_mean
@@ -266,19 +280,18 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
     # !!! need to add funcs to a module or at the end of this script lawl
     # !!! Do we want these plots still? Would need to also load in a rec ???  - or just load in saved geo2d and geo3d?
     # Plot scalp plot of mean, tstat,rsme + Plot mse hist
-    rec_test = cedalion.io.read_snirf("/projectnb/nphfnirs/ns/Shannon/Data/Interactive_Walking_HD/sub-01/nirs/sub-01_task-STS_run-01_nirs.snirf")
+    #rec_test = cedalion.io.read_snirf("/projectnb/nphfnirs/ns/Shannon/Data/Interactive_Walking_HD/sub-01/nirs/sub-01_task-STS_run-01_nirs.snirf")
     
-    #pdb.set_trace()
-    for idxt, trial_type in enumerate(all_trial_blockaverage_weighted_mean.trial_type.values):         
-        plot_mean_stderr(rec_test[0], 'amp', trial_type, cfg_dataset, cfg_blockaverage, blockaverage_mean_weighted, 
-                         all_trial_total_stderr, mse_mean_within_subject, mse_weighted_between_subjects, geo3d)
+    # for idxt, trial_type in enumerate(all_trial_blockaverage_weighted_mean.trial_type.values):         
+    #     plot_mean_stderr(rec_test[0], 'amp', trial_type, cfg_dataset, cfg_blockaverage, blockaverage_mean_weighted, 
+    #                      all_trial_total_stderr, mse_mean_within_subject, mse_weighted_between_subjects, geo3d)
         
-        plot_mse_hist(rec_test[0], 'amp', trial_type, cfg_dataset, all_trial_mse_subj, cfg_mse['mse_val_for_bad_data'], cfg_mse['mse_min_thresh'])  # !!! not sure if these r working correctly tbh
+    #     plot_mse_hist(rec_test[0], 'amp', trial_type, cfg_dataset, all_trial_mse_subj, cfg_mse['mse_val_for_bad_data'], cfg_mse['mse_min_thresh'])  # !!! not sure if these r working correctly tbh
     
     
     #blockaverage_mean, blockaverage_weighted_mean, total_stderr, blockaverage_subj, blockaverage_weighted_subj, mse_subj
     
-    #pdb.set_trace()
+
     groupavg_results = {'group_blockaverage': all_trial_blockaverage_mean,              # weighted group avg 
                    'group_blockaverage_weighted': all_trial_blockaverage_weighted_mean,   # unweighted group aaverage
                    'total_stderr_blockaverage': all_trial_total_stderr,
@@ -298,10 +311,14 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
     
     #return all_trial_blockaverage_mean, all_trial_blockaverage_weighted_mean, all_trial_total_stderr, all_trial_blockaverage_subj, all_trial_blockaverage_weighted_subj, all_trial_mse_subj
        
-    #%%
+    
+
+    # %%
     # # Loop over subjects
+    # #pdb.set_trace()
     # blockaverage_subj = None
     # for subj_idx, subj in enumerate(blockavg_files):
+    
     #     # Load in json data qual
     #     with open(data_quality_files[subj_idx], 'r') as fp:
     #         data_quality_sub = json.load(fp)
@@ -316,6 +333,12 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
     #     blockaverage = rec_blockavg['blockaverage']
     #     epochs_all = rec_blockavg['epochs']
         
+    #     # Load geometric positions and landmarks # !!! don't need to do for each subject in reality, but for snakemake yes?
+    #     with gzip.open(geo_files[subj_idx], 'rb') as f:
+    #         geo_pos = pickle.load(f)
+    #     geo2d = geo_pos['geo2d']
+    #     geo3d = geo_pos['geo3d']
+      
     #     # Load in net cdf files
     #     #blockaverage2 = xr.load_dataarray(blockavg_files_nc)
     #     #epochs2 = xr.load_dataarray(epoch_files_nc)
@@ -327,7 +350,7 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
 
     #     mse_t_lst = []
         
-    # Loop thru trial tpes
+    # #Loop thru trial tpes
     
     #     # Loop thru trial tpes
       
@@ -335,18 +358,12 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
             
     #         epochs_zeromean = epochs_all.where(epochs_all.trial_type == trial_type, drop=True) - blockaverage_weighted.sel(trial_type=trial_type) # zero mean data
     
-    #         if 'chromo' in blockaverage.dims:0].geo3d  # !!! save 2d and 3d pts in blockaverage????
-    #            }
+    #         if 'chromo' in blockaverage.dims: # !!! save 2d and 3d pts in blockaverage????
     
-    # # Save data a pickle for now  # !!! Change to snirf in future when its debugged
-    # with open(out, "wb") as f:        # if output is a single string, it wraps it in an output object and need to index in
-    #     pickle.dump(groupavg_results, f, protocol=pickle.HIGHEST_PROTOCOL)
-        
-    # print("Group average data saved successfully")
     #             foo_t = epochs_zeromean.stack(measurement=['channel','chromo']).sortby('chromo')
     #         else:
     #             foo_t = epochs_zeromean.stack(measurement=['channel','wavelength']).sortby('wavelength')
-    #         #pdb.set_trace()
+
     #         foo_t = foo_t.transpose('measurement', 'reltime', 'epoch')  # !!! this does not have trial type?
     #         mse_t = (foo_t**2).sum('epoch') / (n_epochs - 1)**2 # this is squared to get variance of the mean, aka MSE of the mean
             
@@ -406,7 +423,7 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
     
     #         # !!! DO we still wanna do this?
     #         # set the minimum value of mse_t
-    #         #mse_t = xr.where(mse_t < cfg_mse['mse_min_thresh'], cfg_mse['mse_min_thresh'], mse_t)
+    #         mse_t = xr.where(mse_t < cfg_mse['mse_min_thresh'], cfg_mse['mse_min_thresh'], mse_t)
             
     #         if 'chromo' in blockaverage.dims:
     #             mse_t = mse_t.unstack('measurement').transpose('chromo','channel','reltime')  
@@ -499,8 +516,8 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
     #            'total_stderr_blockaverage': total_stderr_blockaverage,
     #            'blockaverage_subj': blockaverage_subj,  # always unweighted   - load into img recon
     #            'blockaverage_mse_subj': blockaverage_mse_subj, # - load into img recon
-    #            # 'geo2d' : geo2d,
-    #            # 'geo3d' : geo3d     # !!! save 2d and 3d pts in blockaverage????
+    #            'geo2d' : geo2d,
+    #            'geo3d' : geo3d     # !!! save 2d and 3d pts in blockaverage????
     #            }
     
     # # Save data a pickle for now  # !!! Change to snirf in future when its debugged
@@ -510,6 +527,8 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
     # print("Group average data saved successfully")
 
 
+
+#%% Plot funcs
 def plot_mean_stderr(rec, rec_str, trial_type, cfg_dataset, cfg_blockavg, blockaverage_mean_weighted, blockaverage_stderr_weighted, mse_mean_within_subject, mse_weighted_between_subjects, geo3d):
     # scalp_plot the mean, stderr and t-stat
     #######################################################
@@ -665,7 +684,7 @@ def plot_mean_stderr(rec, rec_str, trial_type, cfg_dataset, cfg_blockavg, blocka
 def plot_mse_hist(rec, rec_str, trial_type, cfg_dataset, blockaverage_mse_subj, mse_val_for_bad_data, mse_min_thresh):
     # plot the MSE histogram
     ########################################################
-    #pdb.set_trace()
+
     blockaverage_mse_subj_t = blockaverage_mse_subj #.sel(trial_type = trial_type)
     
     f,ax = p.subplots(2,1,figsize=(6,10))

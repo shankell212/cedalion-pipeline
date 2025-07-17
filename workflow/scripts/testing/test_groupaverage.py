@@ -8,7 +8,9 @@ Created on Thu Jun 12 07:39:52 2025
 import yaml
 import os
 import sys
-sys.path.append('/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/')
+script_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(script_dir)
+sys.path.append(parent_dir)
 import groupaverage as groupavg
 
 #%%
@@ -17,7 +19,7 @@ importlib.reload(groupavg)
 
 # config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
 #config_path = "C:\\Users\\shank\\Documents\\GitHub\\cedalion-pipeline\\workflow\\config\\config.yaml"
-config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml" # CHANGE if testing
+config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml" # CHANGE if testing
 
 
 with open(config_path, 'r') as file:
@@ -41,6 +43,9 @@ geo_files = [os.path.join(blockavg_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_
 # blockavg_files_nc = [os.path.join(blockavg_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_nirs_blockaverage.nc") for subj in subjects ]
 # epoch_files_nc = [os.path.join(blockavg_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_nirs_epochs.nc") for subj in subjects ]
 
+# preproc_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "preprocessed_data")  #, f"sub-{subj}")
+# data_quality_files = [os.path.join(preproc_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_run-{cfg_dataset['run'][-1]}_nirs_dataquality_geo.sidecar") for subj in subjects ]
+
 
 save_path = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "groupaverage")
 out = os.path.join(save_path, f"task-{task}_nirs_groupaverage.pkl")
@@ -50,4 +55,5 @@ if not os.path.exists(der_dir):
     os.makedirs(der_dir)
         
 groupavg.groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, flag_prune_channels, blockavg_files, data_quality_files, geo_files, out)
+
 

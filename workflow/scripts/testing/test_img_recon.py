@@ -11,7 +11,9 @@ Created on Mon Jun 16 05:15:40 2025
 import yaml
 import os
 import sys
-sys.path.append('/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/')  # CHANGE
+script_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(script_dir)
+sys.path.append(parent_dir)
 import image_recon as img_recon
 
 
@@ -20,7 +22,7 @@ import importlib
 importlib.reload(img_recon)
 # 
 # config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
-config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml"
+config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml"
 
 
 with open(config_path, 'r') as file:

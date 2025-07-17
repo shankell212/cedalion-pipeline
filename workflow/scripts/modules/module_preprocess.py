@@ -65,16 +65,6 @@ def prune_mask_ts(ts, pruned_chans):
 
 def median_filt(rec, median_filt ):
 
-    # replace negative values and NaNs with a small positive value
-    rec['amp'] = rec['amp'].where( rec['amp']>0, 1e-18 ) 
-    rec['amp'] = rec['amp'].where( ~rec['amp'].isnull(), 1e-18 ) 
-
-    # if first value is 1e-18 then replace with second value
-    indices = np.where(rec['amp'][:,0,0] == 1e-18)
-    rec['amp'][indices[0],0,0] = rec['amp'][indices[0],0,1]
-    indices = np.where(rec['amp'][:,1,0] == 1e-18)
-    rec['amp'][indices[0],1,0] = rec['amp'][indices[0],1,1]
-
     # apply a median filter to rec['amp'] along the time dimension
     # FIXME: this is to handle spikes that arise from the 1e-18 values inserted above or from other causes, 
     #        but this is an effective LPF. TDDR may handle this
@@ -93,7 +83,6 @@ def pruneChannels( rec, cfg_prune ):
     ''' Function that prunes channels based on cfg params.
         *Pruned channels are not dropped, instead they are set to NaN 
         '''
-
     amp_thresh = cfg_prune['amp_thresh']
     snr_thresh = cfg_prune['snr_thresh']
     sd_thresh = cfg_prune['sd_thresh']
@@ -111,7 +100,7 @@ def pruneChannels( rec, cfg_prune ):
     # create an xarray of channel labels with values indicated why pruned
     chs_pruned = xr.DataArray(np.zeros(rec['amp'].shape[0]), dims=["channel"], coords={"channel": rec['amp'].channel})
 
-    #i initialize chs_pruned to 0.58 (good chans)
+    # initialize chs_pruned to 0.58 (good chans)
     chs_pruned[:] = 0.58      # good snr   # was 0.4
 
     # get indices for where snr_mask = false
@@ -135,10 +124,7 @@ def pruneChannels( rec, cfg_prune ):
     masks = [snr_mask, sd_mask, amp_mask]
 
     # prune channels using the masks and the operator "all", which will keep only channels that pass all three metrics
-    amp_pruned, drop_list = quality.prune_ch(rec['amp'], masks, "all", flag_drop=False)
-
-    # record the pruned array in the record
-    rec['amp_pruned'] = amp_pruned
+    rec['amp_pruned'], drop_list = quality.prune_ch(rec['amp'], masks, "all", flag_drop=False)
 
     perc_time_clean_thresh = cfg_prune['perc_time_clean_thresh']
     sci_threshold = cfg_prune['sci_threshold']
@@ -159,7 +145,7 @@ def pruneChannels( rec, cfg_prune ):
     elif cfg_prune['flag_use_psp']:
         sci_x_psp_mask = psp_mask
     else:
-        return rec, chs_pruned #, sci, psp
+        return rec, chs_pruned
 
     perc_time_clean = sci_x_psp_mask.sum(dim="time") / len(sci.time)
     perc_time_mask = xrutils.mask(perc_time_clean, True)
@@ -175,8 +161,7 @@ def pruneChannels( rec, cfg_prune ):
     rec['amp_pruned'] = perc_time_pruned
 
     # modify xarray of channel labels with value of 0.95 for channels that are pruned by SCI and/or PSP
-    chs_pruned.loc[drop_list] = 0.76     # was 0.95
-    # pdb.set_trace()
+    chs_pruned.loc[drop_list] = 0.76   #SCI and/or PSP  # was 0.95
     # rec.set_mask('chs_pruned', chs_pruned)
     
     return rec, chs_pruned
@@ -184,23 +169,24 @@ def pruneChannels( rec, cfg_prune ):
 
 def GLM(rec, rec_str, cfg_GLM, cfg_hrf, pruned_chans):
     
+    # !!! change to have this do a weighted avg of all the short chans
     # get pruned data for SSR
     rec_pruned = prune_mask_ts(rec[rec_str], pruned_chans) # !!! how is this affected when using pruned data
     
-    rec_pruned = rec_pruned.where( ~rec_pruned.isnull(), 0)  #1e-18 )   # set nan to 0
-
+    #rec_pruned = rec_pruned.where( ~rec_pruned.isnull(), 0)  #1e-18 )   # set nan to 0
+    #pdb.set_trace()
     # separate long and short channels using pruned data. 
     ts_long, ts_short = cedalion.nirs.split_long_short_channels(
         rec_pruned, rec.geo3d, distance_threshold= cfg_GLM['distance_threshold']  # !!! change to rec_pruned once NaN prob fixed
     )
-    
+    pdb.set_trace()
     #### build design matrix 
     dm = (
     glm.design_matrix.hrf_regressors(
         rec[rec_str], rec.stim, glm.GaussianKernels(cfg_hrf['t_pre'], cfg_hrf['t_post'], cfg_GLM['t_delta'], cfg_GLM['t_std'])
     )
     & glm.design_matrix.drift_regressors(rec[rec_str], drift_order = cfg_GLM['drift_order'])
-    & glm.design_matrix.closest_short_channel_regressor(rec[rec_str], ts_short, rec.geo3d)
+    & glm.design_matrix.average_short_channel_regressor(ts_short)
 )
 
     #### fit the model 

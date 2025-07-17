@@ -816,7 +816,7 @@ def save_image_results(X_matrix, X_matrix_name, save_path, trial_type_img, cfg_i
     
 
 #%%
-def plot_image_recon( X, head, shape, iax, clim=(0,1), flag_hbx='hbo_brain', view_position='superior', p0 = None, title_str = None ):
+def plot_image_recon( X, head, shape, iax, clim=(0,1), flag_hbx='hbo_brain', view_position='superior', p0 = None, title_str = None, off_screen = True ):
 
     cmap = p.get_cmap("jet", 256)
     new_cmap_colors = np.vstack((cmap(np.linspace(0, 1, 256))))
@@ -854,7 +854,7 @@ def plot_image_recon( X, head, shape, iax, clim=(0,1), flag_hbx='hbo_brain', vie
     pos = positions[idx[0]]
 
     if p0 is None:
-        p0 = pv.Plotter(shape=(shape[0],shape[1]), window_size = [2000, 1500], off_screen=True)
+        p0 = pv.Plotter(shape=(shape[0],shape[1]), window_size = [2000, 1500], off_screen=off_screen)
 #        p.add_text(f"Group average with alpha_meas = {alpha_meas} and alpha_spatial = {alpha_spatial}", position='upper_left', font_size=12, viewport=True)
 
     p0.subplot(iax[0], iax[1])
