@@ -10,7 +10,9 @@ import yaml
 import os
 import copy
 import sys
-sys.path.append('/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/')
+script_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(script_dir)
+sys.path.append(parent_dir)
 import preprocess as preproc
 
 
@@ -20,7 +22,7 @@ importlib.reload(preproc)
 
 #config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml" # CHANGE if testing
 #config_path = "C:\\Users\\shank\\Documents\\GitHub\\cedalion-pipeline\\workflow\\config\\config.yaml"
-config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml" # CHANGE if testing
+config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml" # CHANGE if testing
 
 
 with open(config_path, 'r') as file:  # open config file
@@ -31,11 +33,12 @@ cfg_preprocess = config['preprocess']
 cfg_hrf = config['hrf']
 mse_amp_thresh = config['groupaverage']['mse_amp_thresh']
 
-subjects = cfg_dataset['subject'] #[1]   # sub idx you want to test
-tasks = cfg_dataset['task'] #[0]
-runs = cfg_dataset['run'] #[0]
+subjects = cfg_dataset['subject'] 
+tasks = cfg_dataset['task'] 
+runs = cfg_dataset['run'] 
 
-# Loop through lists of tasks, subjects, and runss
+subjects = ['618']
+# Loop through lists of tasks, subjects, and runs
 for subj in subjects:
     for task in tasks:
         for run in runs:
@@ -52,7 +55,7 @@ for subj in subjects:
             #out_json = f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_dataquality.json"
             
             out_files = {
-                "out_snirf" : f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_preprocessed.snirf",
+                "out_snirf" : f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_preprocessed.pkl",
                 "out_sidecar": f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_dataquality_geo.sidecar",
                 #"out_dqr": f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_DQR.png",
                 #"out_gvtd": f"{save_path}sub-{subj}_task-{task}_run-{run}_nirs_DQR_gvtd_hist.png",

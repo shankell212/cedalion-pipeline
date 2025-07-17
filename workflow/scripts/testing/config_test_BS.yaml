@@ -1,14 +1,15 @@
 dataset:
   root_dir: "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS"
-  derivatives_subfolder: "Shannon/cedalion/test" #"Shannon/cedalion/test" 
-  subject: ["568", "577", "580"] #, "581", "583","586", "587", "588", "592"] #, "613", "618","619", "621", "633", "638", "639", "640"]
+  derivatives_subfolder: "Shannon/cedalion"  #/test_allsubs #"Shannon/cedalion/test_all_subs" 
+  subject: ["568", "577", "580", "581", "583","586", "587", "588", "592", "613", "618","619", "621", "633", "638", "639", "640"]
+  
   task: ["BS"]  
   run: ["01", "02", "03"]   # !!! SHOULD we just have snakemake parse thru the number of runs? what if a sub only has 2 runs but all others have 3
     
 hrf:  # !!! make these constants instead?
   stim_lst: ["right", "left"]  #["STS"]  # make this in script instead of adding?  # auto but then add exlusion
   t_pre: "2 second"  # can we make this a lsit for diff trial types for GLM
-  t_post: "15 second" 
+  t_post: "16 second" 
 
 preprocess:
   steps:
@@ -26,7 +27,7 @@ preprocess:
       snr_thresh: 5
       sd_thresh:
         - "1 mm"
-        - "60 mm"
+        - "40 mm"
       amp_thresh:
         - 1e-3
         - 0.84
@@ -49,7 +50,7 @@ preprocess:
     imu_glm:       # FOR WALKING DATA
       enable: false
       statesPerDataFrame: 89
-      hWin: [-3, 5, 1]   # will be put into np.arange func UPDATE THAT
+      hWin: [-3, 5, 1]   # !!! will be put into np.arange func UPDATE THAT
       n_components: [3, 2]  # [gyro, accel] 
       butter_order: 4    # butterworth filter order
       Fc: 0.1   # cutoff freq (Hz)
@@ -76,7 +77,7 @@ preprocess:
       enable: true
       drift_order: 1
       distance_threshold: "20 mm"   # for ssr
-      short_channel_method: "mean"
+      short_channel_method: "mean"   # FIX - this is not being used LOL
       noise_model: "ols"    # !!! ADD choice of basis func 
       t_delta: "1 second"     # for seq of Gauss basis func; temporal spacing btwn consecutive gaussians
       t_std: "1 second"
@@ -92,7 +93,7 @@ blockaverage:
 # !!! ^^ add GLM to blockaverage (either blockavg OR glm) and rename HRF_estimation
 
 groupaverage:
-  mse_amp_thresh: 1e-3 #1e-3 #1.1e-6 for conc
+  mse_amp_thresh: 1e-3
   mse_conc:
    mse_val_for_bad_data: "1e7 micromolar**2"
    mse_min_thresh: "1e0 micromolar**2"
@@ -111,19 +112,19 @@ image_recon:
   BRAIN_ONLY:      # reconstruct brain only OR scalp and brain
     enable: false
   spatial_basis:           
-    enable: true 
+    enable: false 
     mask_threshold: -2
     threshold_brain: "1 mm"
     threshold_scalp: "5 mm"
     sigma_brain: "1 mm"
     sigma_scalp: "5 mm"
-  t_win: [4, 7]
+  t_win: [5, 8] # now using 5-8
   probe_dir: "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/derivatives/Shannon/cedalion/probe/"  #"/projectnb/nphfnirs/ns/Shannon/Data/probes/NN22_WHHD/12NN/" # "/projectnb/nphfnirs/s/users/lcarlton/DATA/probes/NN22_WHHD/12NN/"
   snirf_name_probe: "fullhead_56x144_NN22_System1.snirf" #"fullhead_56x144_System2.snirf"
   head_model: 'ICBM152'
   alpha_meas: 1e4
-  alpha_spatial: 1e-2
-  spectrum: 'prahl'
+  alpha_spatial: 1e-3
+  spectrum: 'prahl'  # for extinction coeffs
   mse_min_thresh: 1e-6   # where is this used
   plot_image:
     enable: true

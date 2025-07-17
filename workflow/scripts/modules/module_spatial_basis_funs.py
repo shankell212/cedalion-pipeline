@@ -168,10 +168,10 @@ def get_kernel_matrix(mesh_downsampled: xr.DataArray,
 
 def get_G_matrix(head: cfm.TwoSurfaceHeadModel, 
                  M: xr.DataArray,
-                 threshold_brain: cedalion.Quantity = 5 * cedalion.units.mm, 
-                 threshold_scalp: cedalion.Quantity = 20 * cedalion.units.mm, 
-                 sigma_brain: cedalion.Quantity = 5 * cedalion.units.mm, 
-                 sigma_scalp: cedalion.Quantity = 20 * cedalion.units.mm
+                 threshold_brain: cedalion.Quantity = 1 * cedalion.units.mm, 
+                 threshold_scalp: cedalion.Quantity = 5 * cedalion.units.mm, 
+                 sigma_brain: cedalion.Quantity = 1 * cedalion.units.mm, 
+                 sigma_scalp: cedalion.Quantity = 5 * cedalion.units.mm
                  ):
     
     """Get the G matrix which contains all the information of the spatial basis

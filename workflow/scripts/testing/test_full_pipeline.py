@@ -10,7 +10,9 @@ Created on Mon Jun 16 06:32:13 2025
 import yaml
 import os
 import sys
-sys.path.append('/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/')  # CHANGE
+script_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(script_dir)
+sys.path.append(parent_dir)
 import preprocess as preproc
 import blockaverage as blockavg
 import groupaverage as groupavg
