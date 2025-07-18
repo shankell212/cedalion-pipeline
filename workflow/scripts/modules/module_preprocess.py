@@ -172,14 +172,14 @@ def GLM(rec, rec_str, cfg_GLM, cfg_hrf, pruned_chans):
     # !!! change to have this do a weighted avg of all the short chans
     # get pruned data for SSR
     rec_pruned = prune_mask_ts(rec[rec_str], pruned_chans) # !!! how is this affected when using pruned data
-    
+
     #rec_pruned = rec_pruned.where( ~rec_pruned.isnull(), 0)  #1e-18 )   # set nan to 0
-    #pdb.set_trace()
+
     # separate long and short channels using pruned data. 
     ts_long, ts_short = cedalion.nirs.split_long_short_channels(
         rec_pruned, rec.geo3d, distance_threshold= cfg_GLM['distance_threshold']  # !!! change to rec_pruned once NaN prob fixed
     )
-    pdb.set_trace()
+    
     #### build design matrix 
     dm = (
     glm.design_matrix.hrf_regressors(
@@ -194,7 +194,7 @@ def GLM(rec, rec_str, cfg_GLM, cfg_hrf, pruned_chans):
 
     betas = results.sm.params
 
-    pred_all = glm.predict(rec[rec_str], betas, dm)  #, channel_wise_regressors)
+    pred_all = glm.predict(rec[rec_str], betas, dm)  
     pred_all = pred_all.pint.quantify('micromolar')
     
     residual = rec[rec_str] - pred_all
@@ -203,9 +203,8 @@ def GLM(rec, rec_str, cfg_GLM, cfg_hrf, pruned_chans):
     pred_hrf = glm.predict(
                             rec[rec_str],
                             betas.sel(regressor=betas.regressor.str.startswith("HRF ")),
-                            dm ) #,
-                            #channel_wise_regressors)
-    
+                            dm ) 
+                            
     pred_hrf = pred_hrf.pint.quantify('micromolar')
     
     rec[rec_str] = pred_hrf + residual 

@@ -9,7 +9,7 @@ dataset:
 hrf:  # !!! make these constants instead?
   stim_lst: ["right", "left"]  #["STS"]  # make this in script instead of adding?  # auto but then add exlusion
   t_pre: "2 second"  # can we make this a lsit for diff trial types for GLM
-  t_post: "16 second" 
+  t_post: "16 second" # 15
 
 preprocess:
   steps:

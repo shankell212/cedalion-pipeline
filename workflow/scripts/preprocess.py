@@ -60,6 +60,7 @@ import yaml
 import json
 import pickle
 import gzip
+import matplotlib.pyplot as plt
 
 #%% Load in data for current subject/task/run
 
@@ -93,26 +94,19 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
     rec['amp'][indices[0],1,0] = rec['amp'][indices[0],1,1]
     
     #%% Preprocess
-    #pdb.set_trace()
+    
     for step_name, params in cfg_preprocess["steps"].items():
-        print(step_name)
-        # print(params)
         
         # If this step is disabled, skip it
         if not (params.get("enable", False))  and (step_name != "prune"): 
             continue
        
         if step_name == "bs_preproc":   # !!! only for BS data 
-            #pdb.set_trace()
+            
             Adot, meas_list, geo3d, amp = img_recon.load_probe(params['probe_dir'], snirf_name=params['snirf_name_probe'])
             #rec['amp'] = rec['amp'].sel(channel=Adot.channel)
             chans = list(dict.fromkeys(meas_list.channel))  # select chans we care about from probe snirf meas list
             rec['amp'] = rec['amp'].sel(channel=chans) 
-            
-            # sd_thresh = [1*units.mm, 42*units.mm]  # gives 569 channels
-            # sd_dist, sd_mask = quality.sd_dist(rec['amp'], rec.geo3d, sd_thresh)
-            # amp_pruned, drop_list = quality.prune_ch(rec['amp'], [sd_mask], "all", flag_drop=True)
-            #amp_new = quality.sd_dist(rec['amp'], rec.geo3d, ())
             
         elif step_name == "median_filter":
             rec = preproc.median_filt( rec, params['order'] )
@@ -139,11 +133,9 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             
             rec["od_corrected"] = rec["od"]
             units_od = rec["od"].pint.units
-        
          
         elif step_name in ("calc_slope_b4", "calc_slope_before", "slope_b4", "slope_before"):
-            # Get the slope of 'od' before motion correction and any bandpass filtering 
-            slope_base = preproc.quant_slope(rec, "od")
+            slope_base = preproc.quant_slope(rec, "od") # Get the slope of 'od' before motion correction and bpf 
             
         elif step_name in ("calc_gvtd_b4", "calc_gvtd_before", "gvtd_b4", "gvtd_before"):
             # Calculate GVTD on pruned data
@@ -162,7 +154,6 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
         # tddr
         elif step_name in ("tddr", "motion_correct_tddr"):
             rec['od_corrected'] = motion_correct.tddr( rec['od_corrected'] )  
-    
             rec['od_corrected'] = rec['od_corrected'].where( ~rec['od_corrected'].isnull(), 1e-18 ) # 0  # replace any NaNs after TDDR # !!! make a step?
         
             
@@ -177,7 +168,7 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
         # splineSG
         elif step_name in ("splineSG", "motion_correct_splineSG"):
             rec['od_corrected'] = motion_correct.motion_correct_splineSG( rec['od_corrected'], params['p'], params['frame_size'] )  
-     
+            
         
         # !!! add PCA
         # elif step_name in ("PCA", "motion_correct_PCA"):
@@ -240,7 +231,6 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             
             rec = preproc.GLM(rec, 'conc', params, cfg_hrf, pruned_chans) # passing in pruned channels
             
-            pdb.set_trace()
             rec['od_corrected'] = cedalion.nirs.conc2od(rec['conc'], rec.geo3d, dpf)  # Convert GLM filtered data back to OD
             rec['od_corrected'] = rec['od_corrected'].transpose('channel', 'wavelength', 'time') # need to transpose to match rec['od'] bc conc2od switches the axes
         
@@ -252,7 +242,6 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             lambda1 = rec['amp_pruned'].wavelength[1].wavelength.values
             snr0, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda0), cfg_preprocess['steps']["prune"]['snr_thresh'])
             snr1, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda1), cfg_preprocess['steps']["prune"]['snr_thresh'])
-            
             snr0 = np.nanmedian(snr0.values)
             snr1 = np.nanmedian(snr1.values)
         
@@ -273,7 +262,6 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
         
     if isinstance(mse_amp_thresh,str):
         mse_amp_thresh = float(mse_amp_thresh)
-    #pdb.set_trace()
     idx_sat = np.where(chs_pruned == 0.92)[0]
     sat_ch_coords = chs_pruned.channel[idx_sat].values  # get channel coords
     amp = rec['amp'].mean('time').min('wavelength') # take the minimum across wavelengths

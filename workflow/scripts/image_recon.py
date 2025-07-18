@@ -95,7 +95,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
     - then get the weighted average in image space 
     - get the total standard error using between + within subject MSE 
     """
-    threshold = -2 # log10 absolute  # !!! this is hard coded, add to config????
+    threshold = -2 # log10 absolute  # !!! this is hard coded, add to config????  # !!! mask_threshold
     wl_idx = 1
 
     ind_subj_blockavg = blockaverage_subj
@@ -114,7 +114,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
         
         for subj in ind_subj_blockavg.subj:
             print(f'Calculating subject = {subj.values}')
-            #pdb.set_trace()
+            
             od_hrf = ind_subj_blockavg.sel(subj=subj, trial_type=trial_type) 
             # od_hrf = od_hrf.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
            
@@ -135,11 +135,11 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
                                                         cfg_sbf = cfg_sb, alpha_spatial = cfg_img_recon['alpha_spatial'], 
                                                         alpha_meas = cfg_img_recon['alpha_meas'],F = F, D = D, G = G)
                                                         
-            #pdb.set_trace()
+            
             X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag, W, DIRECT = cfg_img_recon['DIRECT']['enable'], SB= cfg_sb['enable'], G=G)
             
 
-            # weighted average -- same as chan space - but now is vertex space  #pdb.set_trace()
+            # weighted average -- same as chan space - but now is vertex space  
             if all_subj_X_hrf_mag is None:
                 
                 all_subj_X_hrf_mag = X_hrf_mag
