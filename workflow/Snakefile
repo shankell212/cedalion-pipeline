@@ -2,8 +2,8 @@
 from snakemake.io import glob_wildcards
 
 
-#configfile: "config/config.yaml"
-configfile: "scripts/testing/config_test_BS.yaml"
+configfile: "config/config.yaml"
+#configfile: "scripts/testing/config_test_BS.yaml"
 
 
 ROOT = config['dataset']["root_dir"]

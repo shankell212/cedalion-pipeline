@@ -70,6 +70,7 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
         # Load in json data qual
         # with open(data_quality_files[file_idx], 'r') as fp:
         #     data_quality_run = json.load(fp)
+        
         with gzip.open(data_quality_files[file_idx], 'rb') as f:
             data_quality_run = pickle.load(f)
             
@@ -176,6 +177,7 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
     # # SAVE data quality dict as a sidecar json file   # !!! change to just keeping in xarray as a dim?
     with open(out_json, 'w') as fp:
         json.dump(data_quality, fp)
+        
     # file = gzip.GzipFile('out_sidecar', 'wb')  # save as sidecar instead of json
     # file.write(pickle.dumps(data_quality))
     
