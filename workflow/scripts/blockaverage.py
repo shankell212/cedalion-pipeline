@@ -36,7 +36,7 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
     # update units 
     cfg_hrf['t_pre']= units(cfg_hrf['t_pre'])
     cfg_hrf['t_post']= units(cfg_hrf['t_post'])
-    
+
     # Loop through files
     idx_sat_runs = []
     idx_amp_runs = []
@@ -70,20 +70,23 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
         # Load in json data qual
         # with open(data_quality_files[file_idx], 'r') as fp:
         #     data_quality_run = json.load(fp)
+        
         with gzip.open(data_quality_files[file_idx], 'rb') as f:
             data_quality_run = pickle.load(f)
             
         geo2d = data_quality_run['geo2d']
         geo3d = data_quality_run['geo3d']
             
-        # check if ts has dimenstion chromo
+        # check if ts has dimension chromo   # !!! why transposing? 
+        # conc is already in this order. od_corrected was in order after conc2od, now is not bc transposed
+        # od will be in this order still .... hm 
         if 'chromo' in ts.dims:
             ts = ts.transpose('chromo', 'channel', 'time')  # !!! try transpose(..., 'channel', 'time') to get rid of if statement
         else:
             ts = ts.transpose('wavelength', 'channel', 'time')
             
         ts = ts.assign_coords(samples=('time', np.arange(len(ts.time))))
-        ts['time'] = ts.time.pint.quantify(units.s)     
+        ts['time'] = ts.time.pint.quantify(units.s) # !!! already is s? do we need this
         
         # get the epochs
         epochs_tmp = ts.cd.to_epochs(
@@ -158,7 +161,7 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
     idx_amp_flat = [x for xs in idx_amp_runs for x in xs]
     bad_chans_sat_flat = [x for xs in bad_chans_sat_runs for x in xs]
     bad_chans_amp_flat = [x for xs in bad_chans_amp_runs for x in xs]
-    
+
     idx_sat = list(set(idx_sat_flat)) # get unique channel values only # !!! FIXME: want to not mark a chan bad thats only bad in 1 run in future
     idx_amp = list(set(idx_amp_flat))
     bad_chans_sat = list(set(bad_chans_sat_flat))
@@ -171,9 +174,12 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
         "bad_chans_amp": bad_chans_amp
         }
     
-    # SAVE data quality dict as a sidecar json file   # !!! change to just keeping in xarray as a dim?
+    # # SAVE data quality dict as a sidecar json file   # !!! change to just keeping in xarray as a dim?
     with open(out_json, 'w') as fp:
         json.dump(data_quality, fp)
+        
+    # file = gzip.GzipFile('out_sidecar', 'wb')  # save as sidecar instead of json
+    # file.write(pickle.dumps(data_quality))
     
     # # Debugging issue with save snirf:
     # for key, timeseries in rec.timeseries.items():

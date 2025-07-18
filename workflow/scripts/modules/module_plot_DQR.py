@@ -24,8 +24,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, cfg_hrf): #, 
     a=1
     # make sure save folder exists, if not, create it
     der_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'],'plots', 'DQR')
-    if not os.path.exists(der_dir):
-        os.makedirs(der_dir)
+    os.makedirs(der_dir, exist_ok=True)
     
     stim_lst_str = cfg_hrf['stim_lst']
     

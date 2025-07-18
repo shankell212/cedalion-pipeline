@@ -23,7 +23,6 @@ import json
 import pdb
 
 import sys
-#sys.path.append('/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/scripts/modules/')
 script_dir = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.join(script_dir, 'modules')
 sys.path.append(modules_path)
@@ -52,22 +51,13 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
         blockaverage_stderr = groupavg_results['total_stderr_blockaverage']
         blockaverage_subj = groupavg_results['blockaverage_subj']
         blockaverage_mse_subj = groupavg_results['blockaverage_mse_subj']
-        #geo2d = groupavg_results['geo2d']
-        #geo3d = groupavg_results['geo3d']  # !!! this is not in groupaverage results yet
+        geo2d = groupavg_results['geo2d']
+        geo3d = groupavg_results['geo3d']  # !!! this is not in groupaverage results yet
         print(f" {groupaverage_path} loaded successfully!")
     
     else:
         print(f"Error: File '{groupaverage_path}' not found!")
                 
-    # Load in a random rec so that we have geo2d and geo3d      # !!! NEED to save to a sidecar file or something
-    results_rec = os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'preprocessed_data')
-    filname_rec = "sub-" + cfg_dataset["subject"][0] + "/sub-" + cfg_dataset["subject"][0] + "_task-" + cfg_dataset['task'][0] + "_run-01_nirs_preprocessed.snirf" # !!! hard coding for meantime
-    filepath_rec = os.path.join(results_rec , filname_rec)
-    
-    records = cedalion.io.read_snirf( filepath_rec )
-    rec = records[0]
-    geo3d = rec.geo3d
-    geo2d = rec.geo2d
     
     # Convert str vals to units from config
     cfg_sb = cfg_img_recon['spatial_basis']
@@ -87,15 +77,16 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
     head, PARCEL_DIR = img_recon.load_head_model(cfg_img_recon['head_model'], with_parcels=False)
     Adot, meas_list, geo3d, amp = img_recon.load_probe(cfg_img_recon['probe_dir'], snirf_name=cfg_img_recon['snirf_name_probe'])
     
-    ec = cedalion.nirs.get_extinction_coefficients('prahl', Adot.wavelength)
+    ec = cedalion.nirs.get_extinction_coefficients(cfg_img_recon['spectrum'], Adot.wavelength)
     einv = cedalion.xrutils.pinv(ec)
     
     #%% run image recon
     #pdb.set_trace()
-    
-    # Make Adot and blockaverage channel order the same
-    blockaverage_subj = blockaverage_subj.sel(channel=Adot.channel.values)
-    blockaverage_mse_subj = blockaverage_mse_subj.sel(channel=Adot.channel.values)
+    Adot = Adot.sel(channel=blockaverage_subj.channel.values)  # grab correct channels from probe
+
+    # # Make Adot and blockaverage channel order the same
+    # blockaverage_subj = blockaverage_subj.sel(channel=Adot.channel.values)
+    # blockaverage_mse_subj = blockaverage_mse_subj.sel(channel=Adot.channel.values)
     
     """
     do the image reconstruction of each subject independently 
@@ -104,7 +95,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
     - then get the weighted average in image space 
     - get the total standard error using between + within subject MSE 
     """
-    threshold = -2 # log10 absolute  # !!! this is hard coded, add to config????
+    threshold = -2 # log10 absolute  # !!! this is hard coded, add to config????  # !!! mask_threshold
     wl_idx = 1
 
     ind_subj_blockavg = blockaverage_subj
@@ -123,7 +114,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
         
         for subj in ind_subj_blockavg.subj:
             print(f'Calculating subject = {subj.values}')
-            #pdb.set_trace()
+            
             od_hrf = ind_subj_blockavg.sel(subj=subj, trial_type=trial_type) 
             # od_hrf = od_hrf.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
            
@@ -136,19 +127,19 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
             C_meas = C_meas.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
             C_meas = xr.where(C_meas < cfg_img_recon['mse_min_thresh'], cfg_img_recon['mse_min_thresh'], C_meas)
 
-                
             # !!! GET RID of hard coded wavelength  -- can just grab from one of the xarrays?
             X_hrf_mag, W, D, F, G = img_recon.do_image_recon(od_hrf_mag, head = head, Adot = Adot, C_meas_flag = cfg_img_recon['Cmeas']['enable'], 
-                                                             C_meas = C_meas, wavelength = [760,850], BRAIN_ONLY = cfg_img_recon['BRAIN_ONLY']['enable'], 
+                                                             C_meas = C_meas, wavelength = [ind_subj_blockavg.wavelength[0].item(), ind_subj_blockavg.wavelength[1].item()], 
+                                                             BRAIN_ONLY = cfg_img_recon['BRAIN_ONLY']['enable'], 
                                                              DIRECT = cfg_img_recon['DIRECT']['enable'], SB = cfg_sb['enable'], 
                                                         cfg_sbf = cfg_sb, alpha_spatial = cfg_img_recon['alpha_spatial'], 
                                                         alpha_meas = cfg_img_recon['alpha_meas'],F = F, D = D, G = G)
                                                         
-            #pdb.set_trace()
+            
             X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag, W, DIRECT = cfg_img_recon['DIRECT']['enable'], SB= cfg_sb['enable'], G=G)
             
 
-            # weighted average -- same as chan space - but now is vertex space
+            # weighted average -- same as chan space - but now is vertex space  
             if all_subj_X_hrf_mag is None:
                 
                 all_subj_X_hrf_mag = X_hrf_mag
@@ -235,97 +226,97 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
     file.close()     
     
     
-    # #%% build and save plots
-    # if cfg_img_recon['plot_image']['enable']:
-    #     plot_img = cfg_img_recon['plot_image']
-    #     threshold = -2 # log10 absolute
-    #     wl_idx = 1
-    #     M = sbf.get_sensitivity_mask(Adot, threshold, wl_idx)
-    #     flag_hbo_list = plot_img['flag_hbo_list']  #[True, False]
-    #     flag_brain_list = plot_img['flag_brain_list'] #[True]   #, False]
-    #     flag_img_list = plot_img['flag_img_list'] #['mag', 'tstat', 'noise'] #, 'noise'
+    #%% build and save plots
+    if cfg_img_recon['plot_image']['enable']:
+        plot_img = cfg_img_recon['plot_image']
+        threshold = -2 # log10 absolute
+        wl_idx = 1
+        M = sbf.get_sensitivity_mask(Adot, threshold, wl_idx)
+        flag_hbo_list = plot_img['flag_hbo_list']  #[True, False]
+        flag_brain_list = plot_img['flag_brain_list'] #[True]   #, False]
+        flag_img_list = plot_img['flag_img_list'] #['mag', 'tstat', 'noise'] #, 'noise'
             
-    #     flag_condition_list = cfg_hrf['stim_lst']
+        flag_condition_list = cfg_hrf['stim_lst']
         
         
-    #     # all_trial_X_hrf_mag = results['X_hrf_mag']
-    #     for flag_hbo in flag_hbo_list:
+        # all_trial_X_hrf_mag = results['X_hrf_mag']
+        for flag_hbo in flag_hbo_list:
             
-    #         for flag_brain in flag_brain_list: 
+            for flag_brain in flag_brain_list: 
                 
-    #             for flag_condition in flag_condition_list:
+                for flag_condition in flag_condition_list:
                     
-    #                 for flag_img in flag_img_list:
+                    for flag_img in flag_img_list:
                         
-    #                     if flag_hbo in ['hbo', 'HbO']:
-    #                         title_str = flag_condition + ' ' + 'HbO'
-    #                         hbx_brain_scalp = 'hbo'
-    #                     else:
-    #                         title_str = flag_condition + ' ' + 'HbR'
-    #                         hbx_brain_scalp = 'hbr'
+                        if flag_hbo in ['hbo', 'HbO']:
+                            title_str = flag_condition + ' ' + 'HbO'
+                            hbx_brain_scalp = 'hbo'
+                        else:
+                            title_str = flag_condition + ' ' + 'HbR'
+                            hbx_brain_scalp = 'hbr'
                         
-    #                     if flag_brain in ['brain', 'Brain']:
-    #                         title_str = title_str + ' brain'
-    #                         hbx_brain_scalp = hbx_brain_scalp + '_brain'
-    #                     else:
-    #                         title_str = title_str + ' scalp'
-    #                         hbx_brain_scalp = hbx_brain_scalp + '_scalp'
+                        if flag_brain in ['brain', 'Brain']:
+                            title_str = title_str + ' brain'
+                            hbx_brain_scalp = hbx_brain_scalp + '_brain'
+                        else:
+                            title_str = title_str + ' scalp'
+                            hbx_brain_scalp = hbx_brain_scalp + '_scalp'
                         
-    #                     if len(flag_condition_list) > 1:
-    #                         if flag_img == 'tstat':
-    #                             foo_img = all_trial_X_tstat.sel(trial_type=flag_condition).copy()
-    #                             title_str = title_str + ' t-stat'
-    #                         elif flag_img == 'mag':
-    #                             foo_img = all_trial_X_hrf_mag_weighted.sel(trial_type=flag_condition).copy()
-    #                             title_str = title_str + ' magnitude'
-    #                         elif flag_img == 'noise':
-    #                             foo_img = all_trial_X_stderr.sel(trial_type=flag_condition).copy()
-    #                             title_str = title_str + ' noise'
-    #                     else:
-    #                         if flag_img == 'tstat':
-    #                             foo_img = all_trial_X_tstat.copy()
-    #                             title_str = title_str + ' t-stat'
-    #                         elif flag_img == 'mag':
-    #                             foo_img = all_trial_X_hrf_mag_weighted.copy()
-    #                             title_str = title_str + ' magnitude'
-    #                         elif flag_img == 'noise':
-    #                             foo_img = all_trial_X_stderr.copy()
-    #                             title_str = title_str + ' noise'
+                        if len(flag_condition_list) > 1:
+                            if flag_img == 'tstat':
+                                foo_img = all_trial_X_tstat.sel(trial_type=flag_condition).copy()
+                                title_str = title_str + ' t-stat'
+                            elif flag_img == 'mag':
+                                foo_img = all_trial_X_hrf_mag_weighted.sel(trial_type=flag_condition).copy()
+                                title_str = title_str + ' magnitude'
+                            elif flag_img == 'noise':
+                                foo_img = all_trial_X_stderr.sel(trial_type=flag_condition).copy()
+                                title_str = title_str + ' noise'
+                        else:
+                            if flag_img == 'tstat':
+                                foo_img = all_trial_X_tstat.copy()
+                                title_str = title_str + ' t-stat'
+                            elif flag_img == 'mag':
+                                foo_img = all_trial_X_hrf_mag_weighted.copy()
+                                title_str = title_str + ' magnitude'
+                            elif flag_img == 'noise':
+                                foo_img = all_trial_X_stderr.copy()
+                                title_str = title_str + ' noise'
                 
-    #                     foo_img = foo_img.pint.dequantify()
-    #                     foo_img = foo_img.transpose('vertex', 'chromo')
-    #                     foo_img[~M] = np.nan
+                        foo_img = foo_img.pint.dequantify()
+                        foo_img = foo_img.transpose('vertex', 'chromo')
+                        foo_img[~M] = np.nan
                         
-    #                  # 
-    #                     clim = (-foo_img.sel(chromo='HbO').max(), foo_img.sel(chromo='HbO').max())
-    #                     # if flag_img == 'mag':
-    #                     #     clim = [-7.6e-4, 7.6e-4]
-    #                     p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (1,1), clim, hbx_brain_scalp, 'scale_bar',
-    #                                               None, title_str)
-    #                     p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (0,0), clim, hbx_brain_scalp, 'left', p0)
-    #                     p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (0,1), clim, hbx_brain_scalp, 'superior', p0)
-    #                     p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (0,2), clim, hbx_brain_scalp, 'right', p0)
-    #                     p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (1,0), clim, hbx_brain_scalp, 'anterior', p0)
-    #                     p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (1,2), clim, hbx_brain_scalp, 'posterior', p0)
+                     # 
+                        clim = (-foo_img.sel(chromo='HbO').max(), foo_img.sel(chromo='HbO').max())
+                        # if flag_img == 'mag':
+                        #     clim = [-7.6e-4, 7.6e-4]
+                        p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (1,1), clim, hbx_brain_scalp, 'scale_bar',
+                                                  None, title_str)
+                        p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (0,0), clim, hbx_brain_scalp, 'left', p0)
+                        p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (0,1), clim, hbx_brain_scalp, 'superior', p0)
+                        p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (0,2), clim, hbx_brain_scalp, 'right', p0)
+                        p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (1,0), clim, hbx_brain_scalp, 'anterior', p0)
+                        p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (1,2), clim, hbx_brain_scalp, 'posterior', p0)
                         
     
-    #                     #img_folder = f'{direct_name}_aspatial-{cfg_img_recon["alpha_spatial"]}_ameas-{cfg_img_recon["alpha_meas"]}_{Cmeas_name}_{SB_name}'
+                        #img_folder = f'{direct_name}_aspatial-{cfg_img_recon["alpha_spatial"]}_ameas-{cfg_img_recon["alpha_meas"]}_{Cmeas_name}_{SB_name}'
                         
-    #                     img_folder = (
-    #                                 #f"{cfg_dataset['root_dir']}/derivatives/{cfg_dataset['derivatives_subfolder']}/plots/image_recon/"
-    #                                 ("direct" if cfg_img_recon["DIRECT"]["enable"] else "indirect") 
-    #                                 + f"_aspatial-{cfg_img_recon['alpha_meas']}"
-    #                                 + f"_ameas-{cfg_img_recon['alpha_spatial']}"
-    #                                 + ("_Cmeas" if cfg_img_recon["Cmeas"]["enable"] else "_noCmeas")
-    #                                 + ("_SB" if cfg_img_recon["spatial_basis"]["enable"] else "_noSB")
-    #                                 )
-    #                     #pdb.set_trace()
-    #                     save_dir_tmp= os.path.join(cfg_dataset["root_dir"], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'image_recon', img_folder)
-    #                     if not os.path.exists(save_dir_tmp):
-    #                         os.makedirs(save_dir_tmp)
-    #                     file_name = f'IMG_{flag_condition}_{flag_img}_{hbx_brain_scalp}.png'
-    #                     p0.screenshot( os.path.join(save_dir_tmp, file_name) )
-    #                     p0.close()
+                        img_folder = (
+                                    #f"{cfg_dataset['root_dir']}/derivatives/{cfg_dataset['derivatives_subfolder']}/plots/image_recon/"
+                                    ("direct" if cfg_img_recon["DIRECT"]["enable"] else "indirect") 
+                                    + f"_aspatial-{cfg_img_recon['alpha_meas']}"
+                                    + f"_ameas-{cfg_img_recon['alpha_spatial']}"
+                                    + ("_Cmeas" if cfg_img_recon["Cmeas"]["enable"] else "_noCmeas")
+                                    + ("_SB" if cfg_img_recon["spatial_basis"]["enable"] else "_noSB")
+                                    )
+                        #pdb.set_trace()
+                        save_dir_tmp= os.path.join(cfg_dataset["root_dir"], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'image_recon', img_folder)
+                        if not os.path.exists(save_dir_tmp):
+                            os.makedirs(save_dir_tmp)
+                        file_name = f'IMG_{flag_condition}_{flag_img}_{hbx_brain_scalp}.png'
+                        p0.screenshot( os.path.join(save_dir_tmp, file_name) )
+                        p0.close()
                         
                         
                      
