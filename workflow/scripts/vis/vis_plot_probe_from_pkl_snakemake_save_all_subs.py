@@ -96,7 +96,7 @@ for idx, subj in enumerate(blockaverage_subj.subj.values):
         
         groupaverage_conc_plot = groupaverage_conc.transpose("trial_type", "channel", "chromo", "reltime")
 
-        file_name = f"sub-{subj}_plot_probe.png"
+        file_name = f"sub-{subj}_plot_probe_{task}.png"
         save_path = os.path.join(path2results, "plots", "plot_probe", "subjects") 
         os.makedirs(save_path, exist_ok=True)  # make directory if it doesn't already exist
         out_file = os.path.join(save_path, file_name)

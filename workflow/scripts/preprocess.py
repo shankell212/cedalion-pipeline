@@ -189,7 +189,8 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
         # slope for Corrected OD before bandpass filtering  
         elif step_name in ("calc_slope_af", "calc_slope_after", "slope_after", "slope_af"):
             slope_corrected = preproc.quant_slope(rec, "od_corrected")  # Get slopes after correction before bandpass filtering
-        
+            # !!! am i calculating slope per second instead of per min?
+            
         # GVTD for Corrected OD before bandpass filtering  
         elif step_name in ("calc_gvtd_af", "calc_gvtd_after", "gvtd_after", "gvtd_af"):
             amp_corrected = rec['od_corrected'].copy()  

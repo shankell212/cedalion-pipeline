@@ -69,7 +69,7 @@ def load_probe(probe_path, snirf_name ='fullhead_56x144_System2.snirf', head_mod
     
     Adot = io.forward_model.load_Adot(os.path.join(probe_path, 'fw', head_model, 'Adot.nc'))
         
-    recordings = io.read_snirf(probe_path + snirf_name)
+    recordings = io.read_snirf(os.path.join(probe_path,snirf_name))
     rec = recordings[0]
     geo3d = rec.geo3d
     amp = rec['amp']

@@ -63,7 +63,7 @@ snirf_name= 'fullhead_56x144_NN22_System1.snirf'
 flag_condition_list = ['right', 'left']
 SAVE = True
 # folder_name = "Xs_BS_cov_alpha_spatial_1e-2_alpha_meas_1e4_indirect_Cmeas_SB" #"Xs_STS_cov_alpha_spatial_1e-3_alpha_meas_1e-2_indirect_Cmeas_noSB"  # CHANGE
-folder_name = "Xs_BS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB"
+folder_name = "Xs_BS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB"#"Xs_BS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB"
 
 #%% Load head model 
 import importlib
@@ -91,7 +91,7 @@ flag_img_list = ['mag', 'tstat', 'noise'] #, 'noise'
     
 
 if scc == 1:
-    save_dir_tmp = os.path.join(DERIV_DIR, 'plots', 'images')
+    save_dir_tmp = os.path.join(DERIV_DIR, 'plots', 'image_recon')
     results_dir = os.path.join(DERIV_DIR, 'image_results')
     filepath = os.path.join(results_dir, f'{folder_name}.pkl.gz')
     with gzip.open( filepath, 'rb') as f:
