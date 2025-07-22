@@ -127,7 +127,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
             C_meas = C_meas.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
             C_meas = xr.where(C_meas < cfg_img_recon['mse_min_thresh'], cfg_img_recon['mse_min_thresh'], C_meas)
 
-            # !!! GET RID of hard coded wavelength  -- can just grab from one of the xarrays?
+        
             X_hrf_mag, W, D, F, G = img_recon.do_image_recon(od_hrf_mag, head = head, Adot = Adot, C_meas_flag = cfg_img_recon['Cmeas']['enable'], 
                                                              C_meas = C_meas, wavelength = [ind_subj_blockavg.wavelength[0].item(), ind_subj_blockavg.wavelength[1].item()], 
                                                              BRAIN_ONLY = cfg_img_recon['BRAIN_ONLY']['enable'], 

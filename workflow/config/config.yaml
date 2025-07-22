@@ -2,14 +2,14 @@ dataset:
   root_dir: "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD"
   #root_dir: "/projectnb/nphfnirs/ns/Shannon/Data/Interactive_Walking_HD"
   derivatives_subfolder: "cedalion"
-  subject: ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "12", "13", "15", "19", "20", "21", "22", "23", "24", "25", "26", "28"] # # 11
-  task: ["STS"]                    
+  subject: ["01", "03", "04", "05", "06", "07", "08", "09", "10", "12", "13", "15", "19", "20", "21", "22", "23", "24", "25", "26", "28"] # # 11, 02 excl
+  task: ["IWHD"]                    
   run: ["01"]       # !!! SHOULD we just have snakemake parse thru the number of runs? what if a sub only has 2 runs but all others have 3
-    
+   
 hrf:          # !!! make these constants instead?
-  stim_lst: ["STS"]  #  make this in script instead of adding?  # auto but then add exlusion
-  t_pre: "5 second"   # can we make this a lsit for diff trial types for GLM
-  t_post: "33 second" 
+  stim_lst: ["ST", "DT"]  #  make this in script instead of adding?  # auto but then add exlusion
+  t_pre: "2 second"   # can we make this a lsit for diff trial types for GLM
+  t_post: "25 second" 
 
 preprocess:
   steps:
@@ -94,7 +94,7 @@ groupaverage:
    blockaverage_val: "0 micromolar**2"
   mse_od:
    mse_val_for_bad_data: 1e1
-   mse_min_thresh: 1e-6
+   mse_min_thresh: 1e-5
    blockaverage_val: 0
    
    
@@ -119,8 +119,8 @@ image_recon:
   alpha_meas: 1e4
   alpha_spatial: 1e-3
   spectrum: 'prahl'
-  mse_min_thresh: 1e-6   # where is this used
-  plot_image:    # currently this is commented out --- not creating images here
+  mse_min_thresh: 1e-5 
+  plot_image:    
     enable: true
     flag_hbo_list: ['hbo', 'hbr']
     flag_brain_list: ['brain', 'scalp']  # 'brain', 'scalp' - if you want to plot either
