@@ -21,8 +21,8 @@ import image_recon as img_recon
 import importlib
 importlib.reload(img_recon)
 # 
-# config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
-config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml"
+config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
+# config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml"
 
 
 with open(config_path, 'r') as file:
@@ -32,12 +32,12 @@ cfg_dataset = config['dataset']
 cfg_img_recon = config['image_recon']
 cfg_hrf = config['hrf']
 task = cfg_dataset['task'][0]  # choose first task for testing
-
+cfg_blockavg = config['blockaverage']
 
 
 # Get input file path input file
 groupaverage_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "groupaverage")
-groupaverage_path = os.path.join(groupaverage_dir, f"task-{task}_nirs_groupaverage.pkl")
+groupaverage_path = os.path.join(groupaverage_dir, f"task-{task}_nirs_groupaverage_{cfg_blockavg['rec_str']}.pkl")
 
 
     

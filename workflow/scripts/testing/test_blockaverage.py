@@ -35,8 +35,8 @@ cfg_dataset = config['dataset']
 cfg_blockaverage = config['blockaverage']
 cfg_hrf = config['hrf']
 
-subjects = cfg_dataset['subject'] #[1]   # sub idx you want to test
-tasks = cfg_dataset['task'] #[0]
+subjects = cfg_dataset['subject']    # sub idx you want to test
+tasks = cfg_dataset['task'] 
 run = cfg_dataset['run']
 
 # Loop through lists of tasks and subjects

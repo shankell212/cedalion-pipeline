@@ -28,25 +28,10 @@ import numpy as np
 path2results = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion"
 
 task = "STS"
+rec_str = 'conc'
 
-filname = "task-" + task + "_nirs_groupaverage.pkl"
+filname = "task-" + task + f"_nirs_groupaverage_{rec_str}.pkl"
 filepath_bl = os.path.join(os.path.join(path2results, "groupaverage/") , filname)
-
-  
-# if os.path.exists(filepath_bl):
-#     with gzip.open(filepath_bl, 'rb') as f:
-#         groupavg_results = pickle.load(f)
-#     blockaverage = groupavg_results['blockaverage']
-#     blockaverage_stderr = groupavg_results['blockaverage_stderr']
-#     blockaverage_subj = groupavg_results['blockaverage_subj']
-#     blockaverage_mse_subj = groupavg_results['blockaverage_mse_subj']
-#     geo2d = groupavg_results['geo2d']
-#     geo3d = groupavg_results['geo3d']
-#     print("Blockaverage file loaded successfully!")
-
-# else:
-#     print(f"Error: File '{filepath_bl}' not found!")
-    
 
 
 if os.path.exists(filepath_bl):
@@ -94,38 +79,90 @@ if 'wavelength' in groupaverage.dims:
     blockaverage_subj_conc = nirs.od2conc(blockaverage_subj, geo3d, dpf, spectrum="prahl")
     blockaverage_subj_conc = blockaverage_subj_conc.rename({'time':'reltime'})
     
-    # stderr
-    blockaverage_stderr = blockaverage_stderr.rename({'reltime':'time'})
-    blockaverage_stderr.time.attrs['units'] = units.s
-    blockaverage_stderr_conc = nirs.od2conc(blockaverage_stderr, geo3d, dpf, spectrum="prahl")
-    blockaverage_stderr_conc = blockaverage_stderr_conc.rename({'time':'reltime'})
+    # # stderr
+    # !!! cannot propogate error this way
+    # blockaverage_stderr = blockaverage_stderr.rename({'reltime':'time'})
+    # blockaverage_stderr.time.attrs['units'] = units.s
+    # blockaverage_stderr_conc = nirs.od2conc(blockaverage_stderr, geo3d, dpf, spectrum="prahl")
+    # blockaverage_stderr_conc = blockaverage_stderr_conc.rename({'time':'reltime'})
     
+    # tstat_conc = groupaverage_conc / blockaverage_stderr_conc
+
+else:
+    groupaverage_conc = groupaverage.copy()
+    blockaverage_stderr_conc = blockaverage_stderr.copy()
     tstat_conc = groupaverage_conc / blockaverage_stderr_conc
    
-#%% Plot
+#%% Test thresh
 
-#tstat = blockaverage / blockaverage_stderr   # tstat = blockavg/ noise
+conc_vals = np.abs(groupaverage_conc.values) # shape 2, 3, 567, 244 (chromo, trial, channel, reltime)
+if 'wavelength' in groupaverage.dims:
+    max_per_channel = conc_vals.max(axis=(0, 1, 3)) #  -> shape (C,)
+else:
+    max_per_channel = conc_vals.max(axis=(0, 2, 3)) #  -> shape (C,)
 
-# blk_avg = blockaverage_subj_conc.sel(subj='01')
+thresh = np.abs(groupaverage_conc).max() #.item() # if chan is => thresh make NaN
+thresh=thresh.values.item()
 
-# thresh = np.abs(groupaverage_conc).max() #.item() # if chan is => thresh make NaN
-# thresh=thresh.values.item()
-# thresh = float(thresh)
-thresh = 100.0
+print(thresh)
+
+thr_min = 0
+thr_max = thresh
+n_steps = 100
+thresholds = np.linspace(thr_min, thr_max, n_steps)
+
+counts = [(max_per_channel >= thr).sum() for thr in thresholds]
+
+# 4. Plot:
+f, ax = plt.subplots()
+ax.plot(thresholds, counts)
+ax.set_xlabel("Threshold (µM)")
+ax.set_ylabel("Number of channels exceeding threshold")
+ax.set_title("Channel counts vs. threshold")
+ax.grid(True)
+f.tight_layout()
+plt.show()
+
+# # !!! thresh of 100 is good
+
+#%% Set thresh
+
+# #tstat = blockaverage / blockaverage_stderr   # tstat = blockavg/ noise
+
+# # blk_avg = blockaverage_subj_conc.sel(subj='01')
+
+# # thresh = np.abs(groupaverage_conc).max() #.item() # if chan is => thresh make NaN
+# # thresh=thresh.values.item()
+# # thresh = float(thresh)
+# thresh = 100.0
+# exceeds = (np.abs(groupaverage_conc) >= thresh*units.micromolar).any(dim="reltime")
+
+# chan_indices = np.where(exceeds.values)[2]
+# groupavg_conc_new = groupaverage_conc.copy()
+# groupavg_conc_new[:,:,chan_indices,:] = np.nan*units.micromolar
+
+thresh = 100.0 #60.0 #100.0
 exceeds = (np.abs(groupaverage_conc) >= thresh*units.micromolar).any(dim="reltime")
 
-chan_indices = np.where(exceeds.values)[2]
-groupavg_conc_new = groupaverage_conc.copy()
-groupavg_conc_new[:,:,chan_indices,:] = np.nan*units.micromolar
+if 'wavelength' in groupaverage.dims:       
+    chan_indices = np.where(exceeds.values)[2]
+else:
+    chan_indices = np.where(exceeds.values)[1]
+groupaverage_conc_new = groupaverage_conc.copy()
+blockaverage_stderr_conc_new = blockaverage_stderr_conc.copy()
+
+if 'wavelength' in groupaverage.dims:   
+    groupaverage_conc_new[:,:,chan_indices,:] = np.nan*units.micromolar
+else:
+    groupaverage_conc_new[:,chan_indices,:,:] = np.nan*units.micromolar
+    blockaverage_stderr_conc_new[:,:,chan_indices,:] = np.nan*units.micromolar
+    tstat_conc_new = groupaverage_conc_new / blockaverage_stderr_conc_new
 
 
 
+#%% Plot
 
-#%%
-
-
-
-vPlotProbe.run_vis(blockaverage = groupavg_conc_new, geo2d = geo2d, geo3d = geo3d)
+vPlotProbe.run_vis(blockaverage = groupaverage_conc_new, geo2d = geo2d, geo3d = geo3d)
 
 
 

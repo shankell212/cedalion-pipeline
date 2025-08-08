@@ -28,15 +28,34 @@ import json
 import pdb
 
 
-#%%
+#%% Block average func
 
 def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_quality_files, out_pkl, out_json, out_geo):  #, out_blkavg_nc, out_epoch_nc):
     print(f'run_files: {run_files}')
-    print(f'data_quality_files: {data_quality_files}')
+    
+    all_trial_blockaverage = None
+    
     # update units 
     cfg_hrf['t_pre']= units(cfg_hrf['t_pre'])
     cfg_hrf['t_post']= units(cfg_hrf['t_post'])
-
+    # Choose correct mse values based on if blockaveraging od or conc
+    if 'conc' in cfg_blockaverage['rec_str']:
+        cfg_mse = cfg_blockaverage['mse_conc']
+        cfg_mse["mse_val_for_bad_data"] = units(cfg_mse["mse_val_for_bad_data"])
+        cfg_mse["mse_min_thresh"] = units(cfg_mse["mse_min_thresh"])
+        cfg_mse["blockaverage_val"] = units(cfg_mse["blockaverage_val"])
+    else:
+        cfg_mse = cfg_blockaverage['mse_od']
+        if isinstance(cfg_mse["mse_val_for_bad_data"], str):
+            cfg_mse["mse_val_for_bad_data"] = float(cfg_mse["mse_val_for_bad_data"])
+        if isinstance(cfg_mse["mse_min_thresh"], str):
+            cfg_mse["mse_min_thresh"] = float(eval(cfg_mse["mse_min_thresh"]))
+        if isinstance(cfg_mse["blockaverage_val"], str):
+            cfg_mse["blockaverage_val"] = float(cfg_mse["blockaverage_val"])
+    mse_amp_thresh = [float(x) if isinstance(x,str) else x for x in cfg_blockaverage['mse_amp_thresh']] # convert str to float if str
+    cfg_mse['mse_amp_thresh'] = min(mse_amp_thresh) # get minimum amplitude threshold
+                            
+    
     # Loop through files
     idx_sat_runs = []
     idx_amp_runs = []
@@ -55,8 +74,8 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
             
         
         # if file path/ current run does not exist for this file, continue without it  (i.e. subj dropped out)
-        # if not os.path.isfile(run):  # !!! do not need tis check anymore?
-        #     continue   
+        if not os.path.isfile(run):  # !!! do not need tis check anymore?
+            continue   
         
         # # Load in snirf for curr subj and run
         # records = cedalion.io.read_snirf( run ) 
@@ -67,7 +86,7 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
         ts = rec[cfg_blockaverage['rec_str']].copy()
         stim = rec.stim.copy() # select the stim for the given file
         
-        # Load in json data qual
+        # Load in json data qual   # !!! now is a pkl for now
         # with open(data_quality_files[file_idx], 'r') as fp:
         #     data_quality_run = json.load(fp)
         
@@ -77,9 +96,7 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
         geo2d = data_quality_run['geo2d']
         geo3d = data_quality_run['geo3d']
             
-        # check if ts has dimension chromo   # !!! why transposing? 
-        # conc is already in this order. od_corrected was in order after conc2od, now is not bc transposed
-        # od will be in this order still .... hm 
+        # check if ts has dimension chromo
         if 'chromo' in ts.dims:
             ts = ts.transpose('chromo', 'channel', 'time')  # !!! try transpose(..., 'channel', 'time') to get rid of if statement
         else:
@@ -87,6 +104,8 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
             
         ts = ts.assign_coords(samples=('time', np.arange(len(ts.time))))
         ts['time'] = ts.time.pint.quantify(units.s) # !!! already is s? do we need this
+        
+        # !!! ADD IN IF METHOD == BLOCKAVERAGE, ELSE DO GLM
         
         # get the epochs
         epochs_tmp = ts.cd.to_epochs(
@@ -107,12 +126,81 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
         bad_chans_amp_runs.append(data_quality_run['bad_chans_amp'])
         
         # DONE LOOP OVER FILES
+    
+    # Flatten list of bad channels and take only unique chan values
+    idx_sat_flat = [x for xs in idx_sat_runs for x in xs] # flatten list of bad chans indices for all runs
+    idx_amp_flat = [x for xs in idx_amp_runs for x in xs]
+    bad_chans_sat_flat = [x for xs in bad_chans_sat_runs for x in xs]
+    bad_chans_amp_flat = [x for xs in bad_chans_amp_runs for x in xs]
+
+    idx_sat = list(set(idx_sat_flat)) # get unique channel values only # !!! FIXME: want to not mark a chan bad thats only bad in 1 run in future
+    idx_amp = list(set(idx_amp_flat))
+    bad_chans_sat = list(set(bad_chans_sat_flat))
+    bad_chans_amp = list(set(bad_chans_amp_flat))
+    
 
     # Block Average
     baseline = epochs_all.sel(reltime=(epochs_all.reltime < 0)).mean('reltime')
     epochs = epochs_all - baseline  # baseline subtract
     blockaverage = epochs.groupby('trial_type').mean('epoch') # mean across all epochs 
     
+    epochs_zeromean = epochs - blockaverage   # zeromean the epochs
+    
+    # LOOP OVER TRIAL TYPES
+    
+    for idxt, trial_type in enumerate(cfg_hrf['stim_lst']): 
+    
+        if 'chromo' in blockaverage.dims:
+            epochs_zeromean = epochs_zeromean.stack(measurement=['channel','chromo']).sortby('chromo')
+            blockaverage = blockaverage.transpose('trial_type', 'channel', 'chromo', 'reltime')
+        else:
+            epochs_zeromean = epochs_zeromean.stack(measurement=['channel','wavelength']).sortby('wavelength')
+            blockaverage = blockaverage.transpose('trial_type', 'channel', 'wavelength', 'reltime')
+    
+    
+        n_epochs = len(epochs_zeromean.epoch)
+        
+        # calc mse
+        mse_t = (epochs_zeromean**2).sum('epoch') / (n_epochs - 1)**2 # this is squared to get variance of the mean, aka MSE of the mean
+        
+        
+        
+        # retrieve channels where mse_t = 0
+        bad_mask = mse_t.sel(trial_type=trial_type).data == 0
+        bad_any = bad_mask.any(axis=1)
+        bad_chans_mse = mse_t.channel[bad_any].values
+    
+    
+        # Replace bad vals
+        blockaverage = replace_bad_vals(blockaverage, bad_chans_amp, bad_chans_sat, bad_chans_mse, cfg_mse['blockaverage_val'], trial_type)
+        
+        if 'chromo' in epochs.dims:
+            mse_t = mse_t.unstack('measurement').transpose('trial_type', 'chromo','channel','reltime')
+        else:
+            mse_t = mse_t.unstack('measurement').transpose('trial_type','channel','wavelength','reltime')
+        
+        # replace mse_t values after unstacking
+        mse_t = replace_bad_vals(blockaverage, bad_chans_amp, bad_chans_sat, bad_chans_mse, cfg_mse['mse_val_for_bad_data'], trial_type)
+                    
+        source_coord = blockaverage['source']
+        mse_t = mse_t.assign_coords(source=('channel',source_coord.data))
+        detector_coord = blockaverage['detector']
+        mse_t = mse_t.assign_coords(detector=('channel',detector_coord.data))
+        
+        # set the minimum value of mse_t
+        mse_t = xr.where(mse_t < cfg_mse['mse_min_thresh'], cfg_mse['mse_min_thresh'], mse_t)  # !!! maybe can be removed when we have the between subject mse
+        
+        
+        if all_trial_blockaverage is None:
+            all_trial_blockaverage = blockaverage
+            all_trial_mse = mse_t
+        else:
+            all_trial_blockaverage = xr.concat([all_trial_blockaverage, blockaverage], dim='trial_type') 
+            all_trial_mse = xr.concat([all_trial_mse, mse_t], dim='trial_type')
+            
+    # DONE LOOP OVER TRIAL_TYPES
+
+    '''
     # # create new rec variable that only includes blockaverage for all rusn for this sub/task
     # rec["blockaverage"] = blockaverage
     # rec['epochs'] = epochs
@@ -129,6 +217,8 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
         
     # for key in list(rec.aux_ts.keys()):
     #     del rec.aux_ts[key]
+    '''
+    
     
     # Save geometric 2d and 3d positions to sidecar file
     geo_sidecar = {
@@ -139,8 +229,9 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
     file.write(pickle.dumps(geo_sidecar))
     
     results = {
-        'blockaverage': blockaverage,
-        'epochs': epochs
+        'blockaverage': all_trial_blockaverage,
+        'mse_t': all_trial_mse,
+        #'epochs_zeromean': epochs_zeromean
         }
     
     # SAVE data a pickle for now  # !!! Change to snirf in future when its debugged
@@ -156,17 +247,7 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
     
     print("Block average data saved successfully")
     
-    # Flatten list of bad channels and take only unique chan values
-    idx_sat_flat = [x for xs in idx_sat_runs for x in xs] # flatten list of bad chans indices for all runs
-    idx_amp_flat = [x for xs in idx_amp_runs for x in xs]
-    bad_chans_sat_flat = [x for xs in bad_chans_sat_runs for x in xs]
-    bad_chans_amp_flat = [x for xs in bad_chans_amp_runs for x in xs]
 
-    idx_sat = list(set(idx_sat_flat)) # get unique channel values only # !!! FIXME: want to not mark a chan bad thats only bad in 1 run in future
-    idx_amp = list(set(idx_amp_flat))
-    bad_chans_sat = list(set(bad_chans_sat_flat))
-    bad_chans_amp = list(set(bad_chans_amp_flat))
-    
     data_quality = {       
         "idx_sat": idx_sat,
         "bad_chans_sat": bad_chans_sat,
@@ -177,6 +258,7 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
     # # SAVE data quality dict as a sidecar json file   # !!! change to just keeping in xarray as a dim?
     with open(out_json, 'w') as fp:
         json.dump(data_quality, fp)
+        
         
     # file = gzip.GzipFile('out_sidecar', 'wb')  # save as sidecar instead of json
     # file.write(pickle.dumps(data_quality))
@@ -195,7 +277,18 @@ def blockaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, run_files, data_qu
     # PROCEED w/ saving as a pickle file for now
         # post prob on cedalion implementation
     
- 
+
+
+def replace_bad_vals(data_array, bad_chans_amp, bad_chans_sat, bad_chans_mse, replacement_val, trial_type):
+    # Change bad values to predetermined set val
+
+    data_array.loc[dict(trial_type=trial_type, channel=bad_chans_amp)] = replacement_val
+    data_array.loc[dict(trial_type=trial_type, channel=bad_chans_sat)] = replacement_val
+    data_array.loc[dict(trial_type=trial_type, channel=bad_chans_mse)] = replacement_val
+
+    return data_array
+
+    
 #%%
 
 def main():

@@ -47,12 +47,15 @@ warnings.filterwarnings('ignore')
 
 #%%
 
-ROOT_DIR = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/" 
-DERIV_DIR = os.path.join(ROOT_DIR, 'derivatives', 'Shannon', 'cedalion') #, 'test')
+# ROOT_DIR = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/" 
+
+ROOT_DIR = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/" 
+
+DERIV_DIR = os.path.join(ROOT_DIR, 'derivatives', 'cedalion') # 'Shannon', 'cedalion') #, 'test')
 
 if scc ==1:
     #probe_dir = "/projectnb/nphfnirs/s/Shannon/Data/probes/NN22_WHHD/12NN/"  # CHANGE
-    probe_dir = os.path.join(ROOT_DIR, 'derivatives/Shannon/cedalion/probe/')
+    probe_dir = os.path.join(ROOT_DIR, 'derivatives/cedalion/probe/')
 else:
     probe_dir = 'C://Users//shank//Downloads//probes//NN22_WHHD//12NN//'
     
@@ -60,10 +63,11 @@ else:
 head_model = 'ICBM152'
 snirf_name= 'fullhead_56x144_NN22_System1.snirf'
 
-flag_condition_list = ['right', 'left']
-SAVE = True
-# folder_name = "Xs_BS_cov_alpha_spatial_1e-2_alpha_meas_1e4_indirect_Cmeas_SB" #"Xs_STS_cov_alpha_spatial_1e-3_alpha_meas_1e-2_indirect_Cmeas_noSB"  # CHANGE
-folder_name = "Xs_BS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB"#"Xs_BS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB"
+task = "STS"
+flag_condition_list = ["STS"] #['right', 'left']
+SAVE = False
+folder_name = f"Xs_{task}_cov_alpha_spatial_1e-2_alpha_meas_1e4_indirect_Cmeas_SB" #"Xs_STS_cov_alpha_spatial_1e-3_alpha_meas_1e-2_indirect_Cmeas_noSB"  # CHANGE
+# folder_name = f"Xs_{task}_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB"#"Xs_BS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB"
 
 #%% Load head model 
 import importlib
@@ -84,7 +88,7 @@ importlib.reload(img_recon)
 threshold = -2 # log10 absolute
 wl_idx = 1
 M = sbf.get_sensitivity_mask(Adot, threshold, wl_idx)
-SAVE = True
+
 flag_hbo_list = [True, False]
 flag_brain_list = [True]   #, False]
 flag_img_list = ['mag', 'tstat', 'noise'] #, 'noise'

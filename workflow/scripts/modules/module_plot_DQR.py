@@ -227,10 +227,123 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, cfg_hrf): #, 
         p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR','gvtd', filenm + "_DQR_gvtd_hist.png") )
         #p.savefig(out_gvtd)
         p.close()
-    
 
     return
 
+
+def plot_dark_dignal(rec, cfg_dataset, filnm):
+    der_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'],'plots', 'DQR', 'sidecar')
+    os.makedirs(der_dir, exist_ok=True)
+    
+    # check if 'dark signal' is in recTmp
+    if 'dark signal' in rec.aux_ts:
+        dark_signal = rec.aux_ts['dark signal']
+    else:
+        dark_signal = None
+    
+    # # plot the mean dark signal over aux_channels
+    # if dark_signal is not None:
+    #     dark_signal_mean = dark_signal.mean(dim='aux_channel')
+    
+    #     # get the 98th percentile of the dark signal
+    #     dark_signal_98th = dark_signal.quantile(0.98, dim='aux_channel')
+    #     dark_signal_10th = dark_signal.quantile(0.10, dim='aux_channel')
+        
+    #     p.figure(figsize=(10, 5))
+    #     p.semilogy(dark_signal_mean.time, dark_signal_mean, label='Mean Dark Signal')
+    #     p.semilogy(dark_signal_98th.time, dark_signal_98th, label='98th Percentile Dark Signal', linestyle='--')
+    #     p.semilogy(dark_signal_10th.time, dark_signal_10th, label='10th Percentile Dark Signal', linestyle='--')
+    
+    #     p.xlabel('Time (s)')
+    #     p.ylabel('Dark Signal (a.u.)')
+    #     p.title('Mean Dark Signal Over Aux Channels')
+    #     p.legend()
+    #     p.show()
+    
+    # # 
+    # # plot the mean dark signal over time
+    # if dark_signal is not None:
+    #     p.figure(figsize=(10, 5))
+    #     p.plot(dark_signal.mean(dim='time'), label='Mean Dark Signal')
+    #     p.xlabel('Channel')
+    #     p.ylabel('Dark Signal (a.u.)')
+    #     p.legend()
+    #     p.show()
+    
+    # 
+    # scalp plots
+    # get the percent of time each aux_channel is above a threshold
+    threshold = 0.1  # example threshold
+    foo = (dark_signal > threshold).mean(dim='time', skipna=True) * 100
+    foo = foo.values.reshape(2, -1) # reshape to (wavelength, channel)
+    percent_above_threshold = xr.DataArray(foo, dims=["wavelength", "channel"], coords={"wavelength": rec["amp"].wavelength, "channel": rec["amp"].channel})
+    
+    # get the mean dark signal over time for each channel
+    dark_signal_mean = dark_signal.mean(dim='time', skipna=True)
+    dark_signal_mean = dark_signal_mean.values.reshape(2, -1)  # reshape to (wavelength, channel)
+    dark_signal_mean = xr.DataArray(dark_signal_mean, dims=["wavelength", "channel"], coords={"wavelength": rec["amp"].wavelength, "channel": rec["amp"].channel})
+    
+    
+    fig, axes = p.subplot_mosaic(
+        [
+            ["A", "A"],  # Top row, one long subplot
+            ["B", "C"]   # Bottom row, two subplots
+        ],
+        figsize=(10, 8),
+        gridspec_kw={"height_ratios": [1, 2]}  # [top, bottom]
+    )
+    #pdb.set_trace()
+    dark_signal_mean_ch = dark_signal.mean(dim='aux_channel', skipna=True)
+    
+    # get the 98th percentile of the dark signal
+    # dark_signal_98th = dark_signal.quantile(0.98, dim='aux_channel')
+    # dark_signal_10th = dark_signal.quantile(0.10, dim='aux_channel')
+    
+    axes["A"].plot(dark_signal_mean_ch[2:len(dark_signal_mean_ch)].time, dark_signal_mean_ch[2:len(dark_signal_mean_ch)], label='Mean Dark Signal')
+    # axes["A"].semilogy(dark_signal_98th.time, dark_signal_98th, label='98th Percentile Dark Signal', linestyle='--')
+    # axes["A"].semilogy(dark_signal_10th.time, dark_signal_10th, label='10th Percentile Dark Signal', linestyle='--')
+    
+    axes["A"].set_xlabel('Time (s)')
+    axes["A"].set_ylabel('Dark Signal (a.u.)')
+    axes["A"].set_title('Mean Dark Signal Over Aux Channels')
+    axes["A"].legend()
+    
+    # scalp plots
+    plots.scalp_plot(
+            rec['amp'],
+            rec.geo3d,
+            np.log10(dark_signal_mean.max(dim='wavelength')),
+            axes["B"],
+            cmap='jet',
+            optode_labels=False,
+            optode_size=5,
+            vmin = -4,
+            vmax = 0,
+            title='Mean Dark Signal (log10)',
+            #y_title=0.9
+        )
+    
+    plots.scalp_plot(
+            rec['amp'],
+            rec.geo3d,
+            percent_above_threshold.max(dim='wavelength'),
+            axes["C"],
+            cmap='YlOrRd',
+            optode_labels=False,
+            optode_size=5,
+            vmin = 0,
+            vmax = 100,
+            title='Percent time Dark above threshold={:.2f}'.format(threshold),
+            #y_title=0.9
+        )
+    
+    
+    p.suptitle(filnm)
+
+    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'sidecar', filnm + "_DQR_dark.png") )
+    p.close()
+    
+    
 
 def make_gvtd_hist_compare_corrected(gvtd_time_trace_1, gvtd_time_trace_2, plot_thresh=True, stat_type=None, n_std=None):
     """Generate a histogram of GVTD values and optionally overlay a threshold line.
@@ -450,7 +563,9 @@ def plot_slope(rec = None, slope = None, cfg_preprocess=None, filenm = None, cfg
     
 
 def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
-
+    der_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'],'plots', 'DQR', 'sidecar')
+    os.makedirs(der_dir, exist_ok=True)
+    
     # get the variables from the json file
     dataSDWP_LowHigh = file_json['dataSDWP_LowHigh']
     powerLevelSetting = file_json['powerLevelSetting']
@@ -567,7 +682,7 @@ def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
         coords={"channel": rec["amp"].channel},
     )
     plots.scalp_plot(
-            rec["conc_tddr"],
+            rec["conc"],
             rec.geo3d,
             power_level,
             ax[1,0],
@@ -590,7 +705,7 @@ def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
         coords={"channel": rec["amp"].channel},
     )
     plots.scalp_plot(
-            rec["conc_tddr"],
+            rec["conc"],
             rec.geo3d,
             power_level,
             ax[1,1],
@@ -605,7 +720,7 @@ def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
     # give a title to the figure
     p.suptitle(filenm)
 
-    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_sigVdis.png") )
+    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'sidecar', filenm + "_DQR_sigVdis.png") )
     p.close()
 
 
@@ -679,7 +794,7 @@ def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
     # give a title to the figure
     p.suptitle(filenm)
 
-    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_calib.png") )
+    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'sidecar', filenm + "_DQR_calib.png") )
     p.close()
 
 
@@ -709,7 +824,7 @@ def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
     # give a title to the figure
     p.suptitle(filenm)
 
-    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_crosstalk.png") )
+    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'sidecar', filenm + "_DQR_crosstalk.png") )
     p.close()
 
 
@@ -721,7 +836,7 @@ def plot_crosstalk(SD, dataCrosstalk, ax1, lst1, strTitle ):
 
     for iS in range(nS):
         ax1.plot(SD['SrcPos2D'][iS-1, 0], SD['SrcPos2D'][iS-1, 1], 'r.', markersize=5)
-    #        plt.hold(True)
+    #        p.hold(True)
     for iD in range(nD):
         ax1.plot(SD['DetPos2D'][iD-1, 0], SD['DetPos2D'][iD-1, 1], 'b.', markersize=5)
     for iML in lst1:
@@ -745,7 +860,7 @@ def plot_crosstalk(SD, dataCrosstalk, ax1, lst1, strTitle ):
         else:
             hl.set_linewidth(2)
             hl.set_color([1,0,0])
-    #    plt.hold(False)
+    #    p.hold(False)
     ax1.axis('image')
     ax1.axis('off')
     ax1.set_title(strTitle)

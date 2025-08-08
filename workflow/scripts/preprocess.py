@@ -22,7 +22,6 @@ The data is returned as a recording container with the following fields:
         'gvtd' - the global variance of the time derivative of the 'od' data.
         'gvtd_tddr' - the global variance of the time derivative of the 'od_tddr' data.
         
-        
 Created on Tue Jun  3 11:39:55 2025
 
 @author: shank
@@ -77,11 +76,12 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
     else:
         stim_df = pd.read_csv( events_path, sep='\t' )
         rec.stim = stim_df
-        
+    
     
     # get filename for plots
     filename = os.path.basename(snirf_path)
     filnm, _ext = os.path.splitext(filename)
+    subj = filnm.split('_')[0]
     
     # Replace negatives and nans with a small pos value
     rec['amp'] = rec['amp'].where( rec['amp']>0, 1e-18 ) 
@@ -94,19 +94,18 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
     rec['amp'][indices[0],1,0] = rec['amp'][indices[0],1,1]
     
     #%% Preprocess
-    
     for step_name, params in cfg_preprocess["steps"].items():
         
         # If this step is disabled, skip it
         if not (params.get("enable", False))  and (step_name != "prune"): 
             continue
        
-        if step_name == "bs_preproc":   # !!! only for BS data 
+        if step_name == "bs_preproc":   # !!! only for BS data, a general purpose solution could be coded that prunes chans based on SDS
             
             Adot, meas_list, geo3d, amp = img_recon.load_probe(params['probe_dir'], snirf_name=params['snirf_name_probe'])
             #rec['amp'] = rec['amp'].sel(channel=Adot.channel)
             chans = list(dict.fromkeys(meas_list.channel))  # select chans we care about from probe snirf meas list
-            rec['amp'] = rec['amp'].sel(channel=chans) 
+            rec['amp'] = rec['amp'].sel(channel=chans)
             
         elif step_name == "median_filter":
             rec = preproc.median_filt( rec, params['order'] )
@@ -252,7 +251,20 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             if not (rec["od_corrected"].data == rec["od"].data).all():
                 plot_dqr.plot_slope(rec, [slope_base, slope_corrected], cfg_preprocess['steps'], filnm, cfg_dataset) #, out_files['out_slope'])
             
+            
+            # load the sidecar json file 
+            file_path_json = os.path.join(cfg_dataset['root_dir'], 'sourcedata', 'raw', subj, filnm + '.json')
+            if os.path.exists(file_path_json):
+                with open(file_path_json) as json_file:
+                    file_json = json.load(json_file)
+                if 'dataSDWP_LowHigh' in file_json:
+                    plot_dqr.plotDQR_sidecar(file_json, rec, cfg_dataset, filnm )
+            
+            # Plot dark signal DQR plots
+            plot_dqr.plot_dark_dignal(rec, cfg_dataset, filnm)
+            
             # !!! how to add in plot_group_DQR ?  - make separate rule?
+    
     
         # If you get here, that means this step is enabled but unrecognized. 
         else:
@@ -269,22 +281,37 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
     #idx_amp = np.where(amp < cfg_preprocess["steps"]["prune"]["amp_thresh"][0])[0]
     idx_amp = np.where(amp < mse_amp_thresh)[0]   # COMES FROM GROUP AVG CFG
     amp_ch_coords = chs_pruned.channel[idx_amp].values
-
-    data_quality = {       
-        "chs_pruned": chs_pruned,  # !!! cannot save matrix or xarray as json
-        "idx_sat": idx_sat.tolist(),
-        "bad_chans_sat": sat_ch_coords.tolist(),
-        "bad_chans_amp": amp_ch_coords.tolist(),
-        "idx_amp": idx_amp.tolist(),
-        'slope_base': slope_base,   # for group DQR plot
-        'slope_corrected': slope_corrected,  # for Group DQR plot
-        'gvtd_base': rec.aux_ts['gvtd'],
-        'gvtd_corrected': rec.aux_ts['gvtd_corrected'],
-        'snr0': snr0,
-        'snr1': snr1,
-        'geo2d': rec.geo2d,
-        'geo3d': rec.geo3d
-        }
+    
+    if cfg_preprocess['steps']['plot_dqr']['enable']:
+        if cfg_preprocess['steps']['calc_slope_b4']['enable']:
+            if cfg_preprocess['steps']['calc_gvtd_b4']['enable']:
+                if cfg_preprocess['steps']['calc_gvtd_after']['enable']:
+                    if cfg_preprocess['steps']['calc_slope_after']['enable']:
+                        data_quality = {       
+                            "chs_pruned": chs_pruned,  # !!! cannot save matrix or xarray as json
+                            "idx_sat": idx_sat.tolist(),
+                            "bad_chans_sat": sat_ch_coords.tolist(),
+                            "bad_chans_amp": amp_ch_coords.tolist(),
+                            "idx_amp": idx_amp.tolist(),
+                            'slope_base': slope_base,   # for group DQR plot
+                            'slope_corrected': slope_corrected,  # for Group DQR plot
+                            'gvtd_base': rec.aux_ts['gvtd'],
+                            'gvtd_corrected': rec.aux_ts['gvtd_corrected'],
+                            'snr0': snr0,
+                            'snr1': snr1,
+                            'geo2d': rec.geo2d,
+                            'geo3d': rec.geo3d
+                            }
+    else:
+        data_quality = {       
+            "chs_pruned": chs_pruned,  # !!! cannot save matrix or xarray as json
+            "idx_sat": idx_sat.tolist(),
+            "bad_chans_sat": sat_ch_coords.tolist(),
+            "bad_chans_amp": amp_ch_coords.tolist(),
+            "idx_amp": idx_amp.tolist(),
+            'geo2d': rec.geo2d,
+            'geo3d': rec.geo3d
+            }
     
     # Save data quality dict as a sidecar json file
     # with open(out_files['out_json'], 'w') as fp:

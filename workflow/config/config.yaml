@@ -80,7 +80,7 @@ preprocess:
     plot_dqr:
       enable: true
 
-blockaverage:
+blockaverage:   # 
   rec_str: "od_corrected"   # od_02 or conc   od_corrected  - what you want to block average
   trange_hrf_stat: [10, 20]  # !!! use plot_name for this var
   
@@ -91,7 +91,7 @@ groupaverage:
   mse_conc:
    mse_val_for_bad_data: "1e7 micromolar**2"
    mse_min_thresh: "1e0 micromolar**2"
-   blockaverage_val: "0 micromolar**2"
+   blockaverage_val: "0 micromolar"
   mse_od:
    mse_val_for_bad_data: 1e1
    mse_min_thresh: 1e-5
@@ -106,7 +106,7 @@ image_recon:
   BRAIN_ONLY:      # reconstruct brain only OR scalp and brain
     enable: false
   spatial_basis:           
-    enable: false 
+    enable: true 
     mask_threshold: -2
     threshold_brain: "1 mm"
     threshold_scalp: "5 mm"
@@ -117,7 +117,7 @@ image_recon:
   snirf_name_probe: "fullhead_56x144_NN22_System1.snirf"
   head_model: 'ICBM152'
   alpha_meas: 1e4
-  alpha_spatial: 1e-3
+  alpha_spatial: 1e-2   #   WITH SB= 1e-2, NO SB = 1e-3
   spectrum: 'prahl'
   mse_min_thresh: 1e-5 
   plot_image:    

@@ -31,11 +31,11 @@ def load_head_model(head_model='ICBM152', with_parcels=True):
         SEG_DATADIR, mask_files, landmarks_file = datasets.get_icbm152_segmentation()
         if with_parcels:
             PARCEL_DIR = datasets.get_icbm152_parcel_file()
-        else :
+        else:
             PARCEL_DIR = None
             
     elif head_model == 'colin27':
-        SEG_DATADIR, mask_files, landmarks_file = datasets.get_colin27_segmentation()()
+        SEG_DATADIR, mask_files, landmarks_file = datasets.get_colin27_segmentation()
         if with_parcels:
             PARCEL_DIR = datasets.get_colin27_parcel_file()
         else :
@@ -50,10 +50,12 @@ def load_head_model(head_model='ICBM152', with_parcels=True):
         brain_surface_file= os.path.join(SEG_DATADIR, "mask_brain.obj"),
         scalp_surface_file= os.path.join(SEG_DATADIR, "mask_scalp.obj"),
         landmarks_ras_file=landmarks_file,
-        smoothing=0.5,
-        fill_holes=True,
-        parcel_file=PARCEL_DIR
+        parcel_file=PARCEL_DIR,
+        smoothing = 0,
+        brain_face_count=None,
+        scalp_face_count=None
     ) 
+    
     head.scalp.units = units.mm
     # head.scalp.vertices = head.scalp.vertices * units.mm
     head.brain.units = units.mm
@@ -117,7 +119,6 @@ def calculate_W(A, alpha_meas=0.1, alpha_spatial=0.01, BRAIN_ONLY = False, DIREC
                                         C_meas_flag=C_meas_flag, C_meas=C_meas, D=D, F=F)
     else:
         W_xr, D, F = _calculate_W_indirect(A, alpha_meas=alpha_meas, alpha_spatial=alpha_spatial,
-                                          BRAIN_ONLY=BRAIN_ONLY, 
                                           C_meas_flag=C_meas_flag, C_meas=C_meas, D=D, F=F)
         
     return W_xr, D, F
@@ -364,9 +365,9 @@ def do_image_recon(od, head, Adot, C_meas_flag, C_meas, wavelength, BRAIN_ONLY, 
                                              sigma_scalp=cfg_sbf['sigma_scalp'])
             
             H = sbf.get_H(G, Adot)
-            Adot = H.copy()
+            Adot_ir = H.copy()
             
-        W, D, F = calculate_W(Adot, alpha_meas=alpha_meas, alpha_spatial=alpha_spatial,
+        W, D, F = calculate_W(Adot_ir, alpha_meas=alpha_meas, alpha_spatial=alpha_spatial,
                               C_meas_flag=C_meas_flag, C_meas=C_meas, DIRECT=DIRECT, BRAIN_ONLY=BRAIN_ONLY, D=D, F=F)
         X = _get_image_brain_scalp_indirect(od, W, Adot, SB=SB, G=G)
 

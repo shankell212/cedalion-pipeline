@@ -42,22 +42,20 @@ warnings.filterwarnings('ignore')
 def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
         
     # Load in data
-    if os.path.exists(groupaverage_path):
-        with open(groupaverage_path, 'rb') as f:
-            groupavg_results = pickle.load(f)
-      
-        blockaverage_mean = groupavg_results['group_blockaverage_weighted']  #groupavg_results['group_blockaverage_weighted']
-        blockaverage = groupavg_results['group_blockaverage']
-        blockaverage_stderr = groupavg_results['total_stderr_blockaverage']
-        blockaverage_subj = groupavg_results['blockaverage_subj']
-        blockaverage_mse_subj = groupavg_results['blockaverage_mse_subj']
-        geo2d = groupavg_results['geo2d']
-        geo3d = groupavg_results['geo3d']  # !!! this is not in groupaverage results yet
-        print(f" {groupaverage_path} loaded successfully!")
+    assert os.path.exists(groupaverage_path), f"File not found: {groupaverage_path!r}" # throw error if path does not exist
     
-    else:
-        print(f"Error: File '{groupaverage_path}' not found!")
-                
+    with open(groupaverage_path, 'rb') as f:
+        groupavg_results = pickle.load(f)
+  
+    blockaverage_mean = groupavg_results['group_blockaverage_weighted']  #groupavg_results['group_blockaverage_weighted']
+    blockaverage = groupavg_results['group_blockaverage']
+    blockaverage_stderr = groupavg_results['total_stderr_blockaverage']
+    blockaverage_subj = groupavg_results['blockaverage_subj']
+    blockaverage_mse_subj = groupavg_results['blockaverage_mse_subj']
+    geo2d = groupavg_results['geo2d']
+    geo3d = groupavg_results['geo3d']  # !!! this is not in groupaverage results yet
+    print(f" {groupaverage_path} loaded successfully!")
+    
     
     # Convert str vals to units from config
     cfg_sb = cfg_img_recon['spatial_basis']
@@ -66,13 +64,19 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
     cfg_sb["sigma_brain"] = units(cfg_sb["sigma_brain"])
     cfg_sb["sigma_scalp"] = units(cfg_sb["sigma_scalp"])
     if isinstance(cfg_img_recon["mse_min_thresh"], str):
-        cfg_img_recon["mse_min_thresh"] = float(cfg_img_recon["mse_min_thresh"])
+        cfg_img_recon["mse_min_thresh"] = float(eval(cfg_img_recon["mse_min_thresh"]))
     if isinstance(cfg_img_recon["alpha_meas"], str):
         cfg_img_recon["alpha_meas"] = float(cfg_img_recon["alpha_meas"])
     if isinstance(cfg_img_recon["alpha_spatial"], str):
         cfg_img_recon["alpha_spatial"] = float(cfg_img_recon["alpha_spatial"])
     
-        
+    # assert that block average data is in OD and not conc
+    msg = ("Block average data is in concentration, cannot compute image reconstruction! \n"
+        + "Please change config file: blockaverage['rec_str'] to 'od' or 'od_corrected'")
+    assert 'wavelength' in blockaverage_mean.dims, msg
+    
+    
+    
     #%% Load head model 
     head, PARCEL_DIR = img_recon.load_head_model(cfg_img_recon['head_model'], with_parcels=False)
     Adot, meas_list, geo3d, amp = img_recon.load_probe(cfg_img_recon['probe_dir'], snirf_name=cfg_img_recon['snirf_name_probe'])
@@ -146,6 +150,10 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
                 all_subj_X_hrf_mag = all_subj_X_hrf_mag.assign_coords(subj=subj)
                 all_subj_X_hrf_mag = all_subj_X_hrf_mag.assign_coords(trial_type=trial_type)
 
+                all_subj_X_hrf_mag_weighted = X_hrf_mag / X_mse 
+                all_subj_X_hrf_mag_weighted = all_subj_X_hrf_mag_weighted.assign_coords(subj=subj)
+                all_subj_X_hrf_mag_weighted = all_subj_X_hrf_mag_weighted.assign_coords(trial_type=trial_type)
+
                 all_subj_X_mse = X_mse
                 all_subj_X_mse = all_subj_X_mse.assign_coords(subj=subj)
                 all_subj_X_mse = all_subj_X_mse.assign_coords(trial_type=trial_type)
@@ -161,8 +169,13 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
                 X_mse_tmp = X_mse.assign_coords(subj=subj)
                 X_mse_tmp = X_mse_tmp.assign_coords(trial_type=trial_type)
 
+                X_hrf_mag_weighted_tmp = X_hrf_mag_weighted.assign_coords(subj=subj)
+                X_hrf_mag_weighted_tmp = X_hrf_mag_weighted_tmp.assign_coords(trial_type=trial_type)
+
                 all_subj_X_hrf_mag = xr.concat([all_subj_X_hrf_mag, X_hrf_mag_tmp], dim='subj')
                 all_subj_X_mse = xr.concat([all_subj_X_mse, X_mse_tmp], dim='subj')
+                all_subj_X_hrf_mag_weighted = xr.concat([all_subj_X_hrf_mag_weighted, X_hrf_mag_weighted_tmp], dim='subj')
+                
 
                 X_hrf_mag_weighted = X_hrf_mag_weighted + X_hrf_mag_tmp / X_mse
                 X_mse_inv_weighted = X_mse_inv_weighted + 1 / X_mse       # summing weight over all subjects -- viz X_mse_inv_weighted will tell us which regions of brain we are most conf in
@@ -201,6 +214,9 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
             all_trial_X_tstat = X_tstat
             all_trial_X_mse_between = X_mse_weighted_between_subjects
             all_trial_X_mse_within = X_mse_mean_within_subject
+            all_trial_all_subj_X_hrf_mag = all_subj_X_hrf_mag
+            all_trial_all_subj_X_mse = all_subj_X_mse
+            all_trial_all_subj_X_hrf_mag_weighted = all_subj_X_hrf_mag_weighted
         else:
 
             all_trial_X_hrf_mag = xr.concat([all_trial_X_hrf_mag, X_hrf_mag_mean], dim='trial_type')
@@ -209,6 +225,9 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
             all_trial_X_tstat = xr.concat([all_trial_X_tstat, X_tstat], dim='trial_type')
             all_trial_X_mse_between = xr.concat([all_trial_X_mse_between, X_mse_weighted_between_subjects], dim='trial_type')
             all_trial_X_mse_within = xr.concat([all_trial_X_mse_within, X_mse_mean_within_subject], dim='trial_type')
+            all_trial_all_subj_X_hrf_mag = xr.concat([all_trial_all_subj_X_hrf_mag, all_subj_X_hrf_mag], dim='trial_type')
+            all_trial_all_subj_X_mse = xr.concat([all_trial_all_subj_X_mse, all_subj_X_mse], dim='trial_type')
+            all_subj_X_hrf_mag_weighted = xr.concat([all_trial_all_subj_X_hrf_mag_weighted, all_subj_X_hrf_mag_weighted], dim='trial_type')
 
     # END OF TRIAL TYPE LOOP
     results = {'X_hrf_mag': all_trial_X_hrf_mag,
@@ -216,7 +235,10 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
                'X_std_err': all_trial_X_stderr,
                'X_tstat': all_trial_X_tstat,
                'X_mse_between': all_trial_X_mse_between,
-               'X_mse_within': all_trial_X_mse_within
+               'X_mse_within': all_trial_X_mse_within,
+               'X_all_subj_hrf_mag': all_trial_all_subj_X_hrf_mag,
+                'X_all_subj_mse': all_trial_all_subj_X_mse,
+                'X_all_subj_hrf_mag_weighted': all_trial_all_subj_X_hrf_mag_weighted,
                }
     
     # Save data to a compressed pickle file 

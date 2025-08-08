@@ -3,7 +3,8 @@ from snakemake.io import glob_wildcards
 
 
 configfile: "config/config.yaml"
-#configfile: "scripts/testing/config_test_BS.yaml"
+#configfile: "scripts/testing/config_test.yaml"
+#configfile: "scripts/testing/regression_testing/config_BS_reg_test.yaml"
 
 
 ROOT = config['dataset']["root_dir"]
@@ -22,6 +23,15 @@ def get_imagerecon_output():
         + ".pkl.gz"
     )
 
+def get_blockaverage_output():
+    return (
+        f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage_{config['blockaverage']['rec_str']}.pkl"
+    )
+    
+def get_groupaverage_output():
+    return (
+        f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage_{config['blockaverage']['rec_str']}.pkl"
+    )
 
 rule all_default:
     input:
@@ -42,7 +52,8 @@ rule all_preprocess:
 rule all_blockaverage:
     input:
         expand([
-            (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl"),  # blockaverage data
+            #(f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl"),  # blockaverage data
+            get_blockaverage_output(),
             (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json"),  # blockaverage dataqual
             (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_geo.sidecar")
             ],
@@ -53,8 +64,9 @@ rule all_blockaverage:
                       
 rule all_groupaverage:
     input:
-        expand([  # blockaverage dataqual
-            (f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl") # groupaverage
+        expand([  
+            get_groupaverage_output(),
+            #(f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl") # groupaverage
             ],
             subject = config["dataset"]["subject"],
             task = config["dataset"]["task"],
@@ -120,7 +132,8 @@ rule blockaverage:
         #all_preprocessed_runs   # list of all run files for curr sub and task 
     output:
         # block averaged data containing HRF for each task
-        pickle = (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl"),
+        pickle = get_blockaverage_output(),
+        #pickle = (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_blockaverage.pkl"),
         json = (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json"),
         geo = (f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_geo.sidecar")
     params:
@@ -140,7 +153,7 @@ def all_blockaverage_files(wc):
     ''' Return a list of all blockaverage .pkl files for this subject+task (i.e. all subs)'''  
     
     blockavg_paths =  [
-        f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{subject}/sub-{subject}_task-{wc.task}_nirs_blockaverage.pkl"
+        f"{ROOT}/derivatives/{DERIV}/blockaverage/sub-{subject}/sub-{subject}_task-{wc.task}_nirs_blockaverage_{config['blockaverage']['rec_str']}.pkl"
         for subject in config["dataset"]["subject"]
     ]
     
@@ -185,7 +198,8 @@ rule groupaverage:
         #epochs_nc  = lambda wc: all_blockaverage_files(wc)["epochs_nc"]  # epochs data net cdf
     output:
         # group averaged data
-        (f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl")   
+        get_groupaverage_output()
+        #(f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl")   
     params:
         cfg_groupaverage = config["groupaverage"],
         cfg_dataset = config['dataset'],
@@ -207,7 +221,8 @@ rule groupaverage:
 rule imagerecon:
     input:
         # group averaged data
-        (f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl")    # - taking subject blockaverage and subj mse from dict
+        get_groupaverage_output()
+        #(f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl")    # - taking subject blockaverage and subj mse from dict
     output:
         get_imagerecon_output()
         #results = lambda wc: get_imagerecon_output(wc.task)

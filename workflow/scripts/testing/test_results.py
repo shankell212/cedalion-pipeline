@@ -14,6 +14,7 @@ import numpy as np
 import yaml
 import pickle
 import gzip
+from cedalion.physunits import units
 
 
 #%%
@@ -110,9 +111,10 @@ plt.legend()
 
 # Shannon/Cedalion == no GLM, commented out replacing mse_min, only grabbed last run data qual file
 # Shannon/Cedalion/TEST == everything good, changed t post
+
 #%% TEST groupaverage
 groupavg_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'groupaverage')
-groupavg_files = [f'task-{t}_nirs_groupaverage.pkl' for t in cfg_dataset['task']]
+groupavg_files = [f'task-{t}_nirs_groupaverage_conc.pkl' for t in cfg_dataset['task']]
 
 
 # Load in data
@@ -138,7 +140,12 @@ TRIAL_IDX = 1
 WAV=1
 
 # Plot mse_hist
-mse_subj_stacked = blockaverage_mse_subj.stack(foo=['subj', 'trial_type', 'channel', 'wavelength', 'reltime'])
+if 'wavelength' in blockaverage_mse_subj.dims:
+    mse_subj_stacked = blockaverage_mse_subj.stack(foo=['subj', 'trial_type', 'channel', 'wavelength', 'reltime'])
+else:
+    mse_subj_stacked = blockaverage_mse_subj.stack(foo=['subj', 'trial_type', 'channel', 'chromo', 'reltime'])
+    mse_subj_stacked = mse_subj_stacked / (1 * units.micromolar**2)
+
 
 f, ax = plt.subplots()
 ax.hist(np.log10(mse_subj_stacked), bins=100)
@@ -147,20 +154,20 @@ ax.hist(np.log10(mse_subj_stacked), bins=100)
 source = 'S55'
 matching_channels = [ch for ch in blockaverage_weighted.channel.values if source in ch]
 
-# Plot a chans from blockaverage
-TRIAL = 'right'
-CHANNEL = matching_channels[2] #'S5D137'
-WAV = 850  #760
-grp_right = blockaverage_weighted.sel(wavelength=WAV, channel=CHANNEL, trial_type='right')
-grp_left = blockaverage_weighted.sel(wavelength=WAV, channel=CHANNEL, trial_type='left')
+# # Plot a chans from blockaverage
+# TRIAL = 'right'
+# CHANNEL = matching_channels[2] #'S5D137'
+# WAV = 850  #760
+# grp_right = blockaverage_weighted.sel(wavelength=WAV, channel=CHANNEL, trial_type='right')
+# grp_left = blockaverage_weighted.sel(wavelength=WAV, channel=CHANNEL, trial_type='left')
 
-f, ax = plt.subplots(1,1)
-ax.plot(grp_right.reltime, grp_right, label='right')
-ax.plot(grp_left.reltime, grp_left, label='left')
-plt.ylabel('OD')
-plt.xlabel('time (s)')
-plt.legend()
-plt.title(f'group avg weighted (wav {WAV}, channel {CHANNEL}')
+# f, ax = plt.subplots(1,1)
+# ax.plot(grp_right.reltime, grp_right, label='right')
+# ax.plot(grp_left.reltime, grp_left, label='left')
+# plt.ylabel('OD')
+# plt.xlabel('time (s)')
+# plt.legend()
+# plt.title(f'group avg weighted (wav {WAV}, channel {CHANNEL}')
         
 
          

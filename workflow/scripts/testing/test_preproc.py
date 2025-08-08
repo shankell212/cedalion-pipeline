@@ -20,10 +20,8 @@ import preprocess as preproc
 import importlib
 importlib.reload(preproc)
 
-#config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml" # CHANGE if testing
-#config_path = "C:\\Users\\shank\\Documents\\GitHub\\cedalion-pipeline\\workflow\\config\\config.yaml"
-config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml" # CHANGE if testing
-
+# config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml" # CHANGE if testing
+config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test.yaml"
 
 with open(config_path, 'r') as file:  # open config file
     config = yaml.safe_load(file)
@@ -37,7 +35,6 @@ subjects = cfg_dataset['subject']
 tasks = cfg_dataset['task'] 
 runs = cfg_dataset['run'] 
 
-subjects = ['618']
 # Loop through lists of tasks, subjects, and runs
 for subj in subjects:
     for task in tasks:

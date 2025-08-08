@@ -1,8 +1,8 @@
 dataset:
   root_dir: "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS"
-  derivatives_subfolder: "Shannon/cedalion"  #/test_allsubs #"Shannon/cedalion/test_all_subs" 
-  subject: ["568", "577", "580", "581", "583","586", "587", "588", "592", "613", "618","619", "621", "633", "638", "639", "640"]
-  
+  derivatives_subfolder: "Shannon/cedalion/test_DQR"  #/test_allsubs #"Shannon/cedalion/test_all_subs" 
+  #subject: ["568", "577", "580", "581", "583","586", "587", "588", "592", "613", "618","619", "621", "633", "638", "639", "640"]
+  subject: ['621'] #, '618', '587']
   task: ["BS"]  
   run: ["01", "02", "03"]   # !!! SHOULD we just have snakemake parse thru the number of runs? what if a sub only has 2 runs but all others have 3
     
