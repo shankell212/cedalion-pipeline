@@ -5,4 +5,5 @@ pysnirf2
 .snakemake
 __pycasche__
 *.pyc
-pysnirf2.log
+pysnirf2.logworkflow/scripts/testing/regression_testing/**/nirs/*.snirf
+workflow/scripts/testing/regression_testing/**/*_preprocessed.pkl
