@@ -2,7 +2,7 @@
 from snakemake.io import glob_wildcards
 
 
-configfile: "config/config.yaml"
+configfile: "config/config_STS.yaml"
 #configfile: "scripts/testing/config_test_BS.yaml"
 
 
@@ -19,6 +19,7 @@ def get_imagerecon_output():
         + ("_direct" if config["image_recon"]["DIRECT"]["enable"] else "_indirect")
         + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
+        + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
         + ".pkl.gz"
     )
 

@@ -66,7 +66,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
     cfg_sb["sigma_brain"] = units(cfg_sb["sigma_brain"])
     cfg_sb["sigma_scalp"] = units(cfg_sb["sigma_scalp"])
     if isinstance(cfg_img_recon["mse_min_thresh"], str):
-        cfg_img_recon["mse_min_thresh"] = float(cfg_img_recon["mse_min_thresh"])
+        cfg_img_recon["mse_min_thresh"] = float(eval(cfg_img_recon["mse_min_thresh"]))
     if isinstance(cfg_img_recon["alpha_meas"], str):
         cfg_img_recon["alpha_meas"] = float(cfg_img_recon["alpha_meas"])
     if isinstance(cfg_img_recon["alpha_spatial"], str):
@@ -120,14 +120,17 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
            
             od_mse = ind_subj_mse.sel(subj=subj, trial_type=trial_type).drop_vars(['subj', 'trial_type'])
             
-            od_hrf_mag = od_hrf.sel(reltime=slice(cfg_img_recon['t_win'][0], cfg_img_recon['t_win'][1])).mean('reltime')
-            od_mse_mag = od_mse.sel(reltime=slice(cfg_img_recon['t_win'][0], cfg_img_recon['t_win'][1])).mean('reltime')
-            
+            if cfg_img_recon['mag']['enable']:
+                od_hrf_mag = od_hrf.sel(reltime=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('reltime')
+                od_mse_mag = od_mse.sel(reltime=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('reltime')
+            else:
+                od_hrf_mag = od_hrf.copy()
+                od_mse_mag = od_mse.copy()
+
             C_meas = od_mse_mag.pint.dequantify()
             C_meas = C_meas.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
             C_meas = xr.where(C_meas < cfg_img_recon['mse_min_thresh'], cfg_img_recon['mse_min_thresh'], C_meas)
 
-            # !!! GET RID of hard coded wavelength  -- can just grab from one of the xarrays?
             X_hrf_mag, W, D, F, G = img_recon.do_image_recon(od_hrf_mag, head = head, Adot = Adot, C_meas_flag = cfg_img_recon['Cmeas']['enable'], 
                                                              C_meas = C_meas, wavelength = [ind_subj_blockavg.wavelength[0].item(), ind_subj_blockavg.wavelength[1].item()], 
                                                              BRAIN_ONLY = cfg_img_recon['BRAIN_ONLY']['enable'], 
@@ -201,14 +204,17 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
             all_trial_X_tstat = X_tstat
             all_trial_X_mse_between = X_mse_weighted_between_subjects
             all_trial_X_mse_within = X_mse_mean_within_subject
+            all_trial_all_subs_X_hrf_mag = all_subj_X_hrf_mag
+            all_trial_all_subs_X_mse = all_subj_X_mse
         else:
-
             all_trial_X_hrf_mag = xr.concat([all_trial_X_hrf_mag, X_hrf_mag_mean], dim='trial_type')
             all_trial_X_hrf_mag_weighted = xr.concat([all_trial_X_hrf_mag_weighted, X_hrf_mag_mean_weighted], dim='trial_type')
             all_trial_X_stderr = xr.concat([all_trial_X_stderr, X_stderr_weighted], dim='trial_type')
             all_trial_X_tstat = xr.concat([all_trial_X_tstat, X_tstat], dim='trial_type')
             all_trial_X_mse_between = xr.concat([all_trial_X_mse_between, X_mse_weighted_between_subjects], dim='trial_type')
             all_trial_X_mse_within = xr.concat([all_trial_X_mse_within, X_mse_mean_within_subject], dim='trial_type')
+            all_trial_all_subs_X_hrf_mag = xr.concat([all_trial_all_subs_X_hrf_mag, all_subj_X_hrf_mag], dim='trial_type')
+            all_trial_all_subs_X_mse = xr.concat([all_trial_all_subs_X_mse, all_subj_X_mse], dim='trial_type')
 
     # END OF TRIAL TYPE LOOP
     results = {'X_hrf_mag': all_trial_X_hrf_mag,
@@ -216,7 +222,9 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
                'X_std_err': all_trial_X_stderr,
                'X_tstat': all_trial_X_tstat,
                'X_mse_between': all_trial_X_mse_between,
-               'X_mse_within': all_trial_X_mse_within
+               'X_mse_within': all_trial_X_mse_within,
+                'X_all_subj_hrf_mag': all_trial_all_subs_X_hrf_mag,
+                'X_all_subj_mse': all_trial_all_subs_X_mse
                }
     
     # Save data to a compressed pickle file 

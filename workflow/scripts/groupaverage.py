@@ -48,10 +48,10 @@ def groupaverage_func(cfg_dataset, cfg_blockaverage, cfg_hrf, cfg_groupaverage, 
         if isinstance(cfg_mse["mse_val_for_bad_data"], str):
             cfg_mse["mse_val_for_bad_data"] = float(cfg_mse["mse_val_for_bad_data"])
         if isinstance(cfg_mse["mse_min_thresh"], str):
-            cfg_mse["mse_min_thresh"] = float(cfg_mse["mse_min_thresh"])
+            cfg_mse["mse_min_thresh"] = float(eval(cfg_mse["mse_min_thresh"]))
         if isinstance(cfg_mse["blockaverage_val"], str):
             cfg_mse["blockaverage_val"] = float(cfg_mse["blockaverage_val"])
-    mse_amp_thresh = [float(x) if isinstance(x,str) else x for x in cfg_groupaverage['mse_amp_thresh']] # convert str to float if str
+    mse_amp_thresh = [float(eval(x)) if isinstance(x,str) else x for x in cfg_groupaverage['mse_amp_thresh']] # convert str to float if str
     cfg_mse['mse_amp_thresh'] = min(mse_amp_thresh) # get minimum amplitude threshold
                             
     

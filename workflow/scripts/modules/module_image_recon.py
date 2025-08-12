@@ -364,9 +364,13 @@ def do_image_recon(od, head, Adot, C_meas_flag, C_meas, wavelength, BRAIN_ONLY, 
                                              sigma_scalp=cfg_sbf['sigma_scalp'])
             
             H = sbf.get_H(G, Adot)
-            Adot = H.copy()
+            Adot_ir = H.copy()
             
-        W, D, F = calculate_W(Adot, alpha_meas=alpha_meas, alpha_spatial=alpha_spatial,
+        else:
+            Adot_ir = Adot.copy()
+
+            
+        W, D, F = calculate_W(Adot_ir, alpha_meas=alpha_meas, alpha_spatial=alpha_spatial,
                               C_meas_flag=C_meas_flag, C_meas=C_meas, DIRECT=DIRECT, BRAIN_ONLY=BRAIN_ONLY, D=D, F=F)
         X = _get_image_brain_scalp_indirect(od, W, Adot, SB=SB, G=G)
 

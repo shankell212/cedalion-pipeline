@@ -47,12 +47,12 @@ warnings.filterwarnings('ignore')
 
 #%%
 
-ROOT_DIR = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/" 
-DERIV_DIR = os.path.join(ROOT_DIR, 'derivatives', 'Shannon', 'cedalion') #, 'test')
+ROOT_DIR = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/" #"/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/" 
+DERIV_DIR = os.path.join(ROOT_DIR, 'derivatives', 'cedalion') #, 'test')
 
 if scc ==1:
     #probe_dir = "/projectnb/nphfnirs/s/Shannon/Data/probes/NN22_WHHD/12NN/"  # CHANGE
-    probe_dir = os.path.join(ROOT_DIR, 'derivatives/Shannon/cedalion/probe/')
+    probe_dir = os.path.join(ROOT_DIR, 'derivatives/cedalion/probe/')
 else:
     probe_dir = 'C://Users//shank//Downloads//probes//NN22_WHHD//12NN//'
     
@@ -60,10 +60,11 @@ else:
 head_model = 'ICBM152'
 snirf_name= 'fullhead_56x144_NN22_System1.snirf'
 
-flag_condition_list = ['right', 'left']
+task = 'STS'
+flag_condition_list = ['STS']
 SAVE = True
 # folder_name = "Xs_BS_cov_alpha_spatial_1e-2_alpha_meas_1e4_indirect_Cmeas_SB" #"Xs_STS_cov_alpha_spatial_1e-3_alpha_meas_1e-2_indirect_Cmeas_noSB"  # CHANGE
-folder_name = "Xs_BS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB"
+folder_name = f"Xs_{task}_cov_alpha_spatial_1e-2_alpha_meas_1e4_indirect_Cmeas_SB"
 
 #%% Load head model 
 import importlib
@@ -91,7 +92,7 @@ flag_img_list = ['mag', 'tstat', 'noise'] #, 'noise'
     
 
 if scc == 1:
-    save_dir_tmp = os.path.join(DERIV_DIR, 'plots', 'images')
+    save_dir_tmp = os.path.join(DERIV_DIR, 'plots', 'image_recon')
     results_dir = os.path.join(DERIV_DIR, 'image_results')
     filepath = os.path.join(results_dir, f'{folder_name}.pkl.gz')
     with gzip.open( filepath, 'rb') as f:
@@ -110,8 +111,10 @@ all_trial_X_stderr = results['X_std_err']
 all_trial_X_tstat = results['X_tstat'] 
 all_trial_X_mse_between = results['X_mse_between'] 
 all_trial_X_mse_within = results['X_mse_within'] 
-               
+all_subj_X_hrf_mag = results['X_all_subj_hrf_mag'] 
+all_subj_X_mse = results['X_all_subj_mse']
 
+# all_trial_X_hrf_mag_weighted = all_subj_X_hrf_mag.sel(subj='23')
 #%% Plot
 import importlib
 importlib.reload(img_recon)

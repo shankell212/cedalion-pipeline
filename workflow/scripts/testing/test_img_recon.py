@@ -21,8 +21,8 @@ import image_recon as img_recon
 import importlib
 importlib.reload(img_recon)
 # 
-# config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
-config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml"
+config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_STS.yaml"
+# config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml"
 
 
 with open(config_path, 'r') as file:
@@ -53,6 +53,7 @@ file_name = (
     + ("_direct" if config["image_recon"]["DIRECT"]["enable"] else "_indirect")
     + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
     + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
+    + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
     + ".pkl.gz"
 )
 
