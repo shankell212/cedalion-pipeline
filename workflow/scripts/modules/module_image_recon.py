@@ -159,7 +159,7 @@ def _calculate_W_direct(A, alpha_meas=0.1, alpha_spatial=0.01, BRAIN_ONLY=False,
         lambda_meas = alpha_meas * max_eig
         
         if C_meas_flag:  
-            
+            #pdb.set_trace()
             assert  len(C_meas.shape) == 2
                                                             
             W = D @ np.linalg.inv(F  + lambda_meas * C_meas )

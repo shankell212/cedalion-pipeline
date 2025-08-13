@@ -229,7 +229,7 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             cfg_hrf['t_pre'] = units(cfg_hrf['t_pre'])
             cfg_hrf['t_post'] = units(cfg_hrf['t_post'])
             
-            rec = preproc.GLM(rec, 'conc', params, cfg_hrf, pruned_chans) # passing in pruned channels
+            rec = preproc.GLM_filter(rec, 'conc', params, cfg_hrf, pruned_chans) # passing in pruned channels
             
             rec['od_corrected'] = cedalion.nirs.conc2od(rec['conc'], rec.geo3d, dpf)  # Convert GLM filtered data back to OD
             rec['od_corrected'] = rec['od_corrected'].transpose('channel', 'wavelength', 'time') # need to transpose to match rec['od'] bc conc2od switches the axes
