@@ -370,10 +370,12 @@ def do_image_recon(od, head, Adot, C_meas_flag, C_meas, wavelength, BRAIN_ONLY, 
                               C_meas_flag=C_meas_flag, C_meas=C_meas, DIRECT=DIRECT, BRAIN_ONLY=BRAIN_ONLY, D=D, F=F)
         X = _get_image_brain_scalp_indirect(od, W, Adot, SB=SB, G=G)
 
-      
-            
+    if len(od.shape) == 3:
+        X = X.transpose('chromo', 'vertex', 'time')
+    else:
+        X = X.transpose('chromo', 'vertex')
+
     return X, W, D, F, G
-    
 
 
 def get_image_noise(C_meas, X, W, SB=False, DIRECT=True, G=None):
@@ -401,7 +403,7 @@ def get_image_noise(C_meas, X, W, SB=False, DIRECT=True, G=None):
             cov_img_diag = np.nansum(cov_img_tmp**2, axis=1)
         
         if SB:
-            cov_img_diag = sbf.go_from_kernel_space_to_image_space_direct(cov_img_diag, G)
+            cov_img_diag = sbf.go_from_kernel_space_to_image_space_direct(cov_img_diag.T, G)
         else:
             if TIME:
                 split = cov_img_diag.shape[1]//2
@@ -410,10 +412,11 @@ def get_image_noise(C_meas, X, W, SB=False, DIRECT=True, G=None):
 
                 # Stack into vertex x 2 x time
                 cov_img_diag = np.stack([HbO.T, HbR.T], axis=1)  # (vertex, 2, time)
-                cov_img_diag = cov_img_diag.transpose(0,2,1)
+                cov_img_diag = cov_img_diag.transpose(1,0,2)
             else:
                 split = len(cov_img_diag)//2
                 cov_img_diag =  np.reshape( cov_img_diag, (2,split) ).T 
+
         
 
     else:
@@ -433,7 +436,7 @@ def get_image_noise(C_meas, X, W, SB=False, DIRECT=True, G=None):
                     cov_img_diag = np.nansum(cov_img_tmp**2, axis=1)
                     C_tmp_lst.append(cov_img_diag)
 
-                cov_img_diag = np.vstack(C_tmp_lst)
+                cov_img_diag = np.vstack(C_tmp_lst).T
 
             else:
                 cov_img_tmp = W_wl * np.sqrt(C_wl.values) # get diag of image covariance
@@ -441,12 +444,13 @@ def get_image_noise(C_meas, X, W, SB=False, DIRECT=True, G=None):
             
             if SB:
                 cov_img_diag = sbf.go_from_kernel_space_to_image_space_indirect(cov_img_diag, G)
-            
+                # cov_img_diag = cov_img_diag
+
             cov_img_lst.append(cov_img_diag)
             
         if TIME:
-            cov_img_diag =  np.stack(cov_img_lst, axis=2) 
-            cov_img_diag = np.transpose(cov_img_diag, [2,1,0])
+            cov_img_diag =  np.stack(cov_img_lst, axis=2)
+            cov_img_diag = np.transpose(cov_img_diag, [2,0,1])
             cov_img_diag = np.einsum('ij,jab->iab', einv.values**2, cov_img_diag)
 
         else:

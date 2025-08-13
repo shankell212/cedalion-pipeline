@@ -273,18 +273,26 @@ def get_H_stacked(G, A):
 
 
 def go_from_kernel_space_to_image_space_direct(X, G):
-    
-    split = len(X)//2
-    nkernels_brain = G['G_brain'].kernel.shape[0]
 
-    X_hbo = X[:split]
-    X_hbr = X[split:]
-    sb_X_brain_hbo = X_hbo[:nkernels_brain]
-    sb_X_brain_hbr = X_hbr[:nkernels_brain]
-    
-    sb_X_scalp_hbo = X_hbo[nkernels_brain:]
-    sb_X_scalp_hbr = X_hbr[nkernels_brain:]
-    
+    split = X.shape[0]//2
+    nkernels_brain = G['G_brain'].kernel.shape[0]
+    if len(X.shape) > 1:
+        X_hbo = X[:split,:]
+        X_hbr = X[split:,:]
+        sb_X_brain_hbo = X_hbo[:nkernels_brain,:]
+        sb_X_brain_hbr = X_hbr[:nkernels_brain,:]
+        
+        sb_X_scalp_hbo = X_hbo[nkernels_brain:,:]
+        sb_X_scalp_hbr = X_hbr[nkernels_brain:,:]
+    else:
+        X_hbo = X[:split]
+        X_hbr = X[split:]
+        sb_X_brain_hbo = X_hbo[:nkernels_brain]
+        sb_X_brain_hbr = X_hbr[:nkernels_brain]
+        
+        sb_X_scalp_hbo = X_hbo[nkernels_brain:]
+        sb_X_scalp_hbr = X_hbr[nkernels_brain:]
+        
     #% PROJECT BACK TO SURFACE SPACE 
     X_hbo_brain = G['G_brain'].values.T @ sb_X_brain_hbo
     X_hbo_scalp = G['G_scalp'].values.T @ sb_X_scalp_hbo
@@ -297,16 +305,19 @@ def go_from_kernel_space_to_image_space_direct(X, G):
         X = np.stack([np.concatenate([X_hbo_brain, X_hbo_scalp]),np.concatenate([ X_hbr_brain, X_hbr_scalp])], axis=1)
     else:
         X = np.stack([np.vstack([X_hbo_brain, X_hbo_scalp]), np.vstack([X_hbr_brain, X_hbr_scalp])], axis =2)
+        X = X.transpose(2,0,1)
 
     return X
 
 def go_from_kernel_space_to_image_space_indirect(X, G):
     
     nkernels_brain = G['G_brain'].kernel.shape[0]
-
-    sb_X_brain = X[:nkernels_brain]
-    
-    sb_X_scalp = X[nkernels_brain:]
+    if len(X.shape) < 2:
+        sb_X_brain = X[:nkernels_brain]
+        sb_X_scalp = X[nkernels_brain:]
+    else:
+        sb_X_brain = X[:nkernels_brain,:]
+        sb_X_scalp = X[nkernels_brain:,:]
     
     #% PROJECT BACK TO SURFACE SPACE 
     X_brain = G['G_brain'].values.T @ sb_X_brain
