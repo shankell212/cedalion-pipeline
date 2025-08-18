@@ -236,6 +236,10 @@ def GLM(runs, rec_str, cfg_GLM, geo3d, pruned_chans_list):
         drift_regressors = get_drift_regressors(runs_updated, cfg_GLM)
         dms &= reduce(operator.and_, drift_regressors)
 
+    if cfg_GLM['do_drift_legendre']:
+        drift_regressors = get_drift_legendre_regressors(runs_updated, cfg_GLM)
+        dms &= reduce(operator.and_, drift_regressors)
+
     if cfg_GLM['do_short_sep']:
         ss_regressors = get_short_regressors(runs_updated, pruned_chans_list, geo3d, cfg_GLM)
         dms &= reduce(operator.and_, ss_regressors)
@@ -332,6 +336,17 @@ def get_drift_regressors(runs, cfg_GLM):
         
     return drift_regressors
 
+def get_drift_legendre_regressors(runs, cfg_GLM):
+
+    drift_regressors = []
+    i=0
+    for i, run  in enumerate(runs):
+
+        drift = glm.design_matrix.drift_legendre_regressors(run, cfg_GLM['drift_order'])
+        drift.common = drift.common.assign_coords({'regressor': [f'Drift {x} run {i}' for x in range(cfg_GLM['drift_order']+1)]})
+        drift_regressors.append(drift)
+
+    return drift_regressors
 
 def get_short_regressors(runs, pruned_chans_list, geo3d, cfg_GLM):
     ss_regressors = []
