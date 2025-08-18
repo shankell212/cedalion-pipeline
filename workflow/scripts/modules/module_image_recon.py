@@ -411,7 +411,7 @@ def get_image_noise(C_meas, X, W, SB=False, DIRECT=True, G=None):
                 cov_img_diag = cov_img_diag.transpose(1,0,2)
             else:
                 split = len(cov_img_diag)//2
-                cov_img_diag =  np.reshape( cov_img_diag, (2,split) ).T 
+                cov_img_diag =  np.reshape( cov_img_diag, (2,split) )
 
         
 
@@ -452,6 +452,7 @@ def get_image_noise(C_meas, X, W, SB=False, DIRECT=True, G=None):
         else:
             cov_img_diag =  np.vstack(cov_img_lst) 
             cov_img_diag = einv.values**2 @ cov_img_diag
+            
 
     noise = X.copy()
     noise.values = cov_img_diag
