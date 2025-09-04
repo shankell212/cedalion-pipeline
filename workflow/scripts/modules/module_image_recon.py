@@ -371,7 +371,10 @@ def do_image_recon(od, head, Adot, C_meas_flag, C_meas, wavelength, BRAIN_ONLY, 
         X = _get_image_brain_scalp_indirect(od, W, Adot, SB=SB, G=G)
 
     if len(od.shape) == 3:
-        X = X.transpose('chromo', 'vertex', 'time')
+        if 'time' in X.dims:
+            X = X.transpose('chromo', 'vertex', 'time')
+        elif 'reltime' in X.dims:
+            X = X.transpose('chromo', 'vertex', 'reltime')
     else:
         X = X.transpose('chromo', 'vertex')
 

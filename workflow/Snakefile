@@ -2,7 +2,7 @@
 from snakemake.io import glob_wildcards
 
 
-configfile: "config/config_STS.yaml"
+configfile: "config/config_IWHD.yaml"
 #configfile: "scripts/testing/config_test_BS.yaml"
 
 

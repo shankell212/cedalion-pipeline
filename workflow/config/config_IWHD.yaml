@@ -106,7 +106,7 @@ image_recon:
   BRAIN_ONLY:      # reconstruct brain only OR scalp and brain
     enable: false
   spatial_basis:           
-    enable: true 
+    enable: false 
     mask_threshold: -2
     threshold_brain: "1 mm"
     threshold_scalp: "5 mm"
@@ -119,11 +119,11 @@ image_recon:
   snirf_name_probe: "fullhead_56x144_NN22_System1.snirf"
   head_model: 'ICBM152'
   alpha_meas: 1e4
-  alpha_spatial: 1e-2   #   WITH SB= 1e-2, NO SB = 1e-3
+  alpha_spatial: 1e-3   #   WITH SB= 1e-2, NO SB = 1e-3
   spectrum: 'prahl'
   mse_min_thresh: '10 ** -5.5' #1e-5.5
   plot_image:    
-    enable: true
+    enable: false
     flag_hbo_list: ['hbo', 'hbr']
     flag_brain_list: ['brain', 'scalp']  # 'brain', 'scalp' - if you want to plot either
     flag_img_list:  ['mag', 'tstat', 'noise']

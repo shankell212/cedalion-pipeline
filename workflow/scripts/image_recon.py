@@ -119,18 +119,20 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
             # od_hrf = od_hrf.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
            
             od_mse = ind_subj_mse.sel(subj=subj, trial_type=trial_type).drop_vars(['subj', 'trial_type'])
-            
+            #od_mse = xr.dot(E**2, mse, dim=['chromo']) * 1* units.mm**2
+
             if cfg_img_recon['mag']['enable']:
                 od_hrf_mag = od_hrf.sel(reltime=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('reltime')
                 od_mse_mag = od_mse.sel(reltime=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('reltime')
             else:
                 od_hrf_mag = od_hrf.copy()
 
-            od_mse_mag = od_mse.sel(reltime=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('reltime')
-
+            #od_mse_mag = od_mse.sel(reltime=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('reltime')
+            od_mse_mag = od_mse.mean('reltime')
             C_meas = od_mse_mag.pint.dequantify()
             C_meas = C_meas.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
             C_meas = xr.where(C_meas < cfg_img_recon['mse_min_thresh'], cfg_img_recon['mse_min_thresh'], C_meas)
+            od_mse_ts = od_mse.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
             #pdb.set_trace()
             X_hrf_mag, W, D, F, G = img_recon.do_image_recon(od_hrf_mag, head = head, Adot = Adot, C_meas_flag = cfg_img_recon['Cmeas']['enable'], 
                                                              C_meas = C_meas, wavelength = [ind_subj_blockavg.wavelength[0].item(), ind_subj_blockavg.wavelength[1].item()], 
@@ -139,7 +141,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, groupaverage_path, out):
                                                         cfg_sbf = cfg_sb, alpha_spatial = cfg_img_recon['alpha_spatial'], 
                                                         alpha_meas = cfg_img_recon['alpha_meas'],F = F, D = D, G = G)
                                                         
-            
+            od_mse_ts = od_mse_ts.transpose('measurement', 'reltime')
             X_mse = img_recon.get_image_noise(od_mse, X_hrf_mag, W, DIRECT = cfg_img_recon['DIRECT']['enable'], SB= cfg_sb['enable'], G=G)
             
 

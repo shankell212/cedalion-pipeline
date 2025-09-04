@@ -21,7 +21,7 @@ import image_recon as img_recon
 import importlib
 importlib.reload(img_recon)
 # 
-config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_STS.yaml"
+config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_IWHD.yaml"
 # config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml"
 
 

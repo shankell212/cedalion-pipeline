@@ -26,9 +26,10 @@ import cedalion.io
 import cedalion.plots
 import cedalion.sigproc.quality as quality
 import cedalion.vis.plot_sensitivity_matrix
-from cedalion import units
+from cedalion.physunits import units
 from cedalion.imagereco.solver import pseudo_inverse_stacked
 from cedalion.io.forward_model import FluenceFile, load_Adot
+from cedalion.plots import image_recon_multi_view
 
 scc = 0 if os.getenv("HOSTNAME") is None else 1
 
@@ -64,7 +65,7 @@ task = 'STS'
 flag_condition_list = ['STS']
 SAVE = True
 # folder_name = "Xs_BS_cov_alpha_spatial_1e-2_alpha_meas_1e4_indirect_Cmeas_SB" #"Xs_STS_cov_alpha_spatial_1e-3_alpha_meas_1e-2_indirect_Cmeas_noSB"  # CHANGE
-folder_name = f"Xs_{task}_cov_alpha_spatial_1e-2_alpha_meas_1e4_indirect_Cmeas_SB"
+folder_name = f"Xs_{task}_cov_alpha_spatial_1e-2_alpha_meas_1e4_indirect_Cmeas_SB_ts"
 
 #%% Load head model 
 import importlib
@@ -78,17 +79,6 @@ einv = cedalion.xrutils.pinv(ec)
 
 
 #%% Open files
-
-import importlib
-importlib.reload(img_recon)
-
-threshold = -2 # log10 absolute
-wl_idx = 1
-M = sbf.get_sensitivity_mask(Adot, threshold, wl_idx)
-SAVE = True
-flag_hbo_list = [True, False]
-flag_brain_list = [True]   #, False]
-flag_img_list = ['mag', 'tstat', 'noise'] #, 'noise'
     
 
 if scc == 1:
@@ -115,11 +105,24 @@ all_subj_X_hrf_mag = results['X_all_subj_hrf_mag']
 all_subj_X_mse = results['X_all_subj_mse']
 
 # all_trial_X_hrf_mag_weighted = all_subj_X_hrf_mag.sel(subj='23')
-#%% Plot
-import importlib
-importlib.reload(img_recon)
 
-# all_trial_X_hrf_mag = results['X_hrf_mag']
+
+#%% Plot w cedalion function:
+
+# threshold = -2 # log10 absolute
+# wl_idx = 1
+# M = sbf.get_sensitivity_mask(Adot, threshold, wl_idx)
+SAVE = True
+flag_hbo_list = [True, False]
+flag_brain_list = [True]   #, False]
+flag_img_list = ['mag', 'tstat', 'noise'] #, 'noise'
+
+# X_ts = all_trial_X_hrf_mag_weighted.rename({"reltime": "time"})
+# X_ts = X_ts.transpose("vertex", "chromo", "time")
+
+# scl = np.percentile(np.abs(X_ts.sel(chromo='HbO').values.reshape(-1)),99)
+# clim = (-scl,scl)
+
 for flag_hbo in flag_hbo_list:
     
     for flag_brain in flag_brain_list: 
@@ -127,13 +130,15 @@ for flag_hbo in flag_hbo_list:
         for flag_condition in flag_condition_list:
             
             for flag_img in flag_img_list:
-                
+
                 if flag_hbo:
                     title_str = flag_condition + ' ' + 'HbO'
                     hbx_brain_scalp = 'hbo'
+                    chromo='HbO'
                 else:
                     title_str = flag_condition + ' ' + 'HbR'
                     hbx_brain_scalp = 'hbr'
+                    chromo='HbR'
                 
                 if flag_brain:
                     title_str = title_str + ' brain'
@@ -162,42 +167,120 @@ for flag_hbo in flag_hbo_list:
                     elif flag_img == 'noise':
                         foo_img = all_trial_X_stderr.copy()
                         title_str = title_str + ' noise'
-        
-                foo_img = foo_img.pint.dequantify()
-                foo_img = foo_img.transpose('vertex', 'chromo')
-                foo_img[~M] = np.nan
                 
-             # 
-                clim = (-foo_img.sel(chromo='HbO').max(), foo_img.sel(chromo='HbO').max())
-                # if flag_img == 'mag':
-                #     clim = [-7.6e-4, 7.6e-4]
-                p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (1,1), clim, hbx_brain_scalp, 'scale_bar',
-                                          None, title_str, off_screen=SAVE )
-                p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (0,0), clim, hbx_brain_scalp, 'left', p0)
-                p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (0,1), clim, hbx_brain_scalp, 'superior', p0)
-                p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (0,2), clim, hbx_brain_scalp, 'right', p0)
-                p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (1,0), clim, hbx_brain_scalp, 'anterior', p0)
-                p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (1,2), clim, hbx_brain_scalp, 'posterior', p0)
+                foo_img = foo_img.rename({"reltime": "time"})
+                foo_img = foo_img.transpose("vertex", "chromo", "time")
                 
-                
+                scl = np.percentile(np.abs(foo_img.sel(chromo=chromo).values.reshape(-1)),99)
+                clim = (-scl,scl)
+
                 if SAVE:
                     save_dir_tmp_ful = os.path.join(save_dir_tmp, folder_name)
                     if not os.path.exists(save_dir_tmp_ful):
                         os.makedirs(save_dir_tmp_ful)
-                    file_name = f'IMG_{flag_condition}_{flag_img}_{hbx_brain_scalp}.png'
-                    p0.screenshot( os.path.join(save_dir_tmp_ful, file_name) )
-                    p0.close()
-                    print(f"Images saved to {save_dir_tmp_ful}")
-                else:
-                    p0.show()
+                filename = f'IMG_{flag_condition}_{flag_img}_{hbx_brain_scalp}'
+                save_file_path = os.path.join(save_dir_tmp_ful, filename )
+
+                print(foo_img)
+                print('plotting: ', filename)
+                image_recon_multi_view(
+                    foo_img,  # time series data; can be 2D (static) or 3D (dynamic)
+                    head,
+                    cmap='jet',
+                    clim=clim,
+                    view_type=hbx_brain_scalp,
+                    title_str=f'{filename} / uM',
+                    filename=save_file_path,
+                    SAVE=True,
+                    time_range=(foo_img.time.values[0],foo_img.time.values[-1],0.5)*units.s,
+                    fps=6,
+                    geo3d_plot = None, #  geo3d_plot
+                    wdw_size = (1024, 768)
+                )
+
+#%% Plot
+# import importlib
+# importlib.reload(img_recon)
+
+# # all_trial_X_hrf_mag = results['X_hrf_mag']
+# for flag_hbo in flag_hbo_list:
+    
+#     for flag_brain in flag_brain_list: 
+        
+#         for flag_condition in flag_condition_list:
+            
+#             for flag_img in flag_img_list:
                 
-                # if SAVE:
-                #     img_folder = f'{direct_name}_aspatial-{cfg_img_recon["alpha_spatial"]}_ameas-{cfg_img_recon["alpha_meas"]}_{Cmeas_name}_{SB_name}'
-                #     save_dir_tmp= os.path.join(cfg_dataset["root_dir"], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'image_recon', img_folder)
-                #     if not os.path.exists(save_dir_tmp):
-                #         os.makedirs(save_dir_tmp)
-                #     file_name = f'IMG_{flag_condition}_{flag_img}_{hbx_brain_scalp}.png'
-                #     p0.screenshot( os.path.join(save_dir_tmp, file_name) )
-                #     p0.close()
-                # else:
-                #     p0.show()
+#                 if flag_hbo:
+#                     title_str = flag_condition + ' ' + 'HbO'
+#                     hbx_brain_scalp = 'hbo'
+#                 else:
+#                     title_str = flag_condition + ' ' + 'HbR'
+#                     hbx_brain_scalp = 'hbr'
+                
+#                 if flag_brain:
+#                     title_str = title_str + ' brain'
+#                     hbx_brain_scalp = hbx_brain_scalp + '_brain'
+#                 else:
+#                     title_str = title_str + ' scalp'
+#                     hbx_brain_scalp = hbx_brain_scalp + '_scalp'
+                
+#                 if len(flag_condition_list) > 1:
+#                     if flag_img == 'tstat':
+#                         foo_img = all_trial_X_tstat.sel(trial_type=flag_condition).copy()
+#                         title_str = title_str + ' t-stat'
+#                     elif flag_img == 'mag':
+#                         foo_img = all_trial_X_hrf_mag_weighted.sel(trial_type=flag_condition).copy()
+#                         title_str = title_str + ' magnitude'
+#                     elif flag_img == 'noise':
+#                         foo_img = all_trial_X_stderr.sel(trial_type=flag_condition).copy()
+#                         title_str = title_str + ' noise'
+#                 else:
+#                     if flag_img == 'tstat':
+#                         foo_img = all_trial_X_tstat.copy()
+#                         title_str = title_str + ' t-stat'
+#                     elif flag_img == 'mag':
+#                         foo_img = all_trial_X_hrf_mag_weighted.copy()
+#                         title_str = title_str + ' magnitude'
+#                     elif flag_img == 'noise':
+#                         foo_img = all_trial_X_stderr.copy()
+#                         title_str = title_str + ' noise'
+        
+#                 foo_img = foo_img.pint.dequantify()
+#                 foo_img = foo_img.transpose('vertex', 'chromo')
+#                 foo_img[~M] = np.nan
+                
+#              # 
+#                 clim = (-foo_img.sel(chromo='HbO').max(), foo_img.sel(chromo='HbO').max())
+#                 # if flag_img == 'mag':
+#                 #     clim = [-7.6e-4, 7.6e-4]
+#                 p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (1,1), clim, hbx_brain_scalp, 'scale_bar',
+#                                           None, title_str, off_screen=SAVE )
+#                 p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (0,0), clim, hbx_brain_scalp, 'left', p0)
+#                 p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (0,1), clim, hbx_brain_scalp, 'superior', p0)
+#                 p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (0,2), clim, hbx_brain_scalp, 'right', p0)
+#                 p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (1,0), clim, hbx_brain_scalp, 'anterior', p0)
+#                 p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (1,2), clim, hbx_brain_scalp, 'posterior', p0)
+                
+                
+#                 if SAVE:
+#                     save_dir_tmp_ful = os.path.join(save_dir_tmp, folder_name)
+#                     if not os.path.exists(save_dir_tmp_ful):
+#                         os.makedirs(save_dir_tmp_ful)
+#                     file_name = f'IMG_{flag_condition}_{flag_img}_{hbx_brain_scalp}.png'
+#                     p0.screenshot( os.path.join(save_dir_tmp_ful, file_name) )
+#                     p0.close()
+#                     print(f"Images saved to {save_dir_tmp_ful}")
+#                 else:
+#                     p0.show()
+                
+#                 # if SAVE:
+#                 #     img_folder = f'{direct_name}_aspatial-{cfg_img_recon["alpha_spatial"]}_ameas-{cfg_img_recon["alpha_meas"]}_{Cmeas_name}_{SB_name}'
+#                 #     save_dir_tmp= os.path.join(cfg_dataset["root_dir"], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'image_recon', img_folder)
+#                 #     if not os.path.exists(save_dir_tmp):
+#                 #         os.makedirs(save_dir_tmp)
+#                 #     file_name = f'IMG_{flag_condition}_{flag_img}_{hbx_brain_scalp}.png'
+#                 #     p0.screenshot( os.path.join(save_dir_tmp, file_name) )
+#                 #     p0.close()
+#                 # else:
+#                 #     p0.show()
