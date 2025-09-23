@@ -219,22 +219,6 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             )
             rec['conc'] = cedalion.nirs.od2conc(rec['od_corrected'], rec.geo3d, dpf, spectrum="prahl")
         
-        # GLM filtering step
-        # !!! add choice of gauss basis func & SSR method
-        elif step_name == "GLM_filter":
-            # change from str to pint object
-            cfg_preprocess["steps"]["GLM_filter"]["distance_threshold"] = units(cfg_preprocess["steps"]["GLM_filter"]["distance_threshold"])
-            cfg_preprocess["steps"]["GLM_filter"]["t_delta"] = units(cfg_preprocess["steps"]["GLM_filter"]["t_delta"])
-            cfg_preprocess["steps"]["GLM_filter"]["t_std"] = units(cfg_preprocess["steps"]["GLM_filter"]["t_std"])
-            cfg_hrf['t_pre'] = units(cfg_hrf['t_pre'])
-            cfg_hrf['t_post'] = units(cfg_hrf['t_post'])
-            
-            rec = preproc.GLM_filter(rec, 'conc', params, cfg_hrf, pruned_chans) # passing in pruned channels
-            
-            rec['od_corrected'] = cedalion.nirs.conc2od(rec['conc'], rec.geo3d, dpf)  # Convert GLM filtered data back to OD
-            rec['od_corrected'] = rec['od_corrected'].transpose('channel', 'wavelength', 'time') # need to transpose to match rec['od'] bc conc2od switches the axes
-        
-        
         
         # Plot DQR
         elif step_name in ("DQR_plot", "plot_DQR", "plot_dqr", "dqr_plot"):

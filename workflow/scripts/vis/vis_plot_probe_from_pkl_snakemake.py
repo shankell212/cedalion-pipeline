@@ -23,14 +23,15 @@ import cedalion.geometry.registration as registration
 
 #%%
 # path2results = "/projectnb/nphfnirs/ns/Shannon/Data/Interactive_Walking_HD/derivatives/cedalion"
-
 # path2results = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/derivatives/Shannon/cedalion"
-path2results = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion"
+#path2results = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion"
+#path2results = "/projectnb/nphfnirs/s/users/shannon/Data/reg_test_data/ground_truth" #test_data/derivatives/cedalion"
+path2results = "/projectnb/nphfnirs/s/users/shannon/Data/reg_test_data/test_data/derivatives/cedalion"
 
-task = "STS"
+task = "BS"
 
 # sub = "547"  # only for opening rec
-filname = "task-" + task + "_nirs_groupaverage.pkl"
+filname = "task-" + task + "_nirs_groupaverage_od_corrected.pkl"
 filepath_bl = os.path.join(os.path.join(path2results, "groupaverage/") , filname)
     
 

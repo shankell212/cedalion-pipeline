@@ -1,0 +1,155 @@
+dataset:
+  root_dir: "/projectnb/nphfnirs/s/users/shannon/Data/reg_test_data/test_data"
+  derivatives_subfolder: "cedalion" 
+  subject: ['621', '618', '587']
+  task: ["BS"]  
+  run: ["01", "02", "03"]   # !!! SHOULD we just have snakemake parse thru the number of runs? what if a sub only has 2 runs but all others have 3
+
+preprocess:
+  steps:
+    bs_preproc:   # !!! only for BS data
+      enable: true
+      probe_dir: "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/derivatives/Shannon/cedalion/probe/" #"/projectnb/nphfnirs/ns/Shannon/Data/probes/NN22_WHHD/12NN/" #"/projectnb/nphfnirs/s/users/lcarlton/DATA/probes/NN22_WHHD/12NN/"
+      snirf_name_probe: "fullhead_56x144_NN22_System1.snirf" #"fullhead_56x144_System2.snirf"  
+  
+    median_filter:
+      enable: true
+      order: 1
+
+    prune:
+      enable: false  # false, does not update timeseries but does return mask  # FIXME: have enable mean enable (mask created or not) and then add another flag for controlling timeseries
+      snr_thresh: 5
+      sd_thresh:
+        - "1 mm"
+        - "40 mm"
+      amp_thresh:
+        - 1e-3
+        - 0.84
+      perc_time_clean_thresh: 0.6  # for sci x psp mask
+      sci_threshold: 0.6
+      psp_threshold: 0.1
+      window_length: "5 second"  # for both sci and psp
+      flag_use_sci: false #true
+      flag_use_psp: false
+
+    int2od:
+      enable: true
+
+    calc_slope_b4:   # calc slope before correction applied to od
+      enable: true
+
+    calc_gvtd_b4:  # calc gvtd before correction applied to od
+      enable: true
+
+    imu_glm:       # FOR WALKING DATA
+      enable: false
+      statesPerDataFrame: 89
+      hWin: [-3, 5, 1]   # !!! will be put into np.arange func UPDATE THAT
+      n_components: [3, 2]  # [gyro, accel] 
+      butter_order: 4    # butterworth filter order
+      Fc: 0.1   # cutoff freq (Hz)
+      plot_flag_imu: true
+
+    tddr:
+      enable: False #true
+
+    calc_slope_after:
+      enable: true
+
+    calc_gvtd_after:
+      enable: true
+
+    freq_filter:
+      enable: true
+      fmin: "0 Hz" #"0.01 Hz"  # no lpf for arirls method
+      fmax: "0.5 Hz"
+
+    od2conc:
+      enable: true
+
+    plot_dqr:
+      enable: true
+
+
+hrf_estimation:
+  stim_lst: ["right", "left"]  # make this in script instead of adding?  # auto but then add exlusion
+  t_pre: "2 second"  
+  t_post: "15 second" 
+  rec_str: "conc" #"od_corrected"   # od_02 or conc   od_corrected  - what you want to block average
+  #trange_hrf_stat: [2, 16]  # !!! use plot_name for this var -- only used for plots?
+  GLM:        
+   enable: true  # if true do GLM, false do block averaging
+   do_drift: false
+   do_drift_legendre: true
+   do_short_sep: true
+   drift_order: 3
+   distance_threshold: "20 mm"
+   short_channel_method : "mean"
+   noise_model: "ar_irls"
+   t_delta: "1 second"
+   t_std: "1 second"
+  # mse_conc:
+  #  mse_amp_thresh: 1e-3
+  #  mse_val_for_bad_data: "1e7 micromolar**2"
+  #  mse_min_thresh: "1e0 micromolar**2"
+  #  hrf_val: "0 micromolar"
+  # mse_od:
+  #  mse_val_for_bad_data: 10
+  #  mse_min_thresh: 1e-6  #1e-6
+  #  hrf_val: 0
+  
+# !!! ^^ add GLM to blockaverage (either blockavg OR glm) and rename HRF_estimation
+
+groupaverage:   # if this on images, then don't need to change values, if no mse config, then dont change vals
+  mse:   
+   mse_amp_thresh: 1e-3
+   mse_val_for_bad_data: "1e7 micromolar**2"  # conc
+   mse_min_thresh: "1e0 micromolar**2"
+   hrf_val: "0 micromolar" 
+  # mse:  # od
+  #  mse_val_for_bad_data: 10
+  #  mse_min_thresh: 1e-6  #1e-6
+  #  hrf_val: 0 
+   
+image_recon:  # add mse config for od here
+  DIRECT: 
+    enable: false  # true = direct, false = indirect
+  Cmeas: 
+    enable: true
+  BRAIN_ONLY:      # reconstruct brain only OR scalp and brain
+    enable: false
+  spatial_basis:           
+    enable: false 
+    mask_threshold: -2
+    threshold_brain: "1 mm"
+    threshold_scalp: "5 mm"
+    sigma_brain: "1 mm"
+    sigma_scalp: "5 mm"
+  mag:
+    enable: true  # if true, averages data over time stamps in t_win, if false does image recon on time series
+    t_win: [5, 8] # now using 5-8
+  mse:  # od
+   mse_amp_thresh: 1e-3
+   mse_val_for_bad_data: 10
+   mse_min_thresh: 1e-6  #1e-6
+   hrf_val: 0 
+  probe_dir: "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/derivatives/Shannon/cedalion/probe/"  #"/projectnb/nphfnirs/ns/Shannon/Data/probes/NN22_WHHD/12NN/" # "/projectnb/nphfnirs/s/users/lcarlton/DATA/probes/NN22_WHHD/12NN/"
+  snirf_name_probe: "fullhead_56x144_NN22_System1.snirf" #"fullhead_56x144_System2.snirf"
+  head_model: 'ICBM152'
+  alpha_meas: 1e4
+  alpha_spatial: 1e-3  # w/ SB = 1e-2
+  spectrum: 'prahl'  # for extinction coeffs
+  plot_image:
+    enable: true
+    flag_hbo_list: ['hbo', 'hbr']
+    flag_brain_list: ['brain', 'scalp']  # 'brain', 'scalp' - if you want to plot either
+    flag_img_list:  ['mag', 'tstat', 'noise']
+
+
+  
+  
+  
+  
+  
+  
+  

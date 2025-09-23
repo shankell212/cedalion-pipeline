@@ -6,38 +6,41 @@ Created on Thu Jun 12 07:23:40 2025
 @author: smkelley
 """
 
+#%% Imports
 import yaml
 import os
 import copy
 import sys
-script_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(script_dir)
-sys.path.append(parent_dir)
+# script_dir = os.path.dirname(os.path.abspath(__file__))
+# parent_dir = os.path.dirname(script_dir)
+# sys.path.append(parent_dir)
+
+sys.path.append("/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts")
 import preprocess as preproc
 
 
-#%%
+#%% Test
 import importlib
 importlib.reload(preproc)
 
 #config_path = "/projectnb/nphfnirs/ns/Shannon/Code/cedalion-pipeline/workflow/config/config.yaml" # CHANGE if testing
 #config_path = "C:\\Users\\shank\\Documents\\GitHub\\cedalion-pipeline\\workflow\\config\\config.yaml"
-config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml" # CHANGE if testing
-
+#config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml" # CHANGE if testing
+#config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_STS.yaml" # CHANGE if testing
+config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/regression_testing/config_BS_reg_test.yml" # CHANGE if testing
 
 with open(config_path, 'r') as file:  # open config file
     config = yaml.safe_load(file)
     
 cfg_dataset = config['dataset']
 cfg_preprocess = config['preprocess']
-cfg_hrf = config['hrf']
-mse_amp_thresh = config['groupaverage']['mse_amp_thresh']
+cfg_hrf = config['hrf_estimation']
+mse_amp_thresh = config['groupaverage']['mse']['mse_amp_thresh']
 
 subjects = cfg_dataset['subject'] 
 tasks = cfg_dataset['task'] 
 runs = cfg_dataset['run'] 
 
-subjects = ['618']
 # Loop through lists of tasks, subjects, and runs
 for subj in subjects:
     for task in tasks:
