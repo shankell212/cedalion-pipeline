@@ -51,7 +51,7 @@ preprocess:
       plot_flag_imu: true
 
     tddr:
-      enable: False #true
+      enable: false #true
 
     calc_slope_after:
       enable: true
@@ -98,8 +98,6 @@ hrf_estimation:
   #  mse_min_thresh: 1e-6  #1e-6
   #  hrf_val: 0
   
-# !!! ^^ add GLM to blockaverage (either blockavg OR glm) and rename HRF_estimation
-
 groupaverage:   # if this on images, then don't need to change values, if no mse config, then dont change vals
   mse:   
    mse_amp_thresh: 1e-3
@@ -140,7 +138,7 @@ image_recon:  # add mse config for od here
   alpha_spatial: 1e-3  # w/ SB = 1e-2
   spectrum: 'prahl'  # for extinction coeffs
   plot_image:
-    enable: true
+    enable: false
     flag_hbo_list: ['hbo', 'hbr']
     flag_brain_list: ['brain', 'scalp']  # 'brain', 'scalp' - if you want to plot either
     flag_img_list:  ['mag', 'tstat', 'noise']

@@ -1,9 +1,9 @@
 # Snakefile
 from snakemake.io import glob_wildcards
 
-#configfile: "config/config_IWHD.yaml"
+configfile: "config/config_IWHD.yaml"
 #configfile: "scripts/testing/config_test_BS.yaml"
-configfile: "scripts/testing/regression_testing/config_BS_reg_test.yml"
+#configfile: "scripts/testing/regression_testing/config_BS_reg_test.yml"
 
 
 ROOT = config['dataset']["root_dir"]
@@ -33,6 +33,13 @@ def get_groupavg_imagerecon_output():
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
         + ".pkl"
+    )
+
+
+def get_hrf_output():
+    return (
+        f"{ROOT}/derivatives/{DERIV}/hrf_estimate/sub-{{subject}}/"
+        f"sub-{{subject}}_task-{{task}}_nirs_hrf_estimate_{config['hrf_estimation']['rec_str']}.pkl.gz"
     )
 
 
@@ -71,7 +78,7 @@ rule all_preprocess:
 rule all_hrf_estimation:
     input:
         expand([
-            (f"{ROOT}/derivatives/{DERIV}/hrf_estimate/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_hrf_estimate_{config['hrf_estimation']['rec_str']}.pkl"),  # blockaverage data
+        get_hrf_output(),
             (f"{ROOT}/derivatives/{DERIV}/hrf_estimate/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json"),  # blockaverage dataqual
             (f"{ROOT}/derivatives/{DERIV}/hrf_estimate/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_geo.sidecar")
             ],
@@ -103,12 +110,10 @@ rule preprocess:
     output:
         snirf = (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.pkl"), # preprocessed snirf
         sidecar = (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_dataquality_geo.sidecar"), # data qual sidecar
-        
         # !!! figure out how to get these updated with each run of rule
         #dqr_plot = (f"{ROOT}/derivatives/{DERIV}/plots/DQR/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR.png"),   # DQR plots
         #gvtd_plot = (f"{ROOT}/derivatives/{DERIV}/plots/DQR/gvtd/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR_gvtd_hist.png"), # gvtd DQR plots
         #slope_plot = (f"{ROOT}/derivatives/{DERIV}/plots/DQR/slope/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_slope.png")  # slope DQR plots
-    
     params:
         cfg_preprocess = config['preprocess'],
         cfg_dataset = config['dataset'],
@@ -141,12 +146,6 @@ def all_preprocessed_runs(wc):
         "quality":  data_quality_paths
     }
     
-
-def get_hrf_output():
-    return (
-        f"{ROOT}/derivatives/{DERIV}/hrf_estimate/sub-{{subject}}/"
-        f"sub-{{subject}}_task-{{task}}_nirs_hrf_estimate_{config['hrf_estimation']['rec_str']}.pkl.gz"
-    )
 
 rule hrf_estimation:
     input:
