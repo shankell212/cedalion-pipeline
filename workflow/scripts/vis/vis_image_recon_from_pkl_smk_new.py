@@ -48,12 +48,13 @@ warnings.filterwarnings('ignore')
 
 #%%
 
-ROOT_DIR_probe = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/" #"/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/" 
-ROOT_DIR = "/projectnb/nphfnirs/s/users/shannon/Data/reg_test_data/test_data/"
-DERIV_DIR = os.path.join(ROOT_DIR, 'derivatives', 'cedalion') #, 'test')
+#ROOT_DIR_probe = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/" #"/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/" 
+#ROOT_DIR = "/projectnb/nphfnirs/s/users/shannon/Data/reg_test_data/test_data/"
+ROOT_DIR = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/" 
+DERIV_DIR = os.path.join(ROOT_DIR, 'derivatives', 'Shannon', 'cedalion', 'test')
 
 #probe_dir = "/projectnb/nphfnirs/s/Shannon/Data/probes/NN22_WHHD/12NN/"  # CHANGE
-probe_dir = os.path.join(ROOT_DIR_probe, 'derivatives/cedalion/probe/')
+probe_dir = os.path.join(ROOT_DIR, 'derivatives/Shannon/cedalion/probe/')
 
     
 head_model = 'ICBM152'
@@ -66,6 +67,7 @@ SAVE = True
 #folder_name = f"Xs_{task}_cov_alpha_spatial_1e-2_alpha_meas_1e4_indirect_Cmeas_SB_ts"
 
 # folder_name = "task-BS_nirs_groupaverage_imgspace.pkl"
+#folder_name = "Xs_groupavg_BS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB_mag.pkl"
 folder_name = "Xs_groupavg_BS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB_mag.pkl"
 
 #%% Load head model 

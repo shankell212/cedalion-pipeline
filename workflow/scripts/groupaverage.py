@@ -201,7 +201,7 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, blockavg_files, ge
                    #'blockaverage_mse_subj': all_trial_mse_subj, # - load into img recon
                    #'blockaverage_weighted_subj': all_trial_hrf_weighted_subj,
                    'geo2d' : geo2d,
-                   'geo3d' : geo3d,
+                   'geo3d' : geo3d
                }
     
     # Save data a pickle for now  # !!! Change to snirf in future when its debugged

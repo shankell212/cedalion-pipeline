@@ -1,15 +1,10 @@
 dataset:
   root_dir: "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD"
   #root_dir: "/projectnb/nphfnirs/ns/Shannon/Data/Interactive_Walking_HD"
-  derivatives_subfolder: "cedalion/test"
+  derivatives_subfolder: "cedalion/new"
   subject: ["01", "03", "04", "05", "06", "07", "08", "09", "10", "12", "13", "15", "19", "20", "21", "22", "23", "24", "25", "26", "28"] # # 11, 02 excl
   task: ["IWHD"]                    
   run: ["01"]       # !!! SHOULD we just have snakemake parse thru the number of runs? what if a sub only has 2 runs but all others have 3
-   
-hrf:          # !!! make these constants instead?
-  stim_lst: ["ST", "DT"]  #  make this in script instead of adding?  # auto but then add exlusion
-  t_pre: "2 second"   # can we make this a lsit for diff trial types for GLM
-  t_post: "25 second" 
 
 preprocess:
   steps:
@@ -52,7 +47,7 @@ preprocess:
       plot_flag_imu: true
 
     tddr:
-      enable: true
+      enable: false
 
     calc_slope_after:
       enable: true
@@ -62,40 +57,44 @@ preprocess:
 
     freq_filter:
       enable: true
-      fmin: "0.01 Hz"
+      fmin: "0 Hz" #"0.01 Hz"
       fmax: "0.5 Hz"
 
     od2conc:
       enable: true
 
-    GLM_filter:
-      enable: true
-      drift_order: 0
-      distance_threshold: "20 mm"   # for ssr
-      short_channel_method: "mean"
-      noise_model: "ols"    # !!! ADD choice of basis func 
-      t_delta: "1 second"     # for seq of Gauss basis func; temporal spacing btwn consecutive gaussians
-      t_std: "1 second"
-
     plot_dqr:
       enable: true
-
-blockaverage:   # 
-  rec_str: "od_corrected"   # od_02 or conc   od_corrected  - what you want to block average
-  trange_hrf_stat: [10, 20]  # !!! use plot_name for this var
   
-# !!! add GLM rule that can be used instead of block average
+
+hrf_estimation:   #  !!! make these constants instead?
+  stim_lst: ["ST", "DT"]  #  make this in script instead of adding?  # auto but then add exlusion
+  t_pre: "2 second"   # can we make this a lsit for diff trial types for GLM
+  t_post: "25 second"
+  rec_str: "conc"   # od_02 or conc   od_corrected  - what you want to block average
+  GLM:        
+   enable: true  # if true do GLM, false do block averaging
+   do_drift: false
+   do_drift_legendre: true
+   do_short_sep: true
+   drift_order: 3
+   distance_threshold: "20 mm"
+   short_channel_method : "mean"
+   noise_model: "ar_irls"
+   t_delta: "1 second"
+   t_std: "1 second"
 
 groupaverage:
-  mse_amp_thresh: 1e-3 #1.1e-6
-  mse_conc:
+  mse:
+   mse_amp_thresh: 1e-3 #1.1e-6
    mse_val_for_bad_data: "1e7 micromolar**2"
    mse_min_thresh: "1e0 micromolar**2"
    blockaverage_val: "0 micromolar"
-  mse_od:
-   mse_val_for_bad_data: 1e1
-   mse_min_thresh: '10 ** -5.5' # 1e-5.5
-   blockaverage_val: 0
+  # mse:   # od
+  #  mse_amp_thresh: 1e-3 #1.1e-6
+  #  mse_val_for_bad_data: 1e1
+  #  mse_min_thresh: '10 ** -5.5' # 1e-5.5
+  #  blockaverage_val: 0
    
    
 image_recon:
@@ -113,15 +112,19 @@ image_recon:
     sigma_brain: "1 mm"
     sigma_scalp: "5 mm"
   mag:
-    enable: false
+    enable: true
     t_win: [10, 20]
+  mse:  # od
+   mse_amp_thresh: 1e-3 #1.1e-6
+   mse_val_for_bad_data: 1e1
+   mse_min_thresh: '10 ** -5.5' #1e-5.5
+   hrf_val: 0
   probe_dir: "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/probe/"
   snirf_name_probe: "fullhead_56x144_NN22_System1.snirf"
   head_model: 'ICBM152'
   alpha_meas: 1e4
   alpha_spatial: 1e-3   #   WITH SB= 1e-2, NO SB = 1e-3
   spectrum: 'prahl'
-  mse_min_thresh: '10 ** -5.5' #1e-5.5
   plot_image:    
     enable: false
     flag_hbo_list: ['hbo', 'hbr']
