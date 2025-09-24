@@ -304,9 +304,7 @@ def go_from_kernel_space_to_image_space_direct(X, G):
     if len(X.shape) == 1:
         X = np.stack([np.concatenate([X_hbo_brain, X_hbo_scalp]),np.concatenate([ X_hbr_brain, X_hbr_scalp])], axis=1).T
     else:
-        X = np.st
-        
-        ack([np.vstack([X_hbo_brain, X_hbo_scalp]), np.vstack([X_hbr_brain, X_hbr_scalp])], axis =2)
+        X = np.stack([np.vstack([X_hbo_brain, X_hbo_scalp]), np.vstack([X_hbr_brain, X_hbr_scalp])], axis =2)
 
     return X
 
