@@ -20,7 +20,7 @@ import cedalion.plots as plots
 import numpy as np
 import xarray as xr
 import pint
-from cedalion.physunits import units
+from cedalion import units
 
 import matplotlib.pyplot as p
 import yaml
@@ -151,77 +151,6 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_pkl, o
     bad_chans_sat = list(set(bad_chans_sat_flat))
     bad_chans_amp = list(set(bad_chans_amp_flat))
     
-    '''
-    # Block Average
-    baseline = epochs_all.sel(reltime=(epochs_all.reltime < 0)).mean('reltime')
-    epochs = epochs_all - baseline  # baseline subtract
-    blockaverage_ep = epochs.groupby('trial_type').mean('epoch') # mean across all epochs 
-    
-    epochs_zeromean = epochs - blockaverage_ep   # zeromean the epochs
-    
-    # LOOP OVER TRIAL TYPES
-    for idxt, trial_type in enumerate(cfg_hrf['stim_lst']): 
-        epochs_zeromean_tmp = epochs_zeromean.copy()
-        blockaverage_tmp = blockaverage_ep.copy()
-        # select current trial type
-        epochs_zeromean_tmp = epochs_zeromean_tmp.where(epochs_zeromean_tmp.trial_type == trial_type, drop=True)
-        blockaverage1 = blockaverage_tmp.sel(trial_type=trial_type)  # select current trial type
-        blockaverage1 = blockaverage1.expand_dims('trial_type')  # readd trial type coord
-        blockaverage = blockaverage1.copy()
-        
-        if 'chromo' in blockaverage.dims:
-            epochs_zeromean_tmp = epochs_zeromean_tmp.stack(measurement=['channel','chromo']).sortby('chromo')
-            blockaverage = blockaverage.transpose('trial_type', 'channel', 'chromo', 'reltime')
-        else:
-            epochs_zeromean_tmp = epochs_zeromean_tmp.stack(measurement=['channel','wavelength']).sortby('wavelength')
-            blockaverage = blockaverage.transpose('trial_type', 'channel', 'wavelength', 'reltime')
-    
-        n_epochs = len(epochs_zeromean_tmp.epoch)
-
-        epochs_zeromean_tmp = epochs_zeromean_tmp.transpose('trial_type', 'measurement', 'reltime', 'epoch')  
-        # calc mse
-        mse_t = (epochs_zeromean_tmp**2).sum('epoch') / (n_epochs - 1)**2 # this is squared to get variance of the mean, aka MSE of the mean
-        
-        # !!! GLM stuff
-
-        # !!! from here, we shoudl call everythign HRF
-        
-        # retrieve channels where mse_t = 0
-        bad_mask = mse_t.sel(trial_type=trial_type).data == 0
-        bad_any = bad_mask.any(axis=1)
-        bad_chans_mse = mse_t.channel[bad_any].values
-    
-    
-        # # Replace bad vals
-        # blockaverage = replace_bad_vals(blockaverage, bad_chans_amp, bad_chans_sat, bad_chans_mse, cfg_mse['blockaverage_val'], trial_type)
-        
-        # if 'chromo' in epochs.dims:
-        #     mse_t = mse_t.unstack('measurement').transpose('trial_type', 'chromo','channel','reltime')
-        # else:
-        #     mse_t = mse_t.unstack('measurement').transpose('trial_type','channel','wavelength','reltime')
-        
-        # # replace mse_t values after unstacking
-        # mse_t = replace_bad_vals(blockaverage, bad_chans_amp, bad_chans_sat, bad_chans_mse, cfg_mse['mse_val_for_bad_data'], trial_type)
-                    
-        # source_coord = blockaverage['source']
-        # mse_t = mse_t.assign_coords(source=('channel',source_coord.data))
-        # detector_coord = blockaverage['detector']
-        # mse_t = mse_t.assign_coords(detector=('channel',detector_coord.data))
-        
-        # # set the minimum value of mse_t
-        # mse_t = xr.where(mse_t < cfg_mse['mse_min_thresh'], cfg_mse['mse_min_thresh'], mse_t)  # !!! maybe can be removed when we have the between subject mse
-        
-        
-        # if all_trial_blockaverage is None:
-        #     all_trial_blockaverage = blockaverage
-        #     all_trial_mse = mse_t
-        # else:
-        #     all_trial_blockaverage = xr.concat([all_trial_blockaverage, blockaverage], dim='trial_type') 
-        #     all_trial_mse = xr.concat([all_trial_mse, mse_t], dim='trial_type')
-            
-    # DONE LOOP OVER TRIAL_TYPES
-    '''
-    
     pruned_chans = chs_pruned.where(chs_pruned != 0.58, drop=True).channel.values # get array of channels that were pruned
 
     if cfg_GLM['enable']:
@@ -232,6 +161,8 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_pkl, o
         hrf_estimate, hrf_mse, bad_chans_mse_lst = mhrf.blockaverage(epochs_all, cfg_hrf)
         glm_results = None
 
+    #weights = glm_results.sm.
+    
     bad_chans_mse_flat = [x for xs in bad_chans_mse_lst for x in xs]
     bad_chans_mse = list(set(bad_chans_mse_flat))
 
@@ -274,6 +205,7 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_pkl, o
 
         }
     
+    
     # SAVE data a pickle for now  # !!! Change to snirf in future when its debugged
     # with open(out_pkl, "wb") as f:        # if output is a single string, it wraps it in an output object and need to index in
     #     pickle.dump(results, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -281,6 +213,18 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_pkl, o
     file = gzip.GzipFile(out_pkl, 'wb')  # sav eas gzipped pickle file
     file.write(pickle.dumps(results))
     file.close()    
+
+    # # save glm results
+    # if glm_results is not None:
+    #     glm_weights = mhrf.save_weights(glm_results)
+    #     idx = out_json.find("sub-")
+    #     sub_dir = out_json[: out_json.find("/", idx)]
+    #     subject_num = out_json.split("sub-")[1].split("/")[0]
+    #     out_glm = os.path.join(sub_dir, f"sub-{subject_num}_task-{cfg_dataset['task'][0]}_nirs_glm_weights.pkl.gz") # NOTE: assumes only 1 task
+
+    #     file = gzip.GzipFile(out_glm, 'wb')  # sav eas gzipped pickle file
+    #     file.write(pickle.dumps(glm_weights))
+    #     file.close()    
     
     # # SAVE data as netcdf in addition to snirf
     # blockaverage.to_netcdf(path=out_blkavg_nc)

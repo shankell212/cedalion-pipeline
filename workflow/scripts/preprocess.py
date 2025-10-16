@@ -64,7 +64,7 @@ import matplotlib.pyplot as plt
 
 #%% Load in data for current subject/task/run
 
-def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, cfg_hrf, mse_amp_thresh, out_files):
+def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, stim_lst, mse_amp_thresh, out_files):
     
     if not cfg_dataset['derivatives_subfolder']:   # !!! do we need this?
         cfg_dataset['derivatives_subfolder'] = ''
@@ -229,7 +229,7 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             snr0 = np.nanmedian(snr0.values)
             snr1 = np.nanmedian(snr1.values)
         
-            plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, cfg_dataset, cfg_hrf) #, out_files['out_dqr'], out_files['out_gvtd'] )
+            plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, cfg_dataset, stim_lst) #, out_files['out_dqr'], out_files['out_gvtd'] )
             
             # if MA correction was performed, plot slope b4 and after
             if not (rec["od_corrected"].data == rec["od"].data).all():
@@ -293,7 +293,7 @@ def main():
     
     cfg_dataset = snakemake.params.cfg_dataset
     cfg_preprocess = snakemake.params.cfg_preprocess
-    cfg_hrf = snakemake.params.cfg_hrf
+    stim_lst = snakemake.params.stim_lst
     mse_amp_thresh = snakemake.params.mse_amp_thresh
     
     
@@ -304,7 +304,7 @@ def main():
         #"out_gvtd": snakemake.output.gvtd_plot,
         #"out_slope": snakemake.output.slope_plot
         }
-    preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, cfg_hrf, mse_amp_thresh, out_files)
+    preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, stim_lst, mse_amp_thresh, out_files)
  
     
 if __name__ == "__main__":
