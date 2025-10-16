@@ -23,6 +23,61 @@ import operator
 import json
 
 #%% Functions
+def save_weights(glm_results):
+    # Find max length across all regressions
+    max_len = max(
+        glm_results.values[i, j].weights.shape[0]
+        for i in range(glm_results.shape[0])
+        for j in range(glm_results.shape[1])
+    )
+
+    # Create NaN-padded 3D array
+    weights_array = np.full((glm_results.shape[0], glm_results.shape[1], max_len), np.nan)
+    for i in range(glm_results.shape[0]):
+        for j in range(glm_results.shape[1]):
+            w = glm_results.values[i, j].weights
+            weights_array[i, j, :len(w)] = w
+
+    weights_da = xr.DataArray(
+        weights_array,
+        dims=("channel", "chromo", "time"),
+        coords={
+            "channel": glm_results.channel,
+            "chromo": glm_results.chromo,
+            "time": np.arange(max_len)
+        },
+        name="weights"
+    )
+    return weights_da
+
+# def save_weights(glm_results):
+
+#     # Convert object array -> numeric array of weights
+#     weights_array = np.empty(glm_results.shape, dtype=object)
+
+#     for i in range(glm_results.shape[0]):      # channels
+#         for j in range(glm_results.shape[1]):  # chromo
+#             weights_array[i, j] = glm_results.values[i, j].weights
+
+#     # # If weights are always 1D arrays of same length, you can stack into numeric
+#     # weights_array = np.stack(
+#     #     [[glm_results.values[i, j].weights for j in range(glm_results.shape[1])]
+#     #     for i in range(glm_results.shape[0])]
+#     # )
+
+#     # Wrap back into xarray
+#     weights_da = xr.DataArray(
+#         weights_array,
+#         dims=("channel", "chromo", "time"),
+#         coords={
+#             "channel": glm_results.channel,
+#             "chromo": glm_results.chromo,
+#             "time": np.arange(weights_array.shape[2])  # or real time index if you have one
+#         },
+#         name="weights"
+#     )
+#     return weights_da
+
 
 def blockaverage(epochs_all, cfg_hrf_estimation):
     all_trial_blockaverage = None
@@ -56,33 +111,13 @@ def blockaverage(epochs_all, cfg_hrf_estimation):
         epochs_zeromean_tmp = epochs_zeromean_tmp.transpose('trial_type', 'measurement', 'reltime', 'epoch')  
         # calc mse
         mse_t = (epochs_zeromean_tmp**2).sum('epoch') / (n_epochs - 1)**2 # this is squared to get variance of the mean, aka MSE of the mean
-        
-        # !!! from here, we shoudl call everythign HRF
-        
+                
         # retrieve channels where mse_t = 0
         bad_mask = mse_t.sel(trial_type=trial_type).data == 0
         bad_any = bad_mask.any(axis=1)
         bad_chans_mse = mse_t.channel[bad_any].values
     
         bad_chans_mse_lst.append(bad_chans_mse)
-        # # Replace bad vals
-        # blockaverage = replace_bad_vals(blockaverage, bad_chans_amp, bad_chans_sat, bad_chans_mse, cfg_mse['blockaverage_val'], trial_type)
-        
-        # if 'chromo' in epochs.dims:
-        #     mse_t = mse_t.unstack('measurement').transpose('trial_type', 'chromo','channel','reltime')
-        # else:
-        #     mse_t = mse_t.unstack('measurement').transpose('trial_type','channel','wavelength','reltime')
-        
-        # # replace mse_t values after unstacking
-        # mse_t = replace_bad_vals(blockaverage, bad_chans_amp, bad_chans_sat, bad_chans_mse, cfg_mse['mse_val_for_bad_data'], trial_type)
-                    
-        # source_coord = blockaverage['source']
-        # mse_t = mse_t.assign_coords(source=('channel',source_coord.data))
-        # detector_coord = blockaverage['detector']
-        # mse_t = mse_t.assign_coords(detector=('channel',detector_coord.data))
-        
-        # # set the minimum value of mse_t
-        # mse_t = xr.where(mse_t < cfg_mse['mse_min_thresh'], cfg_mse['mse_min_thresh'], mse_t)  # !!! maybe can be removed when we have the between subject mse
         
         if all_trial_blockaverage is None:
             all_trial_blockaverage = blockaverage
@@ -103,16 +138,17 @@ def GLM(runs, rec_str, cfg_hrf_estimation, geo3d, pruned_chans_list):
     t_pre = cfg_hrf_estimation['t_pre']
     t_post = cfg_hrf_estimation['t_post']
 
-    stim = cfg_hrf_estimation['stim_lst']
     # 1. need to concatenate runs 
-    Y_all, stim_df, runs_updated = concatenate_runs(runs, rec_str, stim)
+    Y_all, stim_df_tmp, runs_updated = concatenate_runs(runs, rec_str)
+
+    # grab only trial type of interest
+    stim_df = stim_df_tmp[stim_df_tmp['trial_type'].isin(cfg_hrf_estimation['stim_lst'])].reset_index(drop=True)
 
     # 2. define design matrix
-
     dms = glm.design_matrix.hrf_regressors(
                                     Y_all,
                                     stim_df,
-                                    glm.GaussianKernels(t_pre, t_post, cfg_GLM['t_delta'], cfg_GLM['t_std'])
+                                    glm.GaussianKernels(t_pre, t_post, cfg_GLM['t_delta'], cfg_GLM['t_std']) #NOTE: no option to choose basis funcs
                                 )
 
     # Combine drift and short-separation regressors (if any)
@@ -136,9 +172,10 @@ def GLM(runs, rec_str, cfg_hrf_estimation, geo3d, pruned_chans_list):
     cov_params = results.sm.cov_params()
 
     # 4. estimate HRF and MSE
-    basis_hrf = glm.GaussianKernels(t_pre, t_post, cfg_GLM['t_delta'], cfg_GLM['t_std'])(Y_all)
+    basis_hrf = glm.GaussianKernels(t_pre, t_post, cfg_GLM['t_delta'], cfg_GLM['t_std'])(Y_all) #NOTE: no option for diff basis
 
-    trial_type_list = stim_df['trial_type'].unique()
+    #trial_type_list = stim_df['trial_type'].unique()
+    trial_type_list = cfg_hrf_estimation['stim_lst']
 
     hrf_mse_list = []
     hrf_estimate_list = []
@@ -160,10 +197,6 @@ def GLM(runs, rec_str, cfg_hrf_estimation, geo3d, pruned_chans_list):
         else:
             bad_mask = (hrf_mse == 0).any(dim=["time", "wavelength"])
         bad_chans_mse = hrf_mse.channel[bad_mask].values
-
-        #bad_mask = hrf_mse.data == 0
-        #bad_any = bad_mask.any(axis=1)
-        #bad_chans_mse = hrf_mse.channel[bad_any].values
 
         hrf_estimate = hrf_estimate.expand_dims({'trial_type': [ trial_type ] })
         hrf_mse = hrf_mse.expand_dims({'trial_type': [ trial_type ] })
@@ -263,7 +296,7 @@ def get_short_regressors(runs, pruned_chans_list, geo3d, cfg_GLM):
 
     return ss_regressors
 
-def concatenate_runs(runs, rec_str, stim):
+def concatenate_runs(runs, rec_str):
 
     CURRENT_OFFSET = 0
     runs_updated = []

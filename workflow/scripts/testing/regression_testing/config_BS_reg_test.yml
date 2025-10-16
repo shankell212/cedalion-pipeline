@@ -1,6 +1,6 @@
 dataset:
   root_dir: "/projectnb/nphfnirs/s/users/shannon/Data/reg_test_data/test_data"
-  derivatives_subfolder: "cedalion" 
+  derivatives_subfolder: "cedalion/test" 
   subject: ['621', '618', '587']
   task: ["BS"]  
   run: ["01", "02", "03"]   # !!! SHOULD we just have snakemake parse thru the number of runs? what if a sub only has 2 runs but all others have 3
@@ -78,7 +78,7 @@ hrf_estimation:
   rec_str: "conc" #"od_corrected"   # od_02 or conc   od_corrected  - what you want to block average
   #trange_hrf_stat: [2, 16]  # !!! use plot_name for this var -- only used for plots?
   GLM:        
-   enable: true  # if true do GLM, false do block averaging
+   enable: True  # if true do GLM, false do block averaging
    do_drift: false
    do_drift_legendre: true
    do_short_sep: true

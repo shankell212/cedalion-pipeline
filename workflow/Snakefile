@@ -1,9 +1,9 @@
 # Snakefile
 from snakemake.io import glob_wildcards
 
-configfile: "config/config_IWHD.yaml"
+#configfile: "config/config_IWHD.yaml"
 #configfile: "scripts/testing/config_test_BS.yaml"
-#configfile: "scripts/testing/regression_testing/config_BS_reg_test.yml"
+configfile: "scripts/testing/regression_testing/config_BS_reg_test.yml"
 
 
 ROOT = config['dataset']["root_dir"]
@@ -74,7 +74,7 @@ rule all_preprocess:
             task = config["dataset"]["task"],
             run = config["dataset"]["run"]
             )
-            
+        
 rule all_hrf_estimation:
     input:
         expand([
@@ -117,7 +117,7 @@ rule preprocess:
     params:
         cfg_preprocess = config['preprocess'],
         cfg_dataset = config['dataset'],
-        cfg_hrf = config['hrf_estimation'],
+        stim_lst = config['hrf_estimation']['stim_lst'],
         mse_amp_thresh = config['groupaverage']['mse']['mse_amp_thresh']
     #log:
         #"logs/preprocess/sub-{subject}_task-{task}_run-{run}_nirs_preprocessed.log"   # empty bc have to use shell and not script

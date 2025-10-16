@@ -20,13 +20,11 @@ from scipy.signal.windows import gaussian
 import pdb
 
 
-def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, cfg_hrf): #, out_dqr, out_gvtd):
+def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str): #, out_dqr, out_gvtd):
     a=1
     # make sure save folder exists, if not, create it
     der_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'],'plots', 'DQR')
     os.makedirs(der_dir, exist_ok=True)
-    
-    stim_lst_str = cfg_hrf['stim_lst']
     
     f, ax = p.subplots(3, 2, figsize=(11, 14))
     

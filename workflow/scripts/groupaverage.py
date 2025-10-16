@@ -73,6 +73,8 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, blockavg_files, ge
             if 'bad_indices' in results.keys():
                 bad_channels = results['bad_indices']    
 
+            
+
             # Load geometric positions and landmarks # !!! don't need to do for each subject in reality, but for snakemake yes?
             with gzip.open(geo_files[subj_idx], 'rb') as f:
                 geo_pos = pickle.load(f)
@@ -88,6 +90,10 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, blockavg_files, ge
                 hrf_est.loc[dict(channel=bad_channels)] = cfg_mse['hrf_val']
                 mse_t.loc[dict(channel=bad_channels)] = cfg_mse['mse_val_for_bad_data']  
                 mse_t = xr.where(mse_t < cfg_mse['mse_min_thresh'], cfg_mse['mse_min_thresh'], mse_t)  # !!! maybe can be removed when we have the between subject mse
+                
+            # make units the same
+            target_units = hrf_est.pint.units
+            mse_t = mse_t.pint.to(target_units**2)
 
             hrf_weighted = hrf_est.copy() 
 
@@ -150,9 +156,13 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, blockavg_files, ge
         mse_total = 1/denom
       
         total_stderr_hrf_est = np.sqrt( mse_total )
+        groupaverage_weighted = groupaverage_weighted.pint.dequantify() # dequant for tstat calc
+
         tstat = groupaverage_weighted / total_stderr_hrf_est
         total_stderr_hrf_est = total_stderr_hrf_est.assign_coords(trial_type=groupaverage_weighted.trial_type)
         tstat = tstat.assign_coords(trial_type=groupaverage_weighted.trial_type)
+
+        groupaverage_weighted = groupaverage_weighted.pint.quantify(units=target_units) # requant units
 
         if all_trial_groupaverage is None:
             

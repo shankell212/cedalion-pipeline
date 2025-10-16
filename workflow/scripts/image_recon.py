@@ -62,7 +62,6 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
         cfg_img_recon["alpha_meas"] = float(cfg_img_recon["alpha_meas"])
     if isinstance(cfg_img_recon["alpha_spatial"], str):
         cfg_img_recon["alpha_spatial"] = float(cfg_img_recon["alpha_spatial"])
-
     
         
     #%% Load head model 
@@ -73,9 +72,6 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
     einv = cedalion.xrutils.pinv(ec)
     
     #%% run image recon
-    #pdb.set_trace()
-    
-
     # # Make Adot and blockaverage channel order the same
     # blockaverage_subj = blockaverage_subj.sel(channel=Adot.channel.values)
     # blockaverage_mse_subj = blockaverage_mse_subj.sel(channel=Adot.channel.values)
@@ -153,7 +149,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
         C_meas = C_meas.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
         C_meas = xr.where(C_meas < cfg_mse['mse_min_thresh'], cfg_mse['mse_min_thresh'], C_meas)
         od_mse_ts = od_mse.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
-        #pdb.set_trace()
+        
         X_hrf_mag, W, D, F, G = img_recon.do_image_recon(od_hrf_mag, head = head, Adot = Adot, C_meas_flag = cfg_img_recon['Cmeas']['enable'], 
                                                             C_meas = C_meas, wavelength = [od_hrf.wavelength[0].item(), od_hrf.wavelength[1].item()], 
                                                             BRAIN_ONLY = cfg_img_recon['BRAIN_ONLY']['enable'], 
@@ -165,15 +161,24 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
         else:
              od_mse_ts = od_mse_ts.transpose('measurement', 'time')
              
-        if cfg_img_recon['mag']['enable']:
-            X_mse = img_recon.get_image_noise(od_mse_mag, X_hrf_mag, W, DIRECT = cfg_img_recon['DIRECT']['enable'], SB= cfg_sb['enable'], G=G)
-        else:
-            X_mse = img_recon.get_image_noise(od_mse, X_hrf_mag, W, DIRECT = cfg_img_recon['DIRECT']['enable'], SB= cfg_sb['enable'], G=G)
+        # if cfg_img_recon['mag']['enable']:
+        #     X_mse = img_recon.get_image_noise(od_mse_mag, X_hrf_mag, W, DIRECT = cfg_img_recon['DIRECT']['enable'], SB= cfg_sb['enable'], G=G)
+        # else:
+        #     X_mse = img_recon.get_image_noise(od_mse, X_hrf_mag, W, DIRECT = cfg_img_recon['DIRECT']['enable'], SB= cfg_sb['enable'], G=G)
         
+        if cfg_img_recon['mag']['enable']:
+            X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag, W, DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
+        else:
+             if 'reltime' in od_hrf.dims:
+                X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag.isel(reltime=0).squeeze(), W, DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
+             else:
+                X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag.isel(time=0).squeeze(), W, DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
+
+                
         # concatenate trial 
         X_hrf_mag = X_hrf_mag.assign_coords(trial_type=trial_type) # add trial type name as a coordinate
         X_mse = X_mse.assign_coords(trial_type=trial_type)
-
+        
         if all_trial_X_hrf_mag is None:
             all_trial_X_hrf_mag = X_hrf_mag.expand_dims(trial_type=[trial_type])
             all_trial_X_mse = X_mse.expand_dims(trial_type=[trial_type])
