@@ -218,18 +218,24 @@ def GLM_filter(rec, rec_str, cfg_GLM, cfg_hrf, pruned_chans):
              
     return rec
 
-def GLM(runs, rec_str, cfg_GLM, geo3d, pruned_chans_list):
+def GLM(runs, cfg_GLM, geo3d, pruned_chans_list, stim_list):
 
     # 1. need to concatenate runs 
-    Y_all, stim_df, runs_updated = concatenate_runs(runs, rec_str)
-
+    if len(runs) > 1:
+        Y_all, stim_df, runs_updated = concatenate_runs(runs, stim_list)
+    else:
+        Y_all = runs[0]
+        stim_df = stim_list[0]
+        runs_updated = runs
+        
+    run_unit = Y_all.pint.units
     # 2. define design matrix
-
     dms = glm.design_matrix.hrf_regressors(
                                     Y_all,
                                     stim_df,
                                     glm.GaussianKernels(cfg_GLM['t_pre'], cfg_GLM['t_post'], cfg_GLM['t_delta'], cfg_GLM['t_std'])
                                 )
+
 
     # Combine drift and short-separation regressors (if any)
     if cfg_GLM['do_drift']:
@@ -276,13 +282,13 @@ def GLM(runs, rec_str, cfg_GLM, geo3d, pruned_chans_list):
         hrf_mse_list.append(hrf_mse)
 
     hrf_estimate = xr.concat(hrf_estimate_list, dim='trial_type')
-    hrf_estimate = hrf_estimate.pint.quantify('molar')
+    hrf_estimate = hrf_estimate.pint.quantify(run_unit)
 
     hrf_mse = xr.concat(hrf_mse_list, dim='trial_type')
-    hrf_mse = hrf_mse.pint.quantify('molar**2')
+    hrf_mse = hrf_mse.pint.quantify(run_unit**2)
 
     # set universal time so that all hrfs have the same time base 
-    fs = frequency.sampling_rate(runs[0][rec_str]).to('Hz')
+    fs = frequency.sampling_rate(runs[0]).to('Hz')
     before_samples = int(np.ceil((cfg_GLM['t_pre'] * fs).magnitude))
     after_samples = int(np.ceil((cfg_GLM['t_post'] * fs).magnitude))
 
@@ -329,7 +335,6 @@ def get_drift_regressors(runs, cfg_GLM):
     drift_regressors = []
     i=0
     for i, run  in enumerate(runs):
-
         drift = glm.design_matrix.drift_regressors(run, cfg_GLM['drift_order'])
         drift.common = drift.common.assign_coords({'regressor': [f'Drift {x} run {i}' for x in range(cfg_GLM['drift_order']+1)]})
         drift_regressors.append(drift)
@@ -366,15 +371,13 @@ def get_short_regressors(runs, pruned_chans_list, geo3d, cfg_GLM):
 
     return ss_regressors
 
-def concatenate_runs(runs, rec_str):
+def concatenate_runs(runs, stim):
 
     CURRENT_OFFSET = 0
     runs_updated = []
     stim_updated = []
 
-    for rec in runs:
-
-        ts = rec[rec_str]
+    for s, ts in zip(stim, runs):
         time = ts.time.values
         new_time = time + CURRENT_OFFSET
 
@@ -382,8 +385,7 @@ def concatenate_runs(runs, rec_str):
         ts_new = ts_new.pint.to('molar')
         ts_new = ts_new.assign_coords(time=new_time)
 
-        stim = rec.stim
-        stim_shift = stim.copy()
+        stim_shift = s.copy()
         stim_shift['onset'] += CURRENT_OFFSET
 
         stim_updated.append(stim_shift)
