@@ -26,14 +26,6 @@ import operator
 import json
 
 
-# import my own functions from a different directory
-import sys
-import module_plot_DQR as pfDAB_dqr
-import module_imu_glm_filter as pfDAB_imu
-
-import pdb
-
-
 #%%
 
 def prune_mask_ts(ts, pruned_chans):
