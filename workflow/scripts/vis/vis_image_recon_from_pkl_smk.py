@@ -49,7 +49,7 @@ warnings.filterwarnings('ignore')
 #%%
 
 ROOT_DIR = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/" #"/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/" 
-DERIV_DIR = os.path.join(ROOT_DIR, 'derivatives', 'cedalion') #, 'test')
+DERIV_DIR = os.path.join(ROOT_DIR, 'derivatives', 'cedalion', 'new_inclQ') #, 'test')
 
 if scc ==1:
     #probe_dir = "/projectnb/nphfnirs/s/Shannon/Data/probes/NN22_WHHD/12NN/"  # CHANGE

@@ -31,6 +31,7 @@ import module_image_recon as img_recon
 import module_spatial_basis_funs as sbf 
 import pyvista as pv
 pv.OFF_SCREEN = True
+import pandas as pd
 
 # Turn off all warnings
 import warnings
@@ -51,8 +52,6 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
     cfg_sb["sigma_scalp"] = units(cfg_sb["sigma_scalp"])
     if isinstance(cfg_mse["mse_min_thresh"], str):
         cfg_mse["mse_min_thresh"] = float(eval(cfg_mse["mse_min_thresh"]))
-    if isinstance(cfg_mse["mse_amp_thresh"], str):
-        cfg_mse["mse_amp_thresh"] = float(eval(cfg_mse["mse_amp_thresh"]))
     if isinstance(cfg_mse["hrf_val"], str):
                 cfg_mse["hrf_val"] = float(cfg_mse["hrf_val"])
     if isinstance(cfg_mse["mse_val_for_bad_data"], str):
@@ -83,9 +82,6 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
     - then get the weighted average in image space 
     - get the total standard error using between + within subject MSE 
     """
-    threshold = -2 # log10 absolute  # !!! this is hard coded, add to config????  # !!! mask_threshold
-    wl_idx = 1
-
     F = None
     D = None
     G = None
@@ -106,6 +102,9 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
         hrf = hrf_est.sel(trial_type=trial_type) 
         mse = mse_t.sel(trial_type=trial_type).drop_vars(['trial_type'])
 
+        if 'measurement' in mse.dims and isinstance(mse.get_index('measurement'), pd.MultiIndex):
+            mse = mse.unstack('measurement')
+
         # Convert conc to od and units for cfg
         if 'chromo' in hrf_est.dims:
             dpf = xr.DataArray(
@@ -113,15 +112,12 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
                     dims="wavelength",
                     coords={"wavelength": amp.wavelength},
                     )
-            E = cedalion.nirs.get_extinction_coefficients('prahl', amp.wavelength)
             od_hrf =  cedalion.nirs.conc2od(hrf, geo3d, dpf)
-            od_mse = xr.dot(E**2, mse, dim =['chromo']) * 1 * units.mm**2
+            od_mse = xr.dot(ec**2, mse, dim =['chromo']) * 1 * units.mm**2
 
         else:
             od_hrf = hrf.copy()
             od_mse = mse.copy()
-
-        Adot = Adot.sel(channel=hrf_est.channel.values)  # grab correct channels from probe
 
         print(f'Calculating subject = {hrf_file}')
 
@@ -147,25 +143,16 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
 
         C_meas = od_mse_mag.pint.dequantify()
         C_meas = C_meas.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
-        C_meas = xr.where(C_meas < cfg_mse['mse_min_thresh'], cfg_mse['mse_min_thresh'], C_meas)
-        od_mse_ts = od_mse.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
         
+        # save G in derivatives/cedalion/forward_model  -> for brain and scalp separately and sigma
+        # save in derivatives sub dirs -> make symbolic link to another folder. and then create those folders in optional deriv folder. 
         X_hrf_mag, W, D, F, G = img_recon.do_image_recon(od_hrf_mag, head = head, Adot = Adot, C_meas_flag = cfg_img_recon['Cmeas']['enable'], 
                                                             C_meas = C_meas, wavelength = [od_hrf.wavelength[0].item(), od_hrf.wavelength[1].item()], 
                                                             BRAIN_ONLY = cfg_img_recon['BRAIN_ONLY']['enable'], 
                                                             DIRECT = cfg_img_recon['DIRECT']['enable'], SB = cfg_sb['enable'], 
                                                     cfg_sbf = cfg_sb, alpha_spatial = cfg_img_recon['alpha_spatial'], 
                                                     alpha_meas = cfg_img_recon['alpha_meas'],F = F, D = D, G = G)
-        if 'reltime' in od_mse_ts.dims:                                            
-            od_mse_ts = od_mse_ts.transpose('measurement', 'reltime')
-        else:
-             od_mse_ts = od_mse_ts.transpose('measurement', 'time')
-             
-        # if cfg_img_recon['mag']['enable']:
-        #     X_mse = img_recon.get_image_noise(od_mse_mag, X_hrf_mag, W, DIRECT = cfg_img_recon['DIRECT']['enable'], SB= cfg_sb['enable'], G=G)
-        # else:
-        #     X_mse = img_recon.get_image_noise(od_mse, X_hrf_mag, W, DIRECT = cfg_img_recon['DIRECT']['enable'], SB= cfg_sb['enable'], G=G)
-        
+        # save od_mse time series 
         if cfg_img_recon['mag']['enable']:
             X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag, W, DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
         else:

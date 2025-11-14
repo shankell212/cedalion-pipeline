@@ -25,20 +25,21 @@ import hrf_estimation as hrf
 import importlib
 importlib.reload(hrf)
 
-# config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_IWHD.yaml"
+config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_STS.yaml"
 #config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml" # CHANGE if testing
 #config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_STS.yaml" # CHANGE if testing
-config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/regression_testing/config_BS_reg_test.yml" # CHANGE if testing
+#config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/regression_testing/config_BS_reg_test.yml" # CHANGE if testing
 
 
 with open(config_path, 'r') as file:
     config = yaml.safe_load(file)
 
 cfg_dataset = config['dataset']
-#cfg_blockaverage = config['blockaverage']
 cfg_hrf = config['hrf_estimation']
 
-subjects = cfg_dataset['subject'] #[1]   # sub idx you want to test
+subjects = cfg_dataset['subject']   # sub idx you want to test
+#subjects = ["01", "03", "04", "05", "07", "08", "09", "10", "12", "13", "15", "19", "20", "21", "22", "23", "24", "25", "26", "28"]
+#subjects = ['22']
 tasks = cfg_dataset['task'] #[0]
 run = cfg_dataset['run']
 
@@ -57,7 +58,7 @@ for subj in subjects:
         # run_files = ["/projectnb/nphfnirs/ns/Shannon/Data/Interactive_Walking_HD/derivatives/cedalion/preprocessed_data/sub-01/sub-01_task-STS_run-01_nirs_preprocessed.snirf"]
         
         save_path = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "hrf_estimate", f"sub-{subj}")
-        out_pkl = os.path.join(save_path,f"sub-{subj}_task-{task}_nirs_hrf_estimate_{cfg_hrf['rec_str']}.pkl")
+        out_pkl = os.path.join(save_path,f"sub-{subj}_task-{task}_nirs_hrf_estimate_{cfg_hrf['rec_str']}.pkl.gz")
         out_json = os.path.join(save_path,f"sub-{subj}_task-{task}_nirs_dataquality.json")
         out_geo = os.path.join(save_path,f"sub-{subj}_task-{task}_nirs_geo.sidecar")
         #out_blkavg_nc = os.path.join(save_path, f"sub-{subj}_task-{task}_nirs_blockaverage.nc")
@@ -69,3 +70,5 @@ for subj in subjects:
         
         hrf.hrf_est_func(cfg_dataset, cfg_hrf_loop, run_files, data_quality_files, out_pkl, out_json, out_geo)
         
+        
+# %%

@@ -66,18 +66,27 @@ import matplotlib.pyplot as plt
 
 def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, stim_lst, mse_amp_thresh, out_files):
     
+    # Load in snirf file
     if not cfg_dataset['derivatives_subfolder']:   # !!! do we need this?
         cfg_dataset['derivatives_subfolder'] = ''
     
     records = cedalion.io.read_snirf( snirf_path ) 
     rec = records[0]
     
+    # Load in events.tsv file 
     if not os.path.exists( events_path ):  
         print( f"Error: File {events_path} does not exist" )
     else:
         stim_df = pd.read_csv( events_path, sep='\t' )
         rec.stim = stim_df
-        
+
+    # Load in json sidecar file if it exists
+    file_json_path = snirf_path.replace('.snirf', '.json')
+    if not os.path.exists( file_json_path ):  
+        print( f"File {file_json_path} does not exist" )
+    else:
+        with open( file_json_path, 'r' ) as f:
+            file_json = json.load(f)
     
     # get filename for plots
     filename = os.path.basename(snirf_path)
@@ -113,12 +122,15 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
         
         elif step_name == "prune":
             # change from str to pint object
-            cfg_preprocess["steps"]["prune"]["sd_thresh"] = [units(x) for x in cfg_preprocess["steps"]["prune"]["sd_thresh"]]
-            cfg_preprocess["steps"]["prune"]["window_length"] = units(cfg_preprocess["steps"]["prune"]["window_length"])
-            cfg_preprocess["steps"]["prune"]["amp_thresh"] = [float(x) if isinstance(x,str) else x for x in cfg_preprocess["steps"]["prune"]["amp_thresh"]]
-            
-            rec, chs_pruned = preproc.pruneChannels( rec, params)
-            # chs_pruned = rec.get_mask("chs_pruned") #
+            cfg_preprocess['steps']['prune']["sd_thresh_min"] = units(cfg_preprocess['steps']['prune']["sd_thresh_min"]) 
+            cfg_preprocess['steps']['prune']["sd_thresh_max"] = units(cfg_preprocess['steps']['prune']["sd_thresh_max"])
+            cfg_preprocess['steps']['prune']["window_length"] = units(cfg_preprocess['steps']['prune']["window_length"])
+            if isinstance(cfg_preprocess['steps']['prune']["amp_thresh_min"], str):
+                cfg_preprocess['steps']['prune']["amp_thresh_min"] = float(cfg_preprocess['steps']['prune']["amp_thresh_min"])
+            if isinstance(cfg_preprocess['steps']['prune']["amp_thresh_max"], str):
+                cfg_preprocess['steps']['prune']["amp_thresh_max"] = float(cfg_preprocess['steps']['prune']["amp_thresh_max"])            
+
+            rec, chs_pruned = preproc.pruneChannels( rec, cfg_preprocess['steps']['prune'])
             pruned_chans = chs_pruned.where(chs_pruned != 0.58, drop=True).channel.values # get array of channels that were pruned
             
             
@@ -150,7 +162,7 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             
             
         #%% MOTION CORRECTION: 
-        # !!! each step could run on teh last added time series. 
+        # !!! each step could run on the last added time series. 
         # tddr
         elif step_name in ("tddr", "motion_correct_tddr"):
             rec['od_corrected'] = motion_correct.tddr( rec['od_corrected'] )  
@@ -228,13 +240,16 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             snr1, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda1), cfg_preprocess['steps']["prune"]['snr_thresh'])
             snr0 = np.nanmedian(snr0.values)
             snr1 = np.nanmedian(snr1.values)
-        
+            
             plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, cfg_dataset, stim_lst) #, out_files['out_dqr'], out_files['out_gvtd'] )
             
             # if MA correction was performed, plot slope b4 and after
             if not (rec["od_corrected"].data == rec["od"].data).all():
                 plot_dqr.plot_slope(rec, [slope_base, slope_corrected], cfg_preprocess['steps'], filnm, cfg_dataset) #, out_files['out_slope'])
-            
+
+            if os.path.exists( file_json_path ):
+                plot_dqr.plotDQR_sidecar(file_json, rec, cfg_dataset, filnm)
+
             # !!! how to add in plot_group_DQR ?  - make separate rule?
     
         # If you get here, that means this step is enabled but unrecognized. 

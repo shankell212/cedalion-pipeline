@@ -1,6 +1,6 @@
 dataset:
   root_dir: "/projectnb/nphfnirs/s/users/shannon/Data/reg_test_data/test_data"
-  derivatives_subfolder: "cedalion/test" 
+  derivatives_subfolder: "cedalion/test_dqr_plots" 
   subject: ['621', '618', '587']
   task: ["BS"]  
   run: ["01", "02", "03"]   # !!! SHOULD we just have snakemake parse thru the number of runs? what if a sub only has 2 runs but all others have 3
@@ -41,15 +41,6 @@ preprocess:
     calc_gvtd_b4:  # calc gvtd before correction applied to od
       enable: true
 
-    imu_glm:       # FOR WALKING DATA
-      enable: false
-      statesPerDataFrame: 89
-      hWin: [-3, 5, 1]   # !!! will be put into np.arange func UPDATE THAT
-      n_components: [3, 2]  # [gyro, accel] 
-      butter_order: 4    # butterworth filter order
-      Fc: 0.1   # cutoff freq (Hz)
-      plot_flag_imu: true
-
     tddr:
       enable: false #true
 
@@ -60,9 +51,9 @@ preprocess:
       enable: true
 
     freq_filter:
-      enable: true
+      enable: false
       fmin: "0 Hz" #"0.01 Hz"  # no lpf for arirls method
-      fmax: "0.5 Hz"
+      fmax:  "0 Hz" #"0.5 Hz"
 
     od2conc:
       enable: true

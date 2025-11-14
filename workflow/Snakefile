@@ -1,15 +1,15 @@
 # Snakefile
 from snakemake.io import glob_wildcards
 
-#configfile: "config/config_IWHD.yaml"
+configfile: "config/config_STS_Q.yml"
 #configfile: "scripts/testing/config_test_BS.yaml"
-configfile: "scripts/testing/regression_testing/config_BS_reg_test.yml"
+#configfile: "scripts/testing/regression_testing/config_BS_reg_test.yml"
 
 
 ROOT = config['dataset']["root_dir"]
 DERIV = config['dataset']["derivatives_subfolder"]
 
-def get_imagerecon_output():
+def get_imagerecon_output(): # create file name for image recon output
     return (
         f"{ROOT}/derivatives/{DERIV}/image_results/sub-{{subject}}/"
         f"Xs_sub-{{subject}}_{{task}}"
@@ -19,6 +19,7 @@ def get_imagerecon_output():
         + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
+        + (f"_{config['image_recon']['mag']['t_win'][0]}_{config['image_recon']['mag']['t_win'][1]}" if config["image_recon"]["mag"]["enable"] else "")
         + ".pkl.gz"
     )
 
@@ -32,6 +33,7 @@ def get_groupavg_imagerecon_output():
         + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
+        + (f"_{config['image_recon']['mag']['t_win'][0]}_{config['image_recon']['mag']['t_win'][1]}" if config["image_recon"]["mag"]["enable"] else "")
         + ".pkl"
     )
 
@@ -45,14 +47,14 @@ def get_hrf_output():
 
 rule all_default:
     input:
-        # Groupaverage outputs (per task)
+        # Groupaverage channel space 
         [expand(
             f"{ROOT}/derivatives/{DERIV}/groupaverage/"
             f"task-{{task}}_nirs_groupaverage_chanspace_{config['hrf_estimation']['rec_str']}.pkl",
             task=config["dataset"]["task"],
         ),
 
-        # Group-level image recon (per task)
+        # Groupaverage image space
         expand(
             get_groupavg_imagerecon_output(),
             task=config["dataset"]["task"],
@@ -99,7 +101,6 @@ rule all_imagerecon:
         expand(get_imagerecon_output(), subject = config["dataset"]["subject"], task=config["dataset"]["task"])
 
     
-
 rule preprocess:
     input:
         # raw .snirf and events.tsv
@@ -110,37 +111,29 @@ rule preprocess:
     output:
         snirf = (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.pkl"), # preprocessed snirf
         sidecar = (f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_dataquality_geo.sidecar"), # data qual sidecar
-        # !!! figure out how to get these updated with each run of rule
-        #dqr_plot = (f"{ROOT}/derivatives/{DERIV}/plots/DQR/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR.png"),   # DQR plots
-        #gvtd_plot = (f"{ROOT}/derivatives/{DERIV}/plots/DQR/gvtd/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_DQR_gvtd_hist.png"), # gvtd DQR plots
-        #slope_plot = (f"{ROOT}/derivatives/{DERIV}/plots/DQR/slope/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_slope.png")  # slope DQR plots
     params:
         cfg_preprocess = config['preprocess'],
         cfg_dataset = config['dataset'],
         stim_lst = config['hrf_estimation']['stim_lst'],
         mse_amp_thresh = config['groupaverage']['mse']['mse_amp_thresh']
-    #log:
-        #"logs/preprocess/sub-{subject}_task-{task}_run-{run}_nirs_preprocessed.log"   # empty bc have to use shell and not script
     script:
         "scripts/preprocess.py"
 
 
 
 def all_preprocessed_runs(wc):
-    ''' Return a list of all preprocessed .snirf files for this subject+task (i.e. all runs)'''  
+    ''' Return a list of all preprocessed .snirf files for this subject and task (i.e. all runs)'''  
     
     run_paths =  [
         f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{wc.subject}/"
         f"sub-{wc.subject}_task-{wc.task}_run-{run}_nirs_preprocessed.pkl"
         for run in config["dataset"]["run"]
     ]
-    
     data_quality_paths = [
         f"{ROOT}/derivatives/{DERIV}/preprocessed_data/sub-{wc.subject}/"
         f"sub-{wc.subject}_task-{wc.task}_run-{run}_nirs_dataquality_geo.sidecar"
         for run in config["dataset"]["run"]
     ]
-    
     return {
         "preproc":  run_paths,
         "quality":  data_quality_paths
@@ -152,29 +145,21 @@ rule hrf_estimation:
         preproc  = lambda wc: all_preprocessed_runs(wc)["preproc"],
         quality  = lambda wc: all_preprocessed_runs(wc)["quality"],
         module3 = "scripts/modules/module_hrf_est.py",
-        #all_preprocessed_runs   # list of all run files for curr sub and task 
     output:
         # HRF for each task
-        #pickle = (f"{ROOT}/derivatives/{DERIV}/hrf_estimate/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_hrf_estimate_{config['hrf_estimation']['rec_str']}.pkl"),
         pickle = get_hrf_output(),
         json = (f"{ROOT}/derivatives/{DERIV}/hrf_estimate/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json"),
         geo = (f"{ROOT}/derivatives/{DERIV}/hrf_estimate/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_geo.sidecar")
     params:
         cfg_hrf = config['hrf_estimation'],
         cfg_dataset = config['dataset']
-    #log:
-        #"logs/hrf_estimate/sub-{subject}_task-{task}_nirs_hrf_estimate.log"   # empty bc have to use shell and not script
     script:
         "scripts/hrf_estimation.py"
-    #shell: r""" python "scripts/hrf_estimation.py" --in {input.preproc} --qc {input.quality} --out {output}"""
     
-    
-
     
 def all_hrf_files(wc):
     ''' Return a list of all hrf .pkl files for this subject+task (i.e. all subs)'''  
     
-    # NOTE: add rec str to name?
     hrf_paths =  [
         f"{ROOT}/derivatives/{DERIV}/hrf_estimate/sub-{subject}/sub-{subject}_task-{wc.task}_nirs_hrf_estimate_{config['hrf_estimation']['rec_str']}.pkl.gz" 
         for subject in config["dataset"]["subject"]
@@ -210,9 +195,6 @@ rule groupaverage:
         hrf_subs  = lambda wc: all_hrf_files(wc)["hrf"], # block avg data
         quality  = lambda wc: all_hrf_files(wc)["quality"],    # quality metrics
         geo  = lambda wc: all_hrf_files(wc)["geo"]    # geometric pos and landmarks
-        
-        #blockavg_nc  = lambda wc: all_hrf_files(wc)["blockavg_nc"]    # blockaverage data net cdf
-        #epochs_nc  = lambda wc: all_hrf_files(wc)["epochs_nc"]  # epochs data net cdf
     output:
         # group averaged data
         (f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage_chanspace_{config['hrf_estimation']['rec_str']}.pkl")   
@@ -221,9 +203,6 @@ rule groupaverage:
         cfg_dataset = config['dataset'],
         cfg_hrf = config['hrf_estimation'],
         flag_prune_channels = config['preprocess']['steps']['prune']['enable'],
-        #mse_amp_thresh = config['preprocess']['steps']['prune']['amp_thresh']
-    #run:
-        #print(snakemake.input.blockavg_subs)
     script:
         "scripts/groupaverage.py"
 
@@ -231,8 +210,7 @@ rule groupaverage:
 
 
 def all_img_files(wc):
-    ''' Return a list of all img .pkl files for this subject+task (i.e. all subs)'''  
-    # NOTE: add rec str to name?
+    ''' Return a list of all img .pkl files for this subject and task (i.e. all subs)'''  
     img_paths =  [
         (
         f"{ROOT}/derivatives/{DERIV}/image_results/sub-{subject}/"
@@ -243,6 +221,7 @@ def all_img_files(wc):
         + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
+        + (f"_{config['image_recon']['mag']['t_win'][0]}_{config['image_recon']['mag']['t_win'][1]}" if config["image_recon"]["mag"]["enable"] else "")
         + ".pkl.gz"
     )
         for subject in config["dataset"]["subject"]
@@ -263,25 +242,15 @@ use rule groupaverage as groupaverage_imgspace with:
         cfg_img_recon = config['image_recon'],
         cfg_dataset = config['dataset']
 
-    
-        
-# !!! store xarrays in netcdf file instead of pkl if snirf not enabled - similar to hdf file 
-    # can store dataqual stuff to coordinate dim of xarray   
 
 
 rule imagerecon:
     input:
-        #(f"{ROOT}/derivatives/{DERIV}/groupaverage/task-{{task}}_nirs_groupaverage.pkl"),  
-        #hrf_data = (f"{ROOT}/derivatives/{DERIV}/hrf_estimate/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_hrf_estimate_{config['hrf_estimation']['rec_str']}.pkl"),
-        #hrf_data = get_hrf_output(),
         hrf_data = rules.hrf_estimation.output.pickle,
         module4 = "scripts/modules/module_image_recon.py",
         module5 = "scripts/modules/module_spatial_basis_funs.py"
     output:
         get_imagerecon_output()
-        #results = lambda wc: get_imagerecon_output(wc.task)
-        #results = [get_imagerecon_output(c) for c in config["hrf"]["stim_lst"]] #expand(get_imagerecon_output, task=config["hrf"]["stim_lst"])
-        
     params:
         cfg_img_recon = config['image_recon'],
         cfg_dataset = config['dataset'], 

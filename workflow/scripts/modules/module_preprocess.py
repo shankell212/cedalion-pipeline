@@ -85,9 +85,9 @@ def pruneChannels( rec, cfg_prune ):
     ''' Function that prunes channels based on cfg params.
         *Pruned channels are not dropped, instead they are set to NaN 
         '''
-    amp_thresh = cfg_prune['amp_thresh']
+    amp_thresh = [cfg_prune['amp_thresh_min'], cfg_prune['amp_thresh_max']]
     snr_thresh = cfg_prune['snr_thresh']
-    sd_thresh = cfg_prune['sd_thresh']
+    sd_thresh = [cfg_prune['sd_thresh_min'], cfg_prune['sd_thresh_max']]
 
     amp_thresh_sat = [0., amp_thresh[1]]
     amp_thresh_low = [amp_thresh[0], 1]

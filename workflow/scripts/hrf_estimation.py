@@ -79,7 +79,7 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_pkl, o
     idx_amp_runs = []
     bad_chans_sat_runs = []
     bad_chans_amp_runs = []
-    
+    pruned_chans_lst = []
     # loop through files and concatinate runs for GLM and epochs for blockaverage
     for file_idx, run in enumerate(run_files):     
         
@@ -96,10 +96,6 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_pkl, o
         ts = rec[cfg_hrf['rec_str']].copy()
         stim = rec.stim.copy() # select the stim for the given file 
         
-        # Load in json data qual   # !!! now is a pkl for now
-        # with open(data_quality_files[file_idx], 'r') as fp:
-        #     data_quality_run = json.load(fp)
-        
         with gzip.open(data_quality_files[file_idx], 'rb') as f:
             data_quality_run = pickle.load(f)
             
@@ -114,25 +110,31 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_pkl, o
             ts = ts.transpose('wavelength', 'channel', 'time')
             
         ts = ts.assign_coords(samples=('time', np.arange(len(ts.time))))
-        ts['time'] = ts.time.pint.quantify(units.s) # !!! already is s? do we need this
+        ts['time'] = ts.time.pint.quantify(units.s) # !!! already is s? do we need this HARD CODING SECONDS. FIX IN CEDALION FUNCS
                 
         # get the epochs
+        #FIXME: ADD IF GLM OR BLOCKAVG
         epochs_tmp = ts.cd.to_epochs(
                                     stim,  # stimulus dataframe
                                     set(stim[stim.trial_type.isin(cfg_hrf['stim_lst'])].trial_type), # select events  
                                     before = cfg_hrf['t_pre'],  # seconds before stimulus
                                     after = cfg_hrf['t_post'],  # seconds after stimulus
                                 )
+        #FIXME: IF GLM OR BLOCK
         if file_idx == 0:
             epochs_all = epochs_tmp
             all_runs = []
-            all_runs.append( [rec] )
+            all_runs.append( rec )
 
         else:
             epochs_all = xr.concat([epochs_all, epochs_tmp], dim='epoch')  # concatenate epochs from all runs
-            all_runs.append( [rec] )
+            all_runs.append( rec )
 
-        # Concatenate all data data qual stuff
+
+        # Concatenate all data qual stuff
+        pruned_chans = chs_pruned.where(chs_pruned != 0.58, drop=True).channel.values # get array of channels that were pruned
+        pruned_chans_lst.append(pruned_chans)
+
         idx_sat_runs.append(data_quality_run['idx_sat'])
         bad_chans_sat_runs.append(data_quality_run['bad_chans_sat'])
         idx_amp_runs.append(data_quality_run['idx_amp'])
@@ -151,11 +153,10 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_pkl, o
     bad_chans_sat = list(set(bad_chans_sat_flat))
     bad_chans_amp = list(set(bad_chans_amp_flat))
     
-    pruned_chans = chs_pruned.where(chs_pruned != 0.58, drop=True).channel.values # get array of channels that were pruned
 
-    if cfg_GLM['enable']:
+    if cfg_hrf['GLM']['enable']:
         print('Running GLM HRF estimation')
-        glm_results, hrf_estimate, hrf_mse, bad_chans_mse_lst = mhrf.GLM(all_runs, cfg_hrf['rec_str'], cfg_hrf, geo3d, pruned_chans)
+        glm_results, hrf_estimate, hrf_mse, bad_chans_mse_lst = mhrf.GLM(all_runs, cfg_hrf['rec_str'], cfg_hrf, geo3d, pruned_chans_lst)
     else:
         print('Running Block Average HRF estimation')
         hrf_estimate, hrf_mse, bad_chans_mse_lst = mhrf.blockaverage(epochs_all, cfg_hrf)
@@ -201,8 +202,6 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_pkl, o
         'hrf_est': hrf_estimate,
         'mse_t': hrf_mse,
         'bad_indices': bad_indices,
-        #'glm_results': glm_results # NOTE: can't save in pkl, must be netcdf??? -- error when loading in pkl
-
         }
     
     
