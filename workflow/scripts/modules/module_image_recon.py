@@ -406,7 +406,7 @@ def get_image_noise(C_meas, X, W, SB=False, DIRECT=True, G=None):
             cov_img_diag = np.nansum(cov_img_tmp**2, axis=1)
         
         if SB:
-            cov_img_diag = sbf.go_from_kernel_space_to_image_space_direct(cov_img_diag.T, G)
+            cov_img_diag = sbf.go_from_kernel_space_to_image_space_direct(cov_img_diag, G)
         else:
             if TIME:
                 split = cov_img_diag.shape[1]//2
@@ -415,10 +415,10 @@ def get_image_noise(C_meas, X, W, SB=False, DIRECT=True, G=None):
 
                 # Stack into vertex x 2 x time
                 cov_img_diag = np.stack([HbO.T, HbR.T], axis=1)  # (vertex, 2, time)
-                cov_img_diag = cov_img_diag.transpose(1,0,2)
+                cov_img_diag = cov_img_diag.transpose(0,2,1)
             else:
                 split = len(cov_img_diag)//2
-                cov_img_diag =  np.reshape( cov_img_diag, (2,split) )
+                cov_img_diag =  np.reshape( cov_img_diag, (2,split) ).T
 
         
 
@@ -457,11 +457,14 @@ def get_image_noise(C_meas, X, W, SB=False, DIRECT=True, G=None):
             cov_img_diag = np.einsum('ij,jab->iab', einv.values**2, cov_img_diag)
 
         else:
-            cov_img_diag =  np.vstack(cov_img_lst) 
+            cov_img_diag =  np.vstack(cov_img_lst)
             cov_img_diag = einv.values**2 @ cov_img_diag
             
     noise = X.copy()
-    noise.values = cov_img_diag
+    try:
+        noise.values = cov_img_diag
+    except:
+        noise.values = cov_img_diag.T
 
     return noise
 
