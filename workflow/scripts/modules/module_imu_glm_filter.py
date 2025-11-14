@@ -63,9 +63,7 @@ def filterWalking(rec, rec_str, cfg_imu_glm, filenm = None, cfg_dataset = None):
     hWin = cfg_imu_glm['hWin']
     statesPerDataFrame = cfg_imu_glm['statesPerDataFrame']
     
-    # -------------------------
     # Get IMU data
-    # -------------------------
     accel_x = rec.aux_ts["ACCEL_X"]
     accel_y = rec.aux_ts["ACCEL_Y"]
     accel_z = rec.aux_ts["ACCEL_Z"]
@@ -73,7 +71,7 @@ def filterWalking(rec, rec_str, cfg_imu_glm, filenm = None, cfg_dataset = None):
     accel = accel.assign_coords(axis=['x', 'y', 'z'])
 
     accel_np = np.array(accel).squeeze().T
-    accel_mag = np.linalg.norm(accel_np, axis=1)
+    accel_mag = np.linalg.norm(accel_np, axis=1) # get magnitude
 
     gyro_x = rec.aux_ts["GYRO_X"]
     gyro_y = rec.aux_ts["GYRO_Y"]
@@ -87,9 +85,7 @@ def filterWalking(rec, rec_str, cfg_imu_glm, filenm = None, cfg_dataset = None):
     accel_t = accel_x["time"] # time
     gyro_t = gyro_x["time"]
     
-    # -------------------------
     # ID Walking period 
-    # -------------------------
     stim = rec.stim 
     lstWalk, lstStand = id_walking(dod, stim) 
     
@@ -112,12 +108,12 @@ def filterWalking(rec, rec_str, cfg_imu_glm, filenm = None, cfg_dataset = None):
     # -------------------------
     # Downsample regressors (z) to match fnirs data
     # -------------------------
-    z = np.hstack((zAcc, zGyr))
-    z_resamp = downsample_IMU(z, t, accel_t_np, statesPerDataFrame)
+    z = np.hstack((zAcc, zGyr)) # stack accel and gyroscope 
+    z_resamp = downsample_IMU(z, t, accel_t_np, statesPerDataFrame) 
     
     # -------------------------
     # Create GLM design matrix
-    # -------------------------
+    # ---------------------------
     lstWalktmp = lstWalk[(hWin[-1]):(len(lstWalk) + hWin[0])] # adjust lstWalk for time window
     
     A, AA = GLM_designMat(z_resamp, lstWalk, hWin, lstWalktmp) # get 2D and 3D design matrix
@@ -130,7 +126,7 @@ def filterWalking(rec, rec_str, cfg_imu_glm, filenm = None, cfg_dataset = None):
     Wn = Fc / (Fs/2) # normalizing cutoff freq
     order = cfg_imu_glm['butter_order']  # butterworth filter order
     
-    sos = butter(order, Wn, btype='high', output='sos') # Design the Butterworth high-pass filter
+    sos = butter(order, Wn, btype='high', output='sos') # design the Butterworth high-pass filter -> 2nd order filter order
     # Apply the high-pass filter to dod along the time axis
     dodHP = sosfilt(sos, dod, axis=-1) # dod is chanXwavXtime - want to do filtering along time
 
@@ -145,11 +141,10 @@ def filterWalking(rec, rec_str, cfg_imu_glm, filenm = None, cfg_dataset = None):
 
     # Do GLM on every channel
     # A = predictor, h = corresponding weights --- A*h = component contribution to the modelled signal
-    #dodHPfilt = dodHP
     dodHPfiltnew = np.zeros_like(dodHP)
 
     gaitRatio_af = np.zeros_like(gaitRatio_b4)
-    varExp = np.zeros((dodHP.shape[1], dodHP.shape[2], z_resamp.shape[1]))
+    varExp = np.zeros((dodHP.shape[1], dodHP.shape[2], z_resamp.shape[1])) # initialize variance explained
 
     dodT = dod.T
     for iw in range(dod.shape[1]): # for loop thru each wavelength

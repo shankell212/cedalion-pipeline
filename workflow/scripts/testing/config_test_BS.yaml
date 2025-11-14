@@ -1,13 +1,13 @@
 dataset:
   root_dir: "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS"
-  derivatives_subfolder: "Shannon/cedalion/test"  #/test_allsubs #"Shannon/cedalion/test_all_subs" 
+  derivatives_subfolder: "Shannon/cedalion/new"  
   subject: ["568", "577", "580", "581", "583","586", "587", "588", "592", "613", "618","619", "621", "633", "638", "639", "640"]
   task: ["BS"]  
-  run: ["01", "02", "03"]   # !!! SHOULD we just have snakemake parse thru the number of runs? what if a sub only has 2 runs but all others have 3
+  run: ["01", "02", "03"]  
 
 preprocess:
   steps:
-    bs_preproc:   # !!! only for BS data
+    bs_preproc:   
       enable: true
       probe_dir: "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/derivatives/Shannon/cedalion/probe/" #"/projectnb/nphfnirs/ns/Shannon/Data/probes/NN22_WHHD/12NN/" #"/projectnb/nphfnirs/s/users/lcarlton/DATA/probes/NN22_WHHD/12NN/"
       snirf_name_probe: "fullhead_56x144_NN22_System1.snirf" #"fullhead_56x144_System2.snirf"  
@@ -60,7 +60,7 @@ preprocess:
       enable: true
 
     freq_filter:
-      enable: true
+      enable: false
       fmin: "0 Hz"  #"0.01 Hz"
       fmax: "0.5 Hz"
 
@@ -72,13 +72,12 @@ preprocess:
 
 
 hrf_estimation:
-  stim_lst: ["right", "left"]  # make this in script instead of adding?  # auto but then add exlusion
+  stim_lst: ["right", "left"]  
   t_pre: "2 second"  
   t_post: "15 second" 
-  rec_str: "conc" #"od_corrected"   # od_02 or conc   od_corrected  - what you want to block average
-  #trange_hrf_stat: [2, 16]  # !!! use plot_name for this var -- only used for plots?
+  rec_str: "conc" # od_corrected or conc  - what you want to block average
   GLM:        
-   enable: true  # if true do GLM, false do block averaging
+   enable: false  # if true do GLM, false do block averaging
    do_drift: false
    do_drift_legendre: true
    do_short_sep: true
@@ -100,7 +99,7 @@ groupaverage:   # if this on images, then don't need to change values, if no mse
   #  mse_min_thresh: 1e-6  #1e-6
   #  hrf_val: 0 
    
-image_recon:  # add mse config for od here
+image_recon:  
   DIRECT: 
     enable: false  # true = direct, false = indirect
   Cmeas: 

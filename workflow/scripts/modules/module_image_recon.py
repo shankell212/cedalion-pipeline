@@ -50,7 +50,7 @@ def load_head_model(head_model='ICBM152', with_parcels=True):
         brain_surface_file= os.path.join(SEG_DATADIR, "mask_brain.obj"),
         scalp_surface_file= os.path.join(SEG_DATADIR, "mask_scalp.obj"),
         landmarks_ras_file=landmarks_file,
-        smoothing=0.5,
+        smoothing=0,
         fill_holes=True,
         parcel_file=PARCEL_DIR
     ) 

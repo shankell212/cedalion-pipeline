@@ -23,61 +23,6 @@ import operator
 import json
 
 #%% Functions
-def save_weights(glm_results):
-    # Find max length across all regressions
-    max_len = max(
-        glm_results.values[i, j].weights.shape[0]
-        for i in range(glm_results.shape[0])
-        for j in range(glm_results.shape[1])
-    )
-
-    # Create NaN-padded 3D array
-    weights_array = np.full((glm_results.shape[0], glm_results.shape[1], max_len), np.nan)
-    for i in range(glm_results.shape[0]):
-        for j in range(glm_results.shape[1]):
-            w = glm_results.values[i, j].weights
-            weights_array[i, j, :len(w)] = w
-
-    weights_da = xr.DataArray(
-        weights_array,
-        dims=("channel", "chromo", "time"),
-        coords={
-            "channel": glm_results.channel,
-            "chromo": glm_results.chromo,
-            "time": np.arange(max_len)
-        },
-        name="weights"
-    )
-    return weights_da
-
-# def save_weights(glm_results):
-
-#     # Convert object array -> numeric array of weights
-#     weights_array = np.empty(glm_results.shape, dtype=object)
-
-#     for i in range(glm_results.shape[0]):      # channels
-#         for j in range(glm_results.shape[1]):  # chromo
-#             weights_array[i, j] = glm_results.values[i, j].weights
-
-#     # # If weights are always 1D arrays of same length, you can stack into numeric
-#     # weights_array = np.stack(
-#     #     [[glm_results.values[i, j].weights for j in range(glm_results.shape[1])]
-#     #     for i in range(glm_results.shape[0])]
-#     # )
-
-#     # Wrap back into xarray
-#     weights_da = xr.DataArray(
-#         weights_array,
-#         dims=("channel", "chromo", "time"),
-#         coords={
-#             "channel": glm_results.channel,
-#             "chromo": glm_results.chromo,
-#             "time": np.arange(weights_array.shape[2])  # or real time index if you have one
-#         },
-#         name="weights"
-#     )
-#     return weights_da
-
 
 def blockaverage(epochs_all, cfg_hrf_estimation):
     all_trial_blockaverage = None
@@ -85,8 +30,8 @@ def blockaverage(epochs_all, cfg_hrf_estimation):
     baseline = epochs_all.sel(reltime=(epochs_all.reltime < 0)).mean('reltime')
     epochs = epochs_all - baseline  # baseline subtract
     blockaverage_ep = epochs.groupby('trial_type').mean('epoch') # mean across all epochs 
-    
-    epochs_zeromean = epochs - blockaverage_ep   # zeromean the epochs
+
+    epochs_zeromean = epochs - blockaverage_ep   # zeromean the epochs - residual
     
     bad_chans_mse_lst = []
     # LOOP OVER TRIAL TYPES
@@ -118,6 +63,9 @@ def blockaverage(epochs_all, cfg_hrf_estimation):
         bad_chans_mse = mse_t.channel[bad_any].values
     
         bad_chans_mse_lst.append(bad_chans_mse)
+
+        if 'measurement' in mse_t.dims and isinstance(mse_t.get_index('measurement'), pd.MultiIndex):
+            mse_t = mse_t.unstack('measurement')
         
         if all_trial_blockaverage is None:
             all_trial_blockaverage = blockaverage
@@ -133,10 +81,6 @@ def blockaverage(epochs_all, cfg_hrf_estimation):
 
 def GLM(runs, rec_str, cfg_hrf_estimation, geo3d, pruned_chans_list):
     cfg_GLM = cfg_hrf_estimation['GLM']
-    # t_pre = units(cfg_hrf_estimation['t_pre'])
-    # t_post = units(cfg_hrf_estimation['t_post'])
-    t_pre = cfg_hrf_estimation['t_pre']
-    t_post = cfg_hrf_estimation['t_post']
 
     # 1. need to concatenate runs 
     Y_all, stim_df_tmp, runs_updated = concatenate_runs(runs, rec_str)
@@ -148,17 +92,19 @@ def GLM(runs, rec_str, cfg_hrf_estimation, geo3d, pruned_chans_list):
     dms = glm.design_matrix.hrf_regressors(
                                     Y_all,
                                     stim_df,
-                                    glm.GaussianKernels(t_pre, t_post, cfg_GLM['t_delta'], cfg_GLM['t_std']) #NOTE: no option to choose basis funcs
+                                    glm.GaussianKernels(cfg_hrf_estimation['t_pre'], cfg_hrf_estimation['t_post'], cfg_GLM['t_delta'], cfg_GLM['t_std']) 
+                                    #NOTE: no option to choose basis funcs
                                 )
 
+    # FIXME: one flag named do_drift and have a str for type, options: None, polynomial, legendres
     # Combine drift and short-separation regressors (if any)
     if cfg_GLM['do_drift']:
         drift_regressors = get_drift_regressors(runs_updated, cfg_GLM)
         dms &= reduce(operator.and_, drift_regressors)
 
-    if cfg_GLM['do_drift_legendre']:
+    if cfg_GLM['do_drift_legendre']:  #NOTE: possible for user to include both drift types
         drift_regressors = get_drift_legendre_regressors(runs_updated, cfg_GLM)
-        dms &= reduce(operator.and_, drift_regressors)
+        dms &= reduce(operator.and_, drift_regressors) # adds iteratively to dm 
 
     if cfg_GLM['do_short_sep']:
         ss_regressors = get_short_regressors(runs_updated, pruned_chans_list, geo3d, cfg_GLM)
@@ -172,7 +118,8 @@ def GLM(runs, rec_str, cfg_hrf_estimation, geo3d, pruned_chans_list):
     cov_params = results.sm.cov_params()
 
     # 4. estimate HRF and MSE
-    basis_hrf = glm.GaussianKernels(t_pre, t_post, cfg_GLM['t_delta'], cfg_GLM['t_std'])(Y_all) #NOTE: no option for diff basis
+    #NOTE: HARD CODED
+    basis_hrf = glm.GaussianKernels(cfg_hrf_estimation['t_pre'], cfg_hrf_estimation['t_post'], cfg_GLM['t_delta'], cfg_GLM['t_std'])(Y_all) #NOTE: no option for diff basis
 
     #trial_type_list = stim_df['trial_type'].unique()
     trial_type_list = cfg_hrf_estimation['stim_lst']
@@ -206,25 +153,25 @@ def GLM(runs, rec_str, cfg_hrf_estimation, geo3d, pruned_chans_list):
         bad_chans_mse_lst.append(bad_chans_mse)
 
     hrf_estimate = xr.concat(hrf_estimate_list, dim='trial_type')
-    hrf_estimate = hrf_estimate.pint.quantify('molar')
+    hrf_estimate = hrf_estimate.pint.quantify('molar') #FIXME: HARDCODED
 
     hrf_mse = xr.concat(hrf_mse_list, dim='trial_type')
-    hrf_mse = hrf_mse.pint.quantify('molar**2')
+    hrf_mse = hrf_mse.pint.quantify('molar**2')  #FIXME: HARD CODED
 
     # set universal time so that all hrfs have the same time base 
-    fs = frequency.sampling_rate(runs[0][0][rec_str]).to('Hz')
-    before_samples = int(np.ceil((t_pre * fs).magnitude))
-    after_samples = int(np.ceil((t_post * fs).magnitude))
+    fs = frequency.sampling_rate(runs[0][rec_str]).to('Hz')
+    before_samples = int(np.ceil((cfg_hrf_estimation['t_pre'] * fs).magnitude))
+    after_samples = int(np.ceil((cfg_hrf_estimation['t_post'] * fs).magnitude))
 
     dT = np.round(1 / fs, 3)  # millisecond precision
     n_timepoints = len(hrf_estimate.time)
     reltime = np.linspace(-before_samples * dT, after_samples * dT, n_timepoints)
 
     hrf_mse = hrf_mse.assign_coords({'time': reltime})
-    hrf_mse.time.attrs['units'] = 'second'
+    hrf_mse.time.attrs['units'] = 'second' #FIXME: HARD CODED
 
     hrf_estimate = hrf_estimate.assign_coords({'time': reltime})
-    hrf_estimate.time.attrs['units'] = 'second'
+    hrf_estimate.time.attrs['units'] = 'second'  #FIXME: HARD CODED
 
     return results, hrf_estimate, hrf_mse, bad_chans_mse_lst
 
@@ -287,7 +234,7 @@ def get_short_regressors(runs, pruned_chans_list, geo3d, cfg_GLM):
         _, ts_short = cedalion.nirs.split_long_short_channels(
                                 rec_pruned, geo3d, distance_threshold= cfg_GLM['distance_threshold']  # !!! change to rec_pruned once NaN prob fixed
                                 )
-
+        # FIXME: SSR method is hard coded
         short = glm.design_matrix.average_short_channel_regressor(ts_short)
         short.common = short.common.reset_coords('samples', drop=True)
         short.common = short.common.assign_coords({'regressor': [f'short run {i}']})
@@ -302,8 +249,8 @@ def concatenate_runs(runs, rec_str):
     runs_updated = []
     stim_updated = []
 
-    for r in runs:
-        rec = r[0]
+    for rec in runs:
+
         ts = rec[rec_str]
         time = ts.time.values
         new_time = time + CURRENT_OFFSET
@@ -319,10 +266,10 @@ def concatenate_runs(runs, rec_str):
         stim_updated.append(stim_shift)
         runs_updated.append(ts_new)
 
-        CURRENT_OFFSET = new_time[-1] + (time[1] - time[0])
+        CURRENT_OFFSET = new_time[-1] + (time[1] - time[0])  # updating time offset
 
     Y_all = xr.concat(runs_updated, dim='time')
-    Y_all.time.attrs['units'] = units.s
+    Y_all.time.attrs['units'] = units.s # FIXME hard coded. pull unit from top 
     stim_df = pd.concat(stim_updated, ignore_index = True)
 
     return Y_all, stim_df, runs_updated

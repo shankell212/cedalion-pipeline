@@ -48,29 +48,40 @@ warnings.filterwarnings('ignore')
 
 #%%
 
-#ROOT_DIR_probe = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/" #"/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/" 
-#ROOT_DIR = "/projectnb/nphfnirs/s/users/shannon/Data/reg_test_data/test_data/"
-ROOT_DIR = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/" 
-DERIV_DIR = os.path.join(ROOT_DIR, 'derivatives', 'Shannon', 'cedalion', 'test')
+ROOT_DIR = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/" #"/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/" 
+#ROOT_DIR = "/projectnb/nphfnirs/s/users/shannon/Data/reg_test_data/test_data" 
+#ROOT_DIR = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/"
+DERIV_DIR = os.path.join(ROOT_DIR, 'derivatives', 'cedalion', 'new_inclQ_first_sit')
+#DERIV_DIR = os.path.join(ROOT_DIR,'derivatives', 'Shannon', 'cedalion', 'test')
 
-#probe_dir = "/projectnb/nphfnirs/s/Shannon/Data/probes/NN22_WHHD/12NN/"  # CHANGE
-probe_dir = os.path.join(ROOT_DIR, 'derivatives/Shannon/cedalion/probe/')
 
+probe_dir = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/probe/"
+#probe_dir = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/derivatives/Shannon/cedalion/probe/" 
     
 head_model = 'ICBM152'
 snirf_name= 'fullhead_56x144_NN22_System1.snirf'
 
-task = 'BS'
-flag_condition_list = ['right', 'left']
+task = "IWHD"   #'IWHD'
+flag_condition_list =["ST_Q", "DT_Q"] #['ST', 'DT'] #['right', 'left']
 SAVE = True
+
+flag_hbo_list = [True, False] #, False]
+flag_brain_list = [True] #, False]   #, False]
+flag_img_list = ['mag', 'tstat']#, 'noise'] #, 'noise'
+
 # folder_name = "Xs_BS_cov_alpha_spatial_1e-2_alpha_meas_1e4_indirect_Cmeas_SB" #"Xs_STS_cov_alpha_spatial_1e-3_alpha_meas_1e-2_indirect_Cmeas_noSB"  # CHANGE
 #folder_name = f"Xs_{task}_cov_alpha_spatial_1e-2_alpha_meas_1e4_indirect_Cmeas_SB_ts"
 
 # folder_name = "task-BS_nirs_groupaverage_imgspace.pkl"
 #folder_name = "Xs_groupavg_BS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB_mag.pkl"
-folder_name = "Xs_groupavg_BS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB_mag.pkl"
+# folder_name = "Xs_groupavg_BS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB_mag.pkl"
+# folder_name = "Xs_groupavg_STS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB_mag.pkl"
+# folder_name = f"Xs_groupavg_{task}_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB_ts_20subs.pkl"
+folder_name = f"Xs_groupavg_{task}_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB_ts.pkl"
+
 
 #%% Load head model 
+
 import importlib
 importlib.reload(img_recon)
 
@@ -83,7 +94,6 @@ einv = cedalion.xrutils.pinv(ec)
 
 #%% Open files
     
-
 save_dir_tmp = os.path.join(DERIV_DIR, 'plots', 'image_recon')
 results_dir = os.path.join(DERIV_DIR, 'image_results')
 filepath = os.path.join(results_dir, f'{folder_name}')
@@ -98,13 +108,19 @@ all_trial_X_stderr = results['total_stderr']
 all_trial_X_tstat = results['tstat']
 
 
+#%% Only grab sensitive vertices
+sensitivity_mask = sbf.get_sensitivity_mask(Adot)
+sensitive_vertices = np.where(sensitivity_mask)[0]
+Adot_sensitive = Adot.sel(vertex=sensitivity_mask)
+
+
+all_trial_groupaverage_weighted = all_trial_groupaverage_weighted.where(sensitivity_mask)
+all_trial_X_stderr              = all_trial_X_stderr.where(sensitivity_mask)
+all_trial_X_tstat               = all_trial_X_tstat.where(sensitivity_mask)
+
+
 
 #%% Plot w cedalion function:
-
-SAVE = True
-flag_hbo_list = [True, False]
-flag_brain_list = [True]   #, False]
-flag_img_list = ['mag', 'tstat', 'noise'] #, 'noise'
 
 # scl = np.percentile(np.abs(X_ts.sel(chromo='HbO').values.reshape(-1)),99)
 # clim = (-scl,scl)
@@ -133,26 +149,26 @@ for flag_hbo in flag_hbo_list:
                     title_str = title_str + ' scalp'
                     hbx_brain_scalp = hbx_brain_scalp + '_scalp'
                 
-                if len(flag_condition_list) > 1:
-                    if flag_img == 'tstat':
-                        foo_img = all_trial_X_tstat.sel(trial_type=flag_condition).copy()
-                        title_str = title_str + ' t-stat'
-                    elif flag_img == 'mag':
-                        foo_img = all_trial_groupaverage_weighted.sel(trial_type=flag_condition).copy()
-                        title_str = title_str + ' magnitude'
-                    elif flag_img == 'noise':
-                        foo_img = all_trial_X_stderr.sel(trial_type=flag_condition).copy()
-                        title_str = title_str + ' noise'
-                else:
-                    if flag_img == 'tstat':
-                        foo_img = all_trial_X_tstat.copy()
-                        title_str = title_str + ' t-stat'
-                    elif flag_img == 'mag':
-                        foo_img = all_trial_groupaverage_weighted.copy()
-                        title_str = title_str + ' magnitude'
-                    elif flag_img == 'noise':
-                        foo_img = all_trial_X_stderr.copy()
-                        title_str = title_str + ' noise'
+                #if len(flag_condition_list) > 1:
+                if flag_img == 'tstat':
+                    foo_img = all_trial_X_tstat.sel(trial_type=flag_condition).copy()
+                    title_str = title_str + ' t-stat'
+                elif flag_img == 'mag':
+                    foo_img = all_trial_groupaverage_weighted.sel(trial_type=flag_condition).copy()
+                    title_str = title_str + ' magnitude'
+                elif flag_img == 'noise':
+                    foo_img = all_trial_X_stderr.sel(trial_type=flag_condition).copy()
+                    title_str = title_str + ' noise'
+                # else:
+                #     if flag_img == 'tstat':
+                #         foo_img = all_trial_X_tstat.copy()
+                #         title_str = title_str + ' t-stat'
+                #     elif flag_img == 'mag':
+                #         foo_img = all_trial_groupaverage_weighted.copy()
+                #         title_str = title_str + ' magnitude'
+                #     elif flag_img == 'noise':
+                #         foo_img = all_trial_X_stderr.copy()
+                #         title_str = title_str + ' noise'
                 
                 if 'reltime' in foo_img.dims:
                     foo_img = foo_img.rename({"reltime": "time"})
@@ -170,14 +186,24 @@ for flag_hbo in flag_hbo_list:
                 arr = foo_img.sel(chromo=chromo).values
                 arr = arr[np.isfinite(arr)]
                 scl = np.max(np.abs(arr)) if arr.size > 0 else 1.0
-                clim = (-scl, scl)
-
+                #clim = (-scl/2, scl/2)
+                if flag_img == 'mag':
+                    #clim = (-scl/2, scl/2)
+                    clim = (-5.7e-07, 5.7e-07)
+                else:
+                    #clim = (-scl, scl)
+                    clim = (-2.2e+01, 2.2e+01)
+                filename = f'IMG_{flag_condition}_{flag_img}_{hbx_brain_scalp}'
                 if SAVE:
                     save_dir_tmp_ful = os.path.join(save_dir_tmp, folder_name)
                     if not os.path.exists(save_dir_tmp_ful):
                         os.makedirs(save_dir_tmp_ful)
-                filename = f'IMG_{flag_condition}_{flag_img}_{hbx_brain_scalp}'
-                save_file_path = os.path.join(save_dir_tmp_ful, filename )
+                    save_file_path = os.path.join(save_dir_tmp_ful, filename )
+                else:
+                    save_file_path = None
+                
+                #filename = f'IMG_{flag_condition}_{flag_img}_{hbx_brain_scalp}'
+                
 
                 print(foo_img)
                 print('plotting: ', filename)
@@ -191,9 +217,10 @@ for flag_hbo in flag_hbo_list:
                     filename=save_file_path,
                     SAVE=SAVE,
                     #time_range=(foo_img.time.values[0],foo_img.time.values[-1],0.5)*units.s,
-                    fps=6,
+                    fps=12,
                     geo3d_plot = None, #  geo3d_plot
                     wdw_size = (1024, 768)
                 )
 
 #
+# %%

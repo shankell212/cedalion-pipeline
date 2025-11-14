@@ -23,7 +23,7 @@ import image_recon as img_recon
 import importlib
 importlib.reload(img_recon)
 # 
-config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_STS.yaml"
+config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_IWHD_Q.yml"
 # config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml"
 #config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/regression_testing/config_BS_reg_test.yml" # CHANGE if testing
 
@@ -37,7 +37,7 @@ cfg_hrf = config['hrf_estimation']
 task = cfg_dataset['task'][0]  # choose first task for testing
 
 subjects = cfg_dataset['subject']
-
+# subjects = ["20", "21", "22", "23", "24", "25", "26", "28"]
 
 # # Get input file path input file
 # groupaverage_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "groupaverage")
@@ -48,7 +48,7 @@ blockavg_files = [os.path.join(hrf_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_
 data_quality_files = [os.path.join(hrf_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_nirs_dataquality.json") for subj in subjects ]
 geo_files = [os.path.join(hrf_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_nirs_geo.sidecar") for subj in subjects ]
 
-
+#%
 for idx, subj in enumerate(subjects):
     cfg_img_recon_loop = copy.deepcopy(cfg_img_recon)
     
@@ -69,7 +69,7 @@ for idx, subj in enumerate(subjects):
     )
 
     out = os.path.join(der_dir, file_name)
-
+#
     blockavg_file = blockavg_files[idx]
 
     img_recon.img_recon_func(cfg_dataset, cfg_img_recon_loop, cfg_hrf, blockavg_file, out)

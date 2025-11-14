@@ -63,9 +63,7 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, blockavg_files, ge
         # Loop over subjects
         hrf_est_subj = None
         for subj_idx, subj in enumerate(blockavg_files):
-            #blockavg_files
             # Load in hrf estimation & mse
-            # blockaverage_weighted now hrf weighted
             with gzip.open(subj, 'rb') as f:
                 results = pickle.load(f)
             hrf_est = results['hrf_est']
@@ -86,23 +84,29 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, blockavg_files, ge
             hrf_est1 = hrf_est1.expand_dims('trial_type')  # readd trial type coord
             hrf_est = hrf_est1.copy()
 
-            if 'vertex' not in hrf_est.dims:  # group averaging chan space data, change values of bad chans (img recon does this)
+            if 'vertex' not in hrf_est.dims:  # if group averaging chan space data, change values of bad chans (img recon does this)
                 hrf_est.loc[dict(channel=bad_channels)] = cfg_mse['hrf_val']
                 mse_t.loc[dict(channel=bad_channels)] = cfg_mse['mse_val_for_bad_data']  
                 mse_t = xr.where(mse_t < cfg_mse['mse_min_thresh'], cfg_mse['mse_min_thresh'], mse_t)  # !!! maybe can be removed when we have the between subject mse
                 
             # make units the same
             target_units = hrf_est.pint.units
-            mse_t = mse_t.pint.to(target_units**2)
+            #mse_t.pint.quantify()
+            #mse_t = mse_t.pint.to(target_units**2)
+            has_units = hasattr(mse_t, "pint") and mse_t.pint.units is not None # check if mse_t has units or not
+            if has_units:
+                mse_t = mse_t.pint.to(target_units**2) # if has units convert units to hrf_est units 
+            else: 
+                mse_t = mse_t.pint.quantify(units=target_units**2) # if not units quantify and make units same as hrf
 
             hrf_weighted = hrf_est.copy() 
 
             # gather the hrf_est across subjects
             if hrf_est_subj is None:
                                 
-                hrf_est_subj_weighted = hrf_weighted / mse_t 
+                hrf_est_subj_weighted = hrf_weighted / mse_t  # each subjects hrf est weighted by within subj variance
 
-                groupaverage_weighted = hrf_weighted / mse_t
+                groupaverage_weighted = hrf_weighted / mse_t # groupavg weighted by within subj variance
                 sum_mse_inv = 1/mse_t
                 
                 # add a subject dimension and coordinate
@@ -116,7 +120,7 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, blockavg_files, ge
                                 
                 hrf_est_subj_weighted = xr.concat([hrf_est_subj_weighted, hrf_weighted / mse_t], dim='subj')
                 
-                groupaverage_weighted = groupaverage_weighted + hrf_weighted  / mse_t
+                groupaverage_weighted = groupaverage_weighted + hrf_weighted/mse_t 
                 sum_mse_inv = sum_mse_inv + 1 / mse_t
                 
                 hrf_est_tmp = hrf_est.expand_dims('subj')
@@ -138,8 +142,10 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, blockavg_files, ge
         # get the mean mse within subjects
         mse_mean_within_subject = 1 / sum_mse_inv
         
-        groupaverage_weighted = groupaverage_weighted / sum_mse_inv
+        # 1. est group average using within subject variance
+        groupaverage_weighted = groupaverage_weighted / sum_mse_inv 
 
+        # get the mean between subject variance
         mse_weighted_between_subjects_tmp = (hrf_est_subj - groupaverage_weighted)**2 / mse_subj
         mse_weighted_between_subjects = mse_weighted_between_subjects_tmp.mean('subj')
         mse_weighted_between_subjects = mse_weighted_between_subjects * mse_mean_within_subject # normalized by the within subject variances as weights
@@ -173,8 +179,11 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, blockavg_files, ge
             all_trial_hrf_est_subj = hrf_est_subj
             all_trial_hrf_weighted_subj = hrf_est_subj_weighted
             all_trial_mse_subj = mse_subj 
-
             all_trial_tstat = tstat 
+
+            all_trial_mse_weighted_betwn_subj = mse_weighted_between_subjects
+            all_trial_mse_mean_within_subj = mse_mean_within_subject
+            all_trial_mse_btw_within_sum_subj = mse_btw_within_sum_subj
             
         else:
 
@@ -186,30 +195,35 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, blockavg_files, ge
             all_trial_hrf_weighted_subj = xr.concat([all_trial_hrf_weighted_subj, hrf_est_subj_weighted], dim='trial_type')
             all_trial_mse_subj = xr.concat([all_trial_mse_subj, mse_subj], dim='trial_type')
             all_trial_tstat = xr.concat([all_trial_tstat, tstat], dim='trial_type')
-            
+
+            all_trial_mse_weighted_betwn_subj = xr.concat([all_trial_mse_weighted_betwn_subj, mse_weighted_between_subjects], dim='trial_type')
+            all_trial_mse_mean_within_subj = xr.concat([all_trial_mse_mean_within_subj, mse_mean_within_subject], dim='trial_type')
+            all_trial_mse_btw_within_sum_subj = xr.concat([all_trial_mse_btw_within_sum_subj, mse_btw_within_sum_subj], dim='trial_type')
     # DONE LOOP OVER TRIAL_TYPES
     
     
-    # !!! need to add funcs to a module or at the end of this script lawl
-    # !!! Do we want these plots still? Would need to also load in a rec ???  - or just load in saved geo2d and geo3d?
+   
     # Plot scalp plot of mean, tstat,rsme + Plot mse hist
-    #rec_test = cedalion.io.read_snirf("/projectnb/nphfnirs/ns/Shannon/Data/Interactive_Walking_HD/sub-01/nirs/sub-01_task-STS_run-01_nirs.snirf")
-    
+     # !!! need to add funcs to a module or at the end of this script 
+    # !!! Do we want these plots still? Would need to also load in a rec ???  - or just load in saved geo2d and geo3d?    
     # for idxt, trial_type in enumerate(all_trial_groupaverage_weighted.trial_type.values):         
     #     plot_mean_stderr(rec_test[0], 'amp', trial_type, cfg_dataset, cfg_hrf_est, groupaverage_weighted, 
     #                      all_trial_total_stderr, mse_mean_within_subject, mse_weighted_between_subjects, geo3d)
-        
     #     plot_mse_hist(rec_test[0], 'amp', trial_type, cfg_dataset, all_trial_mse_subj, cfg_mse['mse_val_for_bad_data'], cfg_mse['mse_min_thresh'])  # !!! not sure if these r working correctly tbh
     
-        
-
+    #FIXME: save between subject mse, mean within subject, total    
+    
     groupavg_results = {'group_average': all_trial_groupaverage,              # unweighted group avg 
                    'group_average_weighted': all_trial_groupaverage_weighted,   # weighted group aaverage
                    'total_stderr': all_trial_total_stderr,  # noise
                    'tstat' : all_trial_tstat,
-                   #'blockaverage_subj': all_trial_hrf_est_subj,  # always unweighted   - load into img recon
-                   #'blockaverage_mse_subj': all_trial_mse_subj, # - load into img recon
-                   #'blockaverage_weighted_subj': all_trial_hrf_weighted_subj,
+                   'blockaverage_subj': all_trial_hrf_est_subj,  # unweighted subj block average
+                   'blockaverage_mse_subj': all_trial_mse_subj, # within subject variance 
+                   'blockaverage_weighted_subj': all_trial_hrf_weighted_subj,  # weighted subj blockaverage
+                    
+                    'mse_weighted_btwn_subjs': all_trial_mse_weighted_betwn_subj, # between subject variance,
+                    'mse_mean_within_subj': all_trial_mse_mean_within_subj,  # mean within subject variance  1/sum_mse_inv
+                    'mse_btw_within_sum_subj': all_trial_mse_btw_within_sum_subj,  # within + between subject variance
                    'geo2d' : geo2d,
                    'geo3d' : geo3d
                }
@@ -220,9 +234,6 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, blockavg_files, ge
         
     print("Group average data saved successfully")
     
-           
-    
-
     
 
 

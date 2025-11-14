@@ -21,7 +21,7 @@ import pdb
 
 
 def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str): #, out_dqr, out_gvtd):
-    a=1
+
     # make sure save folder exists, if not, create it
     der_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'],'plots', 'DQR')
     os.makedirs(der_dir, exist_ok=True)
@@ -73,8 +73,8 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
             rec.geo3d,
             chs_pruned,
             ax[0][1],
-            min_dist = cfg_preprocess['prune']['sd_thresh'][0],
-            #max_dist = cfg_preprocess['prune']['sd_thresh'][1], 
+            min_dist = cfg_preprocess['prune']['sd_thresh_min'],
+            #max_dist = cfg_preprocess['prune']['sd_thresh_max'], 
             cmap=cmap, #'gist_rainbow',
             #norm=norm,
             vmin=0,
@@ -100,8 +100,8 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
             rec.geo3d,
             variance_vals_da.isel(wavelength=0),  # first wav
             ax1,
-            min_dist = cfg_preprocess['prune']['sd_thresh'][0],
-            #max_dist = cfg_preprocess['prune']['sd_thresh'][1], 
+            min_dist = cfg_preprocess['prune']['sd_thresh_min'],
+            #max_dist = cfg_preprocess['prune']['sd_thresh_max'], 
             cmap='jet',
             vmin=min_variance,
             vmax=max_variance,
@@ -124,8 +124,8 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
             rec.geo3d,
             variance_vals_da.isel(wavelength=1),  # 2nd wav
             ax1,
-            min_dist = cfg_preprocess['prune']['sd_thresh'][0],
-            #max_dist = cfg_preprocess['prune']['sd_thresh'][1], 
+            min_dist = cfg_preprocess['prune']['sd_thresh_min'],
+            #max_dist = cfg_preprocess['prune']['sd_thresh_max'], 
             cmap='jet',
             vmin=min_variance,
             vmax=max_variance,
@@ -150,8 +150,8 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
             rec.geo3d,
             snr.isel(wavelength=0),
             ax1,
-            min_dist = cfg_preprocess['prune']['sd_thresh'][0],
-            #max_dist = cfg_preprocess['prune']['sd_thresh'][1], 
+            min_dist = cfg_preprocess['prune']['sd_thresh_min'],
+            #max_dist = cfg_preprocess['prune']['sd_thresh_max'], 
             cmap='jet',
             vmin = 0,  #np.min(snr.isel(wavelength=0)),
             vmax = 25,  #np.max(snr.isel(wavelength=0)),
@@ -176,8 +176,8 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
             rec.geo3d,
             snr.isel(wavelength=1),
             ax1,
-            min_dist = cfg_preprocess['prune']['sd_thresh'][0],
-            #max_dist = cfg_preprocess['prune']['sd_thresh'][1], 
+            min_dist = cfg_preprocess['prune']['sd_thresh_min'],
+            #max_dist = cfg_preprocess['prune']['sd_thresh_max'], 
             cmap='jet',
             vmin = 0,  #np.min(snr.isel(wavelength=1)),
             vmax = 25,  #np.max(snr.isel(wavelength=1)),
@@ -456,6 +456,7 @@ def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
     srcModuleGroups = file_json['srcModuleGroups']
     dataSDWP_LowHigh = file_json['dataSDWP_LowHigh']
 
+    # NOTE: if you update channel coord to have less channels, this does not update SD here!!!
     SDj = file_json['SD']
     SD = SDj.copy()
     SD['DetPos2D'] = np.array(SDj['DetPos2D'])
@@ -565,7 +566,7 @@ def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
         coords={"channel": rec["amp"].channel},
     )
     plots.scalp_plot(
-            rec["conc_tddr"],
+            rec["conc"],
             rec.geo3d,
             power_level,
             ax[1,0],
@@ -588,7 +589,7 @@ def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
         coords={"channel": rec["amp"].channel},
     )
     plots.scalp_plot(
-            rec["conc_tddr"],
+            rec["conc"],
             rec.geo3d,
             power_level,
             ax[1,1],

@@ -14,12 +14,10 @@ preprocess:
     prune:
       enable: false  # false, does not update timeseries but does return mask. false=weighted group average  # FIXME: have enable mean enable (mask created or not) and then add another flag for controlling timeseries
       snr_thresh: 5
-      sd_thresh:
-        - "1 mm"
-        - "45 mm"  
-      amp_thresh:
-        - 1e-3
-        - 0.84
+      sd_thresh_min: "1 mm"
+      sd_thresh_max: "45 mm"  
+      amp_thresh_min: 1e-3
+      amp_thresh_max: 0.84
       perc_time_clean_thresh: 0.6  # for sci x psp mask
       sci_threshold: 0.6
       psp_threshold: 0.1

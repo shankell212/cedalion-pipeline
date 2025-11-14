@@ -22,16 +22,14 @@ import cedalion.geometry.registration as registration
 
 
 #%%
-# path2results = "/projectnb/nphfnirs/ns/Shannon/Data/Interactive_Walking_HD/derivatives/cedalion"
 # path2results = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/derivatives/Shannon/cedalion"
-#path2results = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion"
+path2results = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new"
 #path2results = "/projectnb/nphfnirs/s/users/shannon/Data/reg_test_data/ground_truth" #test_data/derivatives/cedalion"
-path2results = "/projectnb/nphfnirs/s/users/shannon/Data/reg_test_data/test_data/derivatives/cedalion"
+#path2results = "/projectnb/nphfnirs/s/users/shannon/Data/reg_test_data/test_data/derivatives/cedalion"
 
-task = "BS"
+task = "IWHD"
 
-# sub = "547"  # only for opening rec
-filname = "task-" + task + "_nirs_groupaverage_od_corrected.pkl"
+filname = "task-" + task + "_nirs_groupaverage_chanspace_conc.pkl"
 filepath_bl = os.path.join(os.path.join(path2results, "groupaverage/") , filname)
     
 
@@ -40,17 +38,13 @@ if os.path.exists(filepath_bl):
     with open(filepath_bl, 'rb') as f:
         groupavg_results = pickle.load(f)
         
-    groupaverage = groupavg_results['group_blockaverage_weighted']
-    groupaverage_unweighted = groupavg_results['group_blockaverage']
-    blockaverage_stderr = groupavg_results['total_stderr_blockaverage']
-    blockaverage_subj = groupavg_results['blockaverage_subj']
-    blockaverage_mse_subj = groupavg_results['blockaverage_mse_subj']
+    groupaverage = groupavg_results['group_average_weighted']
+    groupaverage_unweighted = groupavg_results['group_average']
+    blockaverage_stderr = groupavg_results['total_stderr']
+    tstat = groupavg_results['tstat']
     #geo2d = groupavg_results['geo2d']
     geo3d = groupavg_results['geo3d']
-    
-    # groupaverage_unweighted_orig = groupavg_results['group_blockaverage_orig']
-    # blockaverage_subj_orig = groupavg_results['blockaverage_subj_orig']
-    print("Blockaverage file loaded successfully!")
+    print("Group average file loaded successfully!")
 
 else:
     raise ValueError(f"Error: File '{filepath_bl}' not found!")
@@ -81,12 +75,11 @@ if 'wavelength' in groupaverage.dims:
     blockaverage_stderr.time.attrs['units'] = units.s
     blockaverage_stderr_conc = nirs.od2conc(blockaverage_stderr, geo3d, dpf, spectrum="prahl")
     blockaverage_stderr_conc = blockaverage_stderr_conc.rename({'time':'reltime'})
-    
-    tstat_conc = groupaverage_conc / blockaverage_stderr_conc
+else:
+    groupaverage_conc = groupaverage.copy()
    
 #%% Plot
 
-#tstat = blockaverage / blockaverage_stderr   # tstat = blockavg/ noise
 
 vPlotProbe.run_vis(blockaverage = groupaverage_conc, geo2d = geo2d, geo3d = geo3d)
 
