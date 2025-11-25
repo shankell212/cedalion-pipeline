@@ -22,15 +22,17 @@ import groupaverage as groupavg
 import importlib
 importlib.reload(groupavg)
 
-config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_STS_Q.yml"
+#config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_STS_Q.yml"
 #config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml" # CHANGE if testing
 #config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/regression_testing/config_BS_reg_test.yml" # CHANGE if testing
+config_path = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ/config_STS_Q.yml"
+
 
 with open(config_path, 'r') as file:
     config = yaml.safe_load(file)
 
 # CHANGE
-blockavg = True  # if true, group average done on blockavg, false, done on img recon
+blockavg = False  # if true, group average done on blockavg, false, done on img recon
 
 cfg_dataset = config['dataset']
 cfg_hrf = config['hrf_estimation']
@@ -50,7 +52,7 @@ else:
         #f"Xs_sub-{subj}_{task}"
         f"_cov_alpha_spatial_{config['image_recon']['alpha_spatial']}"
         + f"_alpha_meas_{config['image_recon']['alpha_meas']}"
-        + ("_direct" if config["image_recon"]["DIRECT"]["enable"] else "_indirect")
+        + (f"_recon_mode_{config['image_recon']['recon_mode']}")
         + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
@@ -81,7 +83,7 @@ else:
         f"Xs_groupavg_{task}"
         + f"_cov_alpha_spatial_{config['image_recon']['alpha_spatial']}"
         + f"_alpha_meas_{config['image_recon']['alpha_meas']}"
-        + ("_direct" if config["image_recon"]["DIRECT"]["enable"] else "_indirect")
+        + (f"_recon_mode_{config['image_recon']['recon_mode']}")
         + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")

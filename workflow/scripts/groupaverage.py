@@ -9,34 +9,25 @@ Created on Mon Jun  9 11:48:10 2025
 import os
 import cedalion
 import cedalion.nirs
-import cedalion.sigproc.quality as quality
-
-import cedalion.models.glm as glm
-import cedalion.plots as plots
-
 from cedalion.physunits import units
 import pint
 import numpy as np
 import xarray as xr
-
 import matplotlib.pyplot as p
-
-import yaml
 import gzip
 import pickle
 import json
-import pdb
 
 #%%
 
 
-def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, blockavg_files, geo_files, out):
+def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, file_names, geo_files, out):
     print("group averaging: \n")
-    print(blockavg_files)
+    print(file_names)
     
     cfg_mse = cfg_groupaverage['mse']
 
-    n_subjects = len(blockavg_files)     # !!! will wan to put this in a log ?
+    n_subjects = len(file_names)     # !!! will wan to put this in a log ?
     all_trial_groupaverage = None
 
     # Convert units in cfg
@@ -62,12 +53,20 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, blockavg_files, ge
         
         # Loop over subjects
         hrf_est_subj = None
-        for subj_idx, subj in enumerate(blockavg_files):
+ 
+        for subj_idx, subj in enumerate(file_names):
             # Load in hrf estimation & mse
+
             with gzip.open(subj, 'rb') as f:
                 results = pickle.load(f)
-            hrf_est = results['hrf_est']
-            mse_t = results['mse_t']      
+
+            if 'hrf' in file_names[0]:  # if hrf variable names are this
+                hrf_est = results['hrf_est']
+                mse_t = results['mse_t']      
+            else:
+                hrf_est = results['Xs']
+                mse_t = results['mse']
+
             if 'bad_indices' in results.keys():
                 bad_channels = results['bad_indices']    
 
@@ -462,7 +461,7 @@ def main():
     
     hrf_files = snakemake.input.hrf_subs  #.preproc_runs
     geo_files = snakemake.input.geo
-    #blockavg_files_nc = snakemake.input.blockavg_nc
+    #file_names_nc = snakemake.input.blockavg_nc
     #epoch_files_nc = snakemake.input.epochs_nc
     
     out = snakemake.output[0]

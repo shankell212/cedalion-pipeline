@@ -23,10 +23,10 @@ import image_recon as img_recon
 import importlib
 importlib.reload(img_recon)
 # 
-config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_IWHD_Q.yml"
+# config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_IWHD_Q.yml"
 # config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml"
 #config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/regression_testing/config_BS_reg_test.yml" # CHANGE if testing
-
+config_path = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ/config_STS_Q.yml"
 
 with open(config_path, 'r') as file:
     config = yaml.safe_load(file)
@@ -43,6 +43,7 @@ subjects = cfg_dataset['subject']
 # groupaverage_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "groupaverage")
 # groupaverage_path = os.path.join(groupaverage_dir, f"task-{task}_nirs_groupaverage.pkl")
         
+Adot_path = os.path.join(cfg_dataset['root_dir'], "derivatives", "cedalion", "probe", "fw", cfg_img_recon['head_model'], 'sensitivity.h5')
 hrf_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "hrf_estimate")  #, f"sub-{subj}")
 blockavg_files = [os.path.join(hrf_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_nirs_hrf_estimate_{cfg_hrf['rec_str']}.pkl.gz") for subj in subjects ]
 data_quality_files = [os.path.join(hrf_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_nirs_dataquality.json") for subj in subjects ]
@@ -61,7 +62,7 @@ for idx, subj in enumerate(subjects):
         f"Xs_sub-{subj}_{task}"
         + f"_cov_alpha_spatial_{config['image_recon']['alpha_spatial']}"
         + f"_alpha_meas_{config['image_recon']['alpha_meas']}"
-        + ("_direct" if config["image_recon"]["DIRECT"]["enable"] else "_indirect")
+        + (f"_recon_mode_{config['image_recon']['recon_mode']}")
         + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
@@ -72,7 +73,7 @@ for idx, subj in enumerate(subjects):
 #
     blockavg_file = blockavg_files[idx]
 
-    img_recon.img_recon_func(cfg_dataset, cfg_img_recon_loop, cfg_hrf, blockavg_file, out)
+    img_recon.img_recon_func(cfg_img_recon_loop, cfg_hrf, blockavg_file, Adot_path, out)
 
 
 

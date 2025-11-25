@@ -5,31 +5,14 @@
 import os
 import cedalion
 import cedalion.nirs
-import cedalion.xrutils as xrutils
-
-import xarray as xr
-import cedalion.plots as plots
-from cedalion import units
 import numpy as np
 
-import gzip
 import pickle
-import json
-
-import cedalion.dataclasses as cdc
-import cedalion.datasets
+import cedalion.dot as dot
 import cedalion.geometry.registration
 import cedalion.geometry.segmentation
-import cedalion.imagereco.forward_model as fw
-import cedalion.imagereco.tissue_properties
 import cedalion.io
-import cedalion.plots
-import cedalion.sigproc.quality as quality
-import cedalion.vis.plot_sensitivity_matrix
-from cedalion.physunits import units
-from cedalion.imagereco.solver import pseudo_inverse_stacked
-from cedalion.io.forward_model import FluenceFile, load_Adot
-from cedalion.plots import image_recon_multi_view
+from cedalion.vis.anatomy import image_recon_multi_view
 
 scc = 0 if os.getenv("HOSTNAME") is None else 1
 
@@ -39,8 +22,8 @@ if scc == 1:
     sys.path.append('/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/modules')
 else:
     sys.path.append('C://Users//shank//Documents//GitHub//cedalion-dab-funcs2//modules')
-import module_image_recon as img_recon 
-import module_spatial_basis_funs as sbf    #module_spatial_basis_funs_ced
+# import module_image_recon as img_recon 
+# import module_spatial_basis_funs as sbf    #module_spatial_basis_funs_ced
 
 # Turn off all warnings
 import warnings
@@ -51,18 +34,18 @@ warnings.filterwarnings('ignore')
 ROOT_DIR = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/" #"/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/" 
 #ROOT_DIR = "/projectnb/nphfnirs/s/users/shannon/Data/reg_test_data/test_data" 
 #ROOT_DIR = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/"
-DERIV_DIR = os.path.join(ROOT_DIR, 'derivatives', 'cedalion', 'new_inclQ_first_sit')
+DERIV_DIR = os.path.join(ROOT_DIR, 'derivatives', 'cedalion', 'new_inclQ_test_imgrecon')
 #DERIV_DIR = os.path.join(ROOT_DIR,'derivatives', 'Shannon', 'cedalion', 'test')
 
 
 probe_dir = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/probe/"
 #probe_dir = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/derivatives/Shannon/cedalion/probe/" 
     
-head_model = 'ICBM152'
+head_model = 'icbm152'
 snirf_name= 'fullhead_56x144_NN22_System1.snirf'
 
-task = "IWHD"   #'IWHD'
-flag_condition_list =["ST_Q", "DT_Q"] #['ST', 'DT'] #['right', 'left']
+task = "STS"   #'IWHD'
+flag_condition_list =["STS_Q"] #, "DT_Q"] #['ST', 'DT'] #['right', 'left']
 SAVE = True
 
 flag_hbo_list = [True, False] #, False]
@@ -77,19 +60,22 @@ flag_img_list = ['mag', 'tstat']#, 'noise'] #, 'noise'
 # folder_name = "Xs_groupavg_BS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB_mag.pkl"
 # folder_name = "Xs_groupavg_STS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB_mag.pkl"
 # folder_name = f"Xs_groupavg_{task}_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB_ts_20subs.pkl"
-folder_name = f"Xs_groupavg_{task}_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB_ts.pkl"
+folder_name = f"Xs_groupavg_{task}_cov_alpha_spatial_1e-3_alpha_meas_1e4_recon_mode_mua2conc_Cmeas_noSB_mag_15_25.pkl"
 
 
 #%% Load head model 
 
-import importlib
-importlib.reload(img_recon)
-
-head, PARCEL_DIR = img_recon.load_head_model(head_model, with_parcels=False)
-Adot, meas_list, geo3d, amp = img_recon.load_probe(probe_dir, snirf_name = snirf_name) #snirf_name = "fullhead_56x144_System2.snirf")   #snirf_name='fullhead_56x144_NN22_System1.snirf')
+head = dot.get_standard_headmodel(head_model)
+Adot = cedalion.io.forward_model.load_Adot(os.path.join(probe_dir, 'fw', head_model, 'sensitivity.h5'))
 
 ec = cedalion.nirs.get_extinction_coefficients('prahl', Adot.wavelength)
-einv = cedalion.xrutils.pinv(ec)
+
+
+# head, PARCEL_DIR = img_recon.load_head_model(head_model, with_parcels=False)
+# Adot, meas_list, geo3d, amp = img_recon.load_probe(probe_dir, snirf_name = snirf_name) #snirf_name = "fullhead_56x144_System2.snirf")   #snirf_name='fullhead_56x144_NN22_System1.snirf')
+
+# ec = cedalion.nirs.get_extinction_coefficients('prahl', Adot.wavelength)
+# einv = cedalion.xrutils.pinv(ec)
 
 
 #%% Open files
@@ -109,7 +95,11 @@ all_trial_X_tstat = results['tstat']
 
 
 #%% Only grab sensitive vertices
-sensitivity_mask = sbf.get_sensitivity_mask(Adot)
+intensity = np.log10(Adot[:,:,0].sum('channel'))
+mask = intensity > -2
+sensitivity_mask = mask.drop_vars('wavelength')
+
+# sensitivity_mask = sbf.get_sensitivity_mask(Adot)
 sensitive_vertices = np.where(sensitivity_mask)[0]
 Adot_sensitive = Adot.sel(vertex=sensitivity_mask)
 
@@ -188,11 +178,11 @@ for flag_hbo in flag_hbo_list:
                 scl = np.max(np.abs(arr)) if arr.size > 0 else 1.0
                 #clim = (-scl/2, scl/2)
                 if flag_img == 'mag':
-                    #clim = (-scl/2, scl/2)
-                    clim = (-5.7e-07, 5.7e-07)
+                    clim = (-scl/2, scl/2)
+                    #clim = (-5.7e-07, 5.7e-07)
                 else:
-                    #clim = (-scl, scl)
-                    clim = (-2.2e+01, 2.2e+01)
+                    clim = (-scl, scl)
+                    #clim = (-2.2e+01, 2.2e+01)
                 filename = f'IMG_{flag_condition}_{flag_img}_{hbx_brain_scalp}'
                 if SAVE:
                     save_dir_tmp_ful = os.path.join(save_dir_tmp, folder_name)

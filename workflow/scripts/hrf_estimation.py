@@ -12,22 +12,14 @@ Created on Thu Jun  5 09:40:42 2025
 import os
 import cedalion
 import cedalion.nirs
-import cedalion.sigproc.quality as quality
-
-import cedalion.models.glm as glm
-import cedalion.plots as plots
 
 import numpy as np
 import xarray as xr
 import pint
 from cedalion import units
-
-import matplotlib.pyplot as p
-import yaml
 import gzip
 import pickle
 import json
-import pdb
 
 import sys
 script_dir = os.path.dirname(os.path.abspath(__file__))

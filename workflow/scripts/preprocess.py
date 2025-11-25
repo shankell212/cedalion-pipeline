@@ -32,16 +32,12 @@ import os
 import cedalion
 import cedalion.nirs
 import cedalion.sigproc.quality as quality
-import cedalion.sigproc.frequency as frequency
 import cedalion.sigproc.motion_correct as motion_correct
-import cedalion.xrutils as xrutils
-import cedalion.models.glm as glm
 import xarray as xr
 import numpy as np
 import pandas as pd
 import pint
 from cedalion.physunits import units
-
 
 # import my own functions from a different directory
 import sys
@@ -53,7 +49,6 @@ sys.path.append(modules_path)
 import module_plot_DQR as plot_dqr
 import module_imu_glm_filter as imu_filt
 import module_preprocess as preproc
-import module_image_recon as img_recon 
 
 import pdb
 import yaml
@@ -111,9 +106,9 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             continue
        
         if step_name == "bs_preproc":   # !!! only for BS data 
-            
-            Adot, meas_list, geo3d, amp = img_recon.load_probe(params['probe_dir'], snirf_name=params['snirf_name_probe'])
-            #rec['amp'] = rec['amp'].sel(channel=Adot.channel)
+            recordings = cedalion.io.read_snirf(params['probe_dir'] + params['snirf_name_probe'])
+            rec = recordings[0]
+            meas_list = rec._measurement_lists['amp']
             chans = list(dict.fromkeys(meas_list.channel))  # select chans we care about from probe snirf meas list
             rec['amp'] = rec['amp'].sel(channel=chans) 
             
@@ -138,9 +133,9 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
         # if flag pruned channels is True, then do rest of preprocessing on pruned amp, if not then do preprocessing on unpruned data
         elif step_name == "int2od":
             if cfg_preprocess['steps']['prune']['enable']:
-                rec["od"] = cedalion.nirs.int2od(rec['amp_pruned'])                
+                rec["od"] = cedalion.nirs.cw.int2od(rec['amp_pruned'])                
             else:
-                rec["od"] = cedalion.nirs.int2od(rec['amp'])
+                rec["od"] = cedalion.nirs.cw.int2od(rec['amp'])
                 #del rec.timeseries['amp_pruned']   # delete pruned amp from time series
             
             rec["od_corrected"] = rec["od"]
@@ -229,7 +224,7 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
                 dims="wavelength",
                 coords={"wavelength": rec['amp'].wavelength},
             )
-            rec['conc'] = cedalion.nirs.od2conc(rec['od_corrected'], rec.geo3d, dpf, spectrum="prahl")
+            rec['conc'] = cedalion.nirs.cw.od2conc(rec['od_corrected'], rec.geo3d, dpf, spectrum="prahl")
         
         
         # Plot DQR

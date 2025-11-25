@@ -88,8 +88,7 @@ image_recon:   # need to create sensitivity matrix first. Not included here yet.
   mag:   
     enable: false  # perform image recon on magnitude of HRF averaged between time window (t_win)
     t_win: [5, 15]
-  DIRECT: 
-    enable: false  # true = direct, false = indirect
+  recon_mode: "mua2conc"
   Cmeas: 
     enable: true
   BRAIN_ONLY:      # reconstruct brain only OR scalp and brain
