@@ -16,7 +16,6 @@ import xarray as xr
 from cedalion.sigproc.quality import measurement_variance
 import cedalion.dot as dot
 import cedalion.io as io
-import numpy as np
 import gzip
 import pickle
 
@@ -29,7 +28,6 @@ sys.path.append(modules_path)
 #import module_spatial_basis_funs as sbf 
 import pyvista as pv
 pv.OFF_SCREEN = True
-import pandas as pd
 
 # Turn off all warnings
 import warnings
@@ -38,7 +36,7 @@ warnings.filterwarnings('ignore')
 
 #%%
 
-def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out):
+def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[]):
 
     # Convert str vals to units from config
     cfg_mse = cfg_img_recon['mse']
@@ -62,11 +60,7 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out):
         
     #%% Load head model and sensitivity matrix
 
-    #head, PARCEL_DIR = img_recon.load_head_model(cfg_img_recon['head_model'], with_parcels=False)
-    #Adot, meas_list, geo3d, amp = img_recon.load_probe(cfg_img_recon['probe_dir'], snirf_name=cfg_img_recon['snirf_name_probe'])
-
     head = dot.get_standard_headmodel(cfg_img_recon['head_model'])
-    #Adot = io.forward_model.load_Adot(os.path.join(cfg_img_recon['probe_dir'], 'fw', cfg_img_recon['head_model'], 'Adot.nc'))
     Adot = io.forward_model.load_Adot(Adot_path)
 
     ec = cedalion.nirs.get_extinction_coefficients(cfg_img_recon['spectrum'], Adot.wavelength)
@@ -165,20 +159,12 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out):
         C_meas = C_meas.stack(measurement=('channel', 'wavelength')).sortby('wavelength') #NOTE: do we need to do this anymore? check shape of c_meas from output func
         
         # save G in derivatives/cedalion/forward_model  -> for brain and scalp separately and sigma
-        # save in derivatives sub dirs -> make symbolic link to another folder. and then create those folders in optional deriv folder. 
        
-        if cfg_sb['enable']:
-            head_ras = head.apply_transform(head.t_ijk2ras)
-
-            sbf = dot.GaussianSpatialBasisFunctions(
-                head_ras,
-                Adot,
-                mask_threshold = cfg_sb['mask_threshold'],
-                threshold_brain = cfg_sb['threshold_brain'],
-                threshold_scalp = cfg_sb['threshold_scalp'],
-                sigma_brain = cfg_sb['sigma_brain'],
-                sigma_scalp = cfg_sb['sigma_scalp'],
-                )
+        if cfg_sb['enable'] and SB:  # do I need both
+            #fil_path, after = Adot_path.split("fw", 1)
+            print('Performing image recon with SB')
+            with gzip.open(SB, 'rb') as f:
+                sbf = pickle.load(f)
 
             recon = dot.ImageRecon(
                     Adot,
@@ -190,6 +176,7 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out):
                     spatial_basis_functions = sbf,
                 )
         else:
+             print('Performing image recon without SB')
              recon = dot.ImageRecon(
                     Adot,
                     recon_mode=cfg_img_recon['recon_mode'],
@@ -205,6 +192,7 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out):
         else:
              Xs = recon.reconstruct(od_ts_mag)
         
+        #NOTE: how to handle noise computation when not using Cmeas?
         X_mse = recon.get_image_noise(C_meas) # get image noise
                 
         # concatenate trial 
@@ -384,10 +372,11 @@ def main():
     
     hrf_data = snakemake.input.hrf_data
     Adot_path = snakemake.input.Adot
+    SB_path = snakemake.input.SB
     
     out = snakemake.output[0]
     
-    img_recon_func(cfg_img_recon, cfg_hrf, hrf_data, Adot_path, out)
+    img_recon_func(cfg_img_recon, cfg_hrf, hrf_data, Adot_path, out, SB_path)
     
             
 if __name__ == "__main__":

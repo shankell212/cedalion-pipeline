@@ -34,11 +34,11 @@ warnings.filterwarnings('ignore')
 ROOT_DIR = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/" #"/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/" 
 #ROOT_DIR = "/projectnb/nphfnirs/s/users/shannon/Data/reg_test_data/test_data" 
 #ROOT_DIR = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/"
-DERIV_DIR = os.path.join(ROOT_DIR, 'derivatives', 'cedalion', 'new_inclQ_test_imgrecon')
+DERIV_DIR = os.path.join(ROOT_DIR, 'derivatives', 'cedalion', 'new_inclQ_test_imgrecon_SB')
 #DERIV_DIR = os.path.join(ROOT_DIR,'derivatives', 'Shannon', 'cedalion', 'test')
 
 
-probe_dir = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/probe/"
+probe_dir = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/forward/shannon/"
 #probe_dir = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/derivatives/Shannon/cedalion/probe/" 
     
 head_model = 'icbm152'
@@ -60,13 +60,14 @@ flag_img_list = ['mag', 'tstat']#, 'noise'] #, 'noise'
 # folder_name = "Xs_groupavg_BS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB_mag.pkl"
 # folder_name = "Xs_groupavg_STS_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB_mag.pkl"
 # folder_name = f"Xs_groupavg_{task}_cov_alpha_spatial_1e-3_alpha_meas_1e4_indirect_Cmeas_noSB_ts_20subs.pkl"
-folder_name = f"Xs_groupavg_{task}_cov_alpha_spatial_1e-3_alpha_meas_1e4_recon_mode_mua2conc_Cmeas_noSB_mag_15_25.pkl"
+folder_name = f"Xs_groupavg_{task}_cov_alpha_spatial_1e-2_alpha_meas_1e4_recon_mode_mua2conc_Cmeas_SB_mag.pkl"
 
 
 #%% Load head model 
 
 head = dot.get_standard_headmodel(head_model)
-Adot = cedalion.io.forward_model.load_Adot(os.path.join(probe_dir, 'fw', head_model, 'sensitivity.h5'))
+#Adot = cedalion.io.forward_model.load_Adot(os.path.join(probe_dir, 'fw', head_model, 'sensitivity.h5'))
+Adot = cedalion.io.forward_model.load_Adot(os.path.join(probe_dir, 'fw', 'probe', 'sensitivity.nc'))
 
 ec = cedalion.nirs.get_extinction_coefficients('prahl', Adot.wavelength)
 
