@@ -24,7 +24,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.join(script_dir, 'modules')
 sys.path.append(modules_path)
 
-#import module_image_recon as img_recon 
+import module_image_recon as img_recon 
 #import module_spatial_basis_funs as sbf 
 import pyvista as pv
 pv.OFF_SCREEN = True
@@ -56,6 +56,9 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[]):
         cfg_img_recon["alpha_meas"] = float(cfg_img_recon["alpha_meas"])
     if isinstance(cfg_img_recon["alpha_spatial"], str):
         cfg_img_recon["alpha_spatial"] = float(cfg_img_recon["alpha_spatial"])
+
+    if isinstance(cfg_img_recon["lambda_spatial_depth"], str):
+            cfg_img_recon["lambda_spatial_depth"] = float(eval(cfg_img_recon["lambda_spatial_depth"]))
     
         
     #%% Load head model and sensitivity matrix
@@ -156,9 +159,9 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[]):
         C_meas = od_mse_mag.pint.dequantify()
         #C_meas = np.diag(C_meas)
 
-        C_meas = C_meas.stack(measurement=('channel', 'wavelength')).sortby('wavelength') #NOTE: do we need to do this anymore? check shape of c_meas from output func
+        #C_meas = C_meas.stack(measurement=('channel', 'wavelength')).sortby('wavelength') #NOTE: do we need to do this anymore? check shape of c_meas from output func
         
-        # save G in derivatives/cedalion/forward_model  -> for brain and scalp separately and sigma
+        # save G (spatial basis) in derivatives/cedalion/forward_model  -> for brain and scalp separately and sigma
        
         if cfg_sb['enable'] and SB:  # do I need both
             #fil_path, after = Adot_path.split("fw", 1)
@@ -176,10 +179,11 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[]):
                     spatial_basis_functions = sbf,
                 )
         else:
+             sbf = None
              print('Performing image recon without SB')
              recon = dot.ImageRecon(
                     Adot,
-                    recon_mode=cfg_img_recon['recon_mode'],
+                    recon_mode=cfg_img_recon['recon_mode'],  # conc is direct, mua2conc is indirect
                     brain_only = cfg_img_recon['BRAIN_ONLY']['enable'],
                     alpha_meas = cfg_img_recon['alpha_meas'],
                     alpha_spatial = cfg_img_recon['alpha_spatial'],
@@ -192,9 +196,18 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[]):
         else:
              Xs = recon.reconstruct(od_ts_mag)
         
-        #NOTE: how to handle noise computation when not using Cmeas?
-        X_mse = recon.get_image_noise(C_meas) # get image noise
-                
+        
+        #X_mse = recon.get_image_noise(C_meas) # get image noise   #NOTE: how to handle noise computation in pipeline workflow when not using Cmeas?
+        if cfg_img_recon['recon_mode']=='conc':
+             DIRECT = True
+        elif cfg_img_recon['recon_mode'] == 'mua2conc':
+             DIRECT = False
+            
+        X_mse = img_recon.get_image_noise_posterior(Adot, C_meas, alpha_meas = cfg_img_recon['alpha_meas'], 
+                                                    alpha_spatial_depth = cfg_img_recon['alpha_meas'], 
+                                                lambda_spatial_depth =  cfg_img_recon['lambda_spatial_depth'], 
+                                                DIRECT=DIRECT, SB=cfg_img_recon['spatial_basis']['enable'], G=sbf)       
+
         # concatenate trial 
         Xs = Xs.assign_coords(trial_type=trial_type) # add trial type name as a coordinate
         X_mse = X_mse.assign_coords(trial_type=trial_type)
@@ -207,7 +220,7 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[]):
             all_trial_X_mse = xr.concat([all_trial_X_mse, X_mse], dim='trial_type')
 
     # IF loading in time series, save in parcel space instead of vertex for smaller file size
-    if mse_t is not None: # if hrf data loaded in
+    if mse_t is None: # if time series data loaded in
          Xs_parcel_weighted = (
                     (all_trial_Xs / all_trial_X_mse)            # numerator weights: X * (1/var)
                     .groupby("parcel")
@@ -373,6 +386,8 @@ def main():
     hrf_data = snakemake.input.hrf_data
     Adot_path = snakemake.input.Adot
     SB_path = snakemake.input.SB
+
+    Adot_path = str(Adot_path) if not isinstance(Adot_path, str) else Adot_path
     
     out = snakemake.output[0]
     

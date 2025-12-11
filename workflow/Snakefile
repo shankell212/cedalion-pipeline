@@ -2,7 +2,7 @@
 from snakemake.io import glob_wildcards
 from os.path import join
 
-configfile: "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_test_imgrecon_noCmeas/config_STS_Q.yml" # have snakemake copy this file into derivatives folder
+configfile: "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_test_imgrecon_newnoise/config_STS_Q.yml" # have snakemake copy this file into derivatives folder
 #configfile: "scripts/testing/config_test_BS.yaml"
 #configfile: "scripts/testing/regression_testing/config_BS_reg_test.yml"
 
