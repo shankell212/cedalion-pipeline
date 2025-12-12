@@ -12,7 +12,7 @@ import cedalion.nirs
 import cedalion.sigproc.quality as quality
 
 import cedalion.models.glm as glm
-import cedalion.plots as plots
+from cedalion.vis.anatomy import scalp_plot
 
 from cedalion.physunits import units
 import pint
@@ -271,7 +271,7 @@ def plot_mean_stderr(rec, rec_str, trial_type, cfg_dataset, cfg_blockavg, groupa
         else:
             foo_da_tmp = foo_da.isel(wavelength=i_wav_chromo)
         max_val = np.nanmax(np.abs(foo_da_tmp.values))
-        plots.scalp_plot(
+        scalp_plot(
                 rec[rec_str],
                 geo3d,
                 foo_da_tmp,
@@ -298,7 +298,7 @@ def plot_mean_stderr(rec, rec_str, trial_type, cfg_dataset, cfg_blockavg, groupa
         else:
             foo_da_tmp = foo_da.isel(wavelength=i_wav_chromo)
         max_val = np.nanmax(np.abs(foo_da_tmp.values))
-        plots.scalp_plot(
+        scalp_plot(
                 rec[rec_str],
                 geo3d,
                 foo_da_tmp,
@@ -327,7 +327,7 @@ def plot_mean_stderr(rec, rec_str, trial_type, cfg_dataset, cfg_blockavg, groupa
         foo_da_tmp = np.log10(foo_da_tmp)
         max_val = np.nanmax(foo_da_tmp.values)
         min_val = np.nanmin(foo_da_tmp.values)
-        plots.scalp_plot(
+        scalp_plot(
                 rec[rec_str],
                 geo3d,
                 foo_da_tmp,
@@ -356,7 +356,7 @@ def plot_mean_stderr(rec, rec_str, trial_type, cfg_dataset, cfg_blockavg, groupa
         foo_da_tmp = np.log10(foo_da_tmp)
         max_val = np.nanmax(foo_da_tmp.values)
         min_val = np.nanmin(foo_da_tmp.values)
-        plots.scalp_plot(
+        scalp_plot(
                 rec[rec_str],
                 geo3d,
                 foo_da_tmp,

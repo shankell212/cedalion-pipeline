@@ -6,21 +6,16 @@ Created on Fri Jun 13 07:17:55 2025
 @author: smkelley
 """
 
-
 import os
 import cedalion
 import cedalion.nirs
-import cedalion.xrutils as xrutils
 
 from cedalion.physunits import units
 import xarray as xr
-import cedalion.plots as plots
-import numpy as np
-
+import cedalion.dot as dot
 import gzip
 import pickle
 import json
-import pdb
 
 import sys
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -61,11 +56,17 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
         cfg_img_recon["alpha_meas"] = float(cfg_img_recon["alpha_meas"])
     if isinstance(cfg_img_recon["alpha_spatial"], str):
         cfg_img_recon["alpha_spatial"] = float(cfg_img_recon["alpha_spatial"])
-    
+
+    if 'lambda_spatial_depth' in cfg_img_recon:
+        if isinstance(cfg_img_recon["lambda_spatial_depth"], str):
+            cfg_img_recon["lambda_spatial_depth"] = float(eval(cfg_img_recon["lambda_spatial_depth"]))
+        
         
     #%% Load head model 
-    head, PARCEL_DIR = img_recon.load_head_model(cfg_img_recon['head_model'], with_parcels=False)
-    Adot, meas_list, geo3d, amp = img_recon.load_probe(cfg_img_recon['probe_dir'], snirf_name=cfg_img_recon['snirf_name_probe'])
+    head = dot.get_standard_headmodel(cfg_img_recon['head_model'])
+    #Adot = io.forward_model.load_Adot(Adot_path)
+    #head, PARCEL_DIR = img_recon.load_head_model(cfg_img_recon['head_model'], with_parcels=False)
+    Adot, meas_list, geo3d, amp = img_recon.load_probe(cfg_img_recon['probe_dir'], head_model= cfg_img_recon['head_model'], snirf_name=cfg_img_recon['snirf_name_probe'])
     
     ec = cedalion.nirs.get_extinction_coefficients(cfg_img_recon['spectrum'], Adot.wavelength)
     einv = cedalion.xrutils.pinv(ec)
@@ -112,7 +113,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
                     dims="wavelength",
                     coords={"wavelength": amp.wavelength},
                     )
-            od_hrf =  cedalion.nirs.conc2od(hrf, geo3d, dpf)
+            od_hrf =  cedalion.nirs.cw.conc2od(hrf, geo3d, dpf)
             od_mse = xr.dot(ec**2, mse, dim =['chromo']) * 1 * units.mm**2
 
         else:
@@ -130,16 +131,17 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
         if cfg_img_recon['mag']['enable']:
             if 'reltime' in od_hrf.dims:
                 od_hrf_mag = od_hrf.sel(reltime=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('reltime')
-                od_mse_mag = od_mse.sel(reltime=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('reltime')
+                #od_mse_mag = od_mse.sel(reltime=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('reltime')
             else:
                 od_hrf_mag = od_hrf.sel(time=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('time')
-                od_mse_mag = od_mse.sel(time=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('time')
+                #od_mse_mag = od_mse.sel(time=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('time')
         else:
             od_hrf_mag = od_hrf.copy()
-            if 'reltime' in od_hrf.dims:
-                od_mse_mag = od_mse.mean('reltime')
-            else:
-                 od_mse_mag = od_mse.mean('time')
+            
+        if 'reltime' in od_hrf.dims:
+            od_mse_mag = od_mse.mean('reltime')
+        else:
+                od_mse_mag = od_mse.mean('time')
 
         C_meas = od_mse_mag.pint.dequantify()
         C_meas = C_meas.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
@@ -152,16 +154,19 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
                                                             DIRECT = cfg_img_recon['DIRECT']['enable'], SB = cfg_sb['enable'], 
                                                     cfg_sbf = cfg_sb, alpha_spatial = cfg_img_recon['alpha_spatial'], 
                                                     alpha_meas = cfg_img_recon['alpha_meas'],F = F, D = D, G = G)
-        # save od_mse time series 
-        if cfg_img_recon['mag']['enable']:
-            X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag, W, DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
-        else:
-             if 'reltime' in od_hrf.dims:
-                X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag.isel(reltime=0).squeeze(), W, DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
-             else:
-                X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag.isel(time=0).squeeze(), W, DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
-
-                
+        # # save od_mse time series 
+        # if cfg_img_recon['mag']['enable']:
+        #     X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag, W, DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
+        # else:
+        #      if 'reltime' in od_hrf.dims:
+        #         X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag.isel(reltime=0).squeeze(), W, DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
+        #      else:
+        #         X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag.isel(time=0).squeeze(), W, DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
+            
+        X_mse = img_recon.get_image_noise_posterior(Adot, C_meas, alpha_meas=cfg_img_recon['alpha_meas'], alpha_spatial_depth=cfg_img_recon['alpha_spatial'], 
+                                lambda_spatial_depth=cfg_img_recon['lambda_spatial_depth'],
+                                DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
+        
         # concatenate trial 
         X_hrf_mag = X_hrf_mag.assign_coords(trial_type=trial_type) # add trial type name as a coordinate
         X_mse = X_mse.assign_coords(trial_type=trial_type)

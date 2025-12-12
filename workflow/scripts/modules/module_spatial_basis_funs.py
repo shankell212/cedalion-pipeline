@@ -8,21 +8,11 @@ Created on Wed Oct  9 13:04:39 2024
 
 import numpy as np 
 import xarray as xr
-import pandas as pd
-import scipy.sparse
 from scipy.spatial import KDTree
-import trimesh
 
 import cedalion
-import cedalion.dataclasses as cdc
-import cedalion.imagereco.forward_model as cfm
-from cedalion.geometry.registration import register_trans_rot_isoscale
-import cedalion.typing as cdt
-import cedalion.xrutils as xrutils
-from cedalion.geometry.segmentation import surface_from_segmentation
-from cedalion.imagereco.utils import map_segmentation_mask_to_surface
-
-from cedalion.imagereco.tissue_properties import get_tissue_properties
+import cedalion.dot.forward_model as cfm
+# from cedalion.imagereco.utils import map_segmentation_mask_to_surface
 from tqdm import tqdm 
 
 #%% GETTING THE SPATIAL BASIS 

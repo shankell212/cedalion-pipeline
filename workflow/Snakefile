@@ -1,10 +1,9 @@
 # Snakefile
 from snakemake.io import glob_wildcards
 
-configfile: "config/config_STS_Q.yml"
+configfile: "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ/config_STS_Q.yml"
 #configfile: "scripts/testing/config_test_BS.yaml"
 #configfile: "scripts/testing/regression_testing/config_BS_reg_test.yml"
-
 
 ROOT = config['dataset']["root_dir"]
 DERIV = config['dataset']["derivatives_subfolder"]

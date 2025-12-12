@@ -138,9 +138,9 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
         # if flag pruned channels is True, then do rest of preprocessing on pruned amp, if not then do preprocessing on unpruned data
         elif step_name == "int2od":
             if cfg_preprocess['steps']['prune']['enable']:
-                rec["od"] = cedalion.nirs.int2od(rec['amp_pruned'])                
+                rec["od"] = cedalion.nirs.cw.int2od(rec['amp_pruned'])                
             else:
-                rec["od"] = cedalion.nirs.int2od(rec['amp'])
+                rec["od"] = cedalion.nirs.cw.int2od(rec['amp'])
                 #del rec.timeseries['amp_pruned']   # delete pruned amp from time series
             
             rec["od_corrected"] = rec["od"]
@@ -229,7 +229,7 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
                 dims="wavelength",
                 coords={"wavelength": rec['amp'].wavelength},
             )
-            rec['conc'] = cedalion.nirs.od2conc(rec['od_corrected'], rec.geo3d, dpf, spectrum="prahl")
+            rec['conc'] = cedalion.nirs.cw.od2conc(rec['od_corrected'], rec.geo3d, dpf, spectrum="prahl")
         
         
         # Plot DQR

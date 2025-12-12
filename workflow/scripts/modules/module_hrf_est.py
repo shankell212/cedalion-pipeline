@@ -2,25 +2,18 @@
 # functions to perform GLM
 
 #%% Imports
-import os
 import cedalion
 import cedalion.nirs
-import cedalion.sigproc.quality as quality
 import cedalion.sigproc.frequency as frequency
-import cedalion.sigproc.motion_correct as motion_correct
-import cedalion.xrutils as xrutils
 import cedalion.models.glm as glm
-import cedalion.datasets as datasets
 import xarray as xr
 import matplotlib.pyplot as p
-import cedalion.plots as plots
 from cedalion import units
 import numpy as np
 import pandas as pd
 from functools import reduce
 import operator
 
-import json
 
 #%% Functions
 
