@@ -141,7 +141,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
         if 'reltime' in od_hrf.dims:
             od_mse_mag = od_mse.mean('reltime')
         else:
-                od_mse_mag = od_mse.mean('time')
+            od_mse_mag = od_mse.mean('time')
 
         C_meas = od_mse_mag.pint.dequantify()
         C_meas = C_meas.stack(measurement=('channel', 'wavelength')).sortby('wavelength')

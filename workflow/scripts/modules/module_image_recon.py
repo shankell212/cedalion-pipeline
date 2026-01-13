@@ -13,7 +13,7 @@ import module_spatial_basis_funs as sbf
 
 #%% DATA LOADING
 
-def load_head_model(head_model='ICBM152', with_parcels=True):
+def load_head_model(head_model='icbm152', with_parcels=True):
     
     if head_model == 'icbm152':
         SEG_DATADIR, mask_files, landmarks_file = datasets.get_icbm152_segmentation()
@@ -50,7 +50,7 @@ def load_head_model(head_model='ICBM152', with_parcels=True):
     return head, PARCEL_DIR
 
 
-def load_probe(probe_path, snirf_name ='fullhead_56x144_System2.snirf', head_model='ICBM152'):
+def load_probe(probe_path, snirf_name ='fullhead_56x144_NN22_System1.snirf', head_model='icbm152'):
     # pdb.set_trace()
     # with open(os.path.join(probe_path, 'fw',  head_model, 'Adot.pkl'), 'rb') as f:
     #     Adot = pickle.load(f)

@@ -17,20 +17,22 @@ import matplotlib.pyplot as plt
 # import cedalion
 import xarray as xr
 from cedalion import io, nirs, units
-import cedalion.vis.plot_probe as vPlotProbe
+from cedalion.vis.misc import plot_probe_gui 
 import cedalion.geometry.registration as registration
 
 
 #%%
 # path2results = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/derivatives/Shannon/cedalion"
-path2results = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new"
+root_dir = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/"
 #path2results = "/projectnb/nphfnirs/s/users/shannon/Data/reg_test_data/ground_truth" #test_data/derivatives/cedalion"
 #path2results = "/projectnb/nphfnirs/s/users/shannon/Data/reg_test_data/test_data/derivatives/cedalion"
+
+deriv_dir = os.path.join(root_dir, "derivatives", "cedalion",  "new_inclQ_2_newnoise") #"new_inclQ_test") # CHANGE
 
 task = "IWHD"
 
 filname = "task-" + task + "_nirs_groupaverage_chanspace_conc.pkl"
-filepath_bl = os.path.join(os.path.join(path2results, "groupaverage/") , filname)
+filepath_bl = os.path.join(os.path.join(deriv_dir, "groupaverage/") , filname)
     
 
 
@@ -81,6 +83,6 @@ else:
 #%% Plot
 
 
-vPlotProbe.run_vis(blockaverage = groupaverage_conc, geo2d = geo2d, geo3d = geo3d)
+plot_probe_gui.run_vis(blockaverage = groupaverage_conc, geo2d = geo2d, geo3d = geo3d)
 
 
