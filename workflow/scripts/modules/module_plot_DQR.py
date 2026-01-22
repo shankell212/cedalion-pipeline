@@ -36,12 +36,12 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
     ax[0][0].set_xlabel("time / s")
     ax[0][0].set_title(f"{filenm}")
     thresh = quality._get_gvtd_threshold(rec.aux_ts['gvtd'], 'histogram_mode', n_std = 10)
-    ax[0][0].axhline(thresh.values, color='b', linestyle='--', label=f'Thresh {thresh:.1e}')
+    ax[0][0].axhline(thresh.pint.dequantify().values, color='b', linestyle='--', label=f'Thresh {thresh:.1e}')
     if 'gvtd_corrected' in rec.aux_ts.keys():
         thresh_corrected = quality._get_gvtd_threshold(rec.aux_ts['gvtd_corrected'], 'histogram_mode', n_std = 10)
-        ax[0][0].axhline(thresh_corrected.values, color='#ff4500', linestyle='--', label=f'Thresh {thresh_corrected:.1e}')
+        ax[0][0].axhline(thresh_corrected.pint.dequantify().values, color='#ff4500', linestyle='--', label=f'Thresh {thresh_corrected:.1e}')
     ax[0][0].legend()
-    ax[0][0].set_ylim(0, 3*thresh)
+    ax[0][0].set_ylim(0, 3*thresh.pint.dequantify())
 
     stim = rec.stim.copy()
     if stim_lst_str is not None:
@@ -88,7 +88,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
     # Plot variance of OD along time axis for wavelength 1 (post corrected) 
     #
     ax1 = ax[1][0]
-    variance_vals = np.log10( rec['od_corrected'].values.var(axis=2))
+    variance_vals = np.log10( rec['od_corrected'].pint.dequantify().values.var(axis=2))
     variance_vals_da = xr.DataArray(variance_vals, dims=["channel", "wavelength"], coords={"channel": rec["od"].channel, "wavelength": rec["od"].wavelength})
     max_variance = np.nanmax(variance_vals)
     min_variance = np.nanmin(variance_vals)
@@ -112,7 +112,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
     # Plot variance of OD along time axis for wavelength 2 (post correction) 
     #
     ax1 = ax[1][1]
-    variance_vals = np.log10( rec['od_corrected'].values.var(axis=2))
+    variance_vals = np.log10( rec['od_corrected'].pint.dequantify().values.var(axis=2))
     variance_vals_da = xr.DataArray(variance_vals, dims=["channel", "wavelength"], coords={"channel": rec["od"].channel, "wavelength": rec["od"].wavelength})
     max_variance = np.nanmax(variance_vals)
     min_variance = np.nanmin(variance_vals)
@@ -263,18 +263,18 @@ def make_gvtd_hist_compare_corrected(gvtd_time_trace_1, gvtd_time_trace_2, plot_
 
     # Calculate bin size if not provided
     min_counts_each_bin = 5
-    n_bins_1 = round(len(gvtd_time_trace_1) / min_counts_each_bin)
-    bin_size_1 = np.max(gvtd_time_trace_1) / n_bins_1
+    n_bins_1 = round(len(gvtd_time_trace_1.pint.dequantify().values) / min_counts_each_bin)
+    bin_size_1 = np.max(gvtd_time_trace_1.pint.dequantify().values) / n_bins_1
     
-    n_bins_2 = round(len(gvtd_time_trace_2) / min_counts_each_bin)
-    bin_size_2 = np.max(gvtd_time_trace_2) / n_bins_2
+    n_bins_2 = round(len(gvtd_time_trace_2.pint.dequantify().values) / min_counts_each_bin)
+    bin_size_2 = np.max(gvtd_time_trace_2.pint.dequantify().values) / n_bins_2
 
     f, ax = p.subplots(1, 2, figsize=(11, 5))
 
     # B4 correction
     # Create the histogram
-    bins_1 = np.arange(0, np.max(gvtd_time_trace_1) + bin_size_1, bin_size_1)
-    ax[0].hist(gvtd_time_trace_1, bins=bins_1, edgecolor='black', alpha=0.75)
+    bins_1 = np.arange(0, np.max(gvtd_time_trace_1.pint.dequantify().values) + bin_size_1, bin_size_1)
+    ax[0].hist(gvtd_time_trace_1.pint.dequantify().values, bins=bins_1, edgecolor='black', alpha=0.75)
     ax[0].set_title('GVTD Histogram')
     ax[0].set_xlabel('GVTD')
     ax[0].set_ylabel('Counts')
@@ -285,14 +285,14 @@ def make_gvtd_hist_compare_corrected(gvtd_time_trace_1, gvtd_time_trace_2, plot_
         threshold_1 = quality._get_gvtd_threshold(gvtd_time_trace_1, stat_type, n_std)
 
         # Plot the threshold line
-        ax[0].axvline(threshold_1.values, color='red', linestyle='--', label=f'Threshold: {threshold_1:.4f}')
+        ax[0].axvline(threshold_1.pint.dequantify().values, color='red', linestyle='--', label=f'Threshold: {threshold_1.pint.dequantify().values:.4f}')
         ax[0].legend()
         
         
     # After correction
     # Create the histogram
-    bins_2 = np.arange(0, np.max(gvtd_time_trace_2) + bin_size_2, bin_size_2)
-    ax[1].hist(gvtd_time_trace_2, bins=bins_2, edgecolor='black', alpha=0.75)
+    bins_2 = np.arange(0, np.max(gvtd_time_trace_2.pint.dequantify().values) + bin_size_2, bin_size_2)
+    ax[1].hist(gvtd_time_trace_2.pint.dequantify().values, bins=bins_2, edgecolor='black', alpha=0.75)
     ax[1].set_title('GVTD Histogram - corrected')
     ax[1].set_xlabel('GVTD')
     ax[1].set_ylabel('Counts')
@@ -303,7 +303,7 @@ def make_gvtd_hist_compare_corrected(gvtd_time_trace_1, gvtd_time_trace_2, plot_
         threshold_2 = quality._get_gvtd_threshold(gvtd_time_trace_2, stat_type, n_std)
 
         # Plot the threshold line
-        ax[1].axvline(threshold_2.values, color='red', linestyle='--', label=f'Threshold: {threshold_2:.4f}')
+        ax[1].axvline(threshold_2.pint.dequantify().values, color='red', linestyle='--', label=f'Threshold: {threshold_2.pint.dequantify().values:.4f}')
         ax[1].legend()
 
     return threshold_1, threshold_2
