@@ -8,7 +8,7 @@ import cedalion.nirs
 import cedalion.xrutils as xrutils
 
 import xarray as xr
-import cedalion.plots as plots
+import cedalion.vis as plots
 from cedalion import units
 import numpy as np
 
@@ -17,17 +17,17 @@ import pickle
 import json
 
 import cedalion.dataclasses as cdc
-import cedalion.datasets
+import cedalion.data
 import cedalion.geometry.registration
 import cedalion.geometry.segmentation
-import cedalion.imagereco.forward_model as fw
-import cedalion.imagereco.tissue_properties
+import cedalion.dot.forward_model as fw
+import cedalion.dot.tissue_properties
 import cedalion.io
-import cedalion.plots
+import cedalion.vis
 import cedalion.sigproc.quality as quality
 import cedalion.vis.plot_sensitivity_matrix
 from cedalion.physunits import units
-from cedalion.imagereco.solver import pseudo_inverse_stacked
+# from cedalion.dot.solver import pseudo_inverse_stacked  # Not available in current cedalion
 from cedalion.io.forward_model import FluenceFile, load_Adot
 from cedalion.plots import image_recon_multi_view
 
@@ -224,3 +224,6 @@ for flag_hbo in flag_hbo_list:
 
 #
 # %%
+
+
+

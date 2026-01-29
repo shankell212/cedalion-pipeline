@@ -14,7 +14,7 @@ import cedalion.xrutils as xrutils
 
 from cedalion.physunits import units
 import xarray as xr
-import cedalion.plots as plots
+import cedalion.vis as plots
 import numpy as np
 
 import gzip
@@ -112,7 +112,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
                     dims="wavelength",
                     coords={"wavelength": amp.wavelength},
                     )
-            od_hrf =  cedalion.nirs.conc2od(hrf, geo3d, dpf)
+            od_hrf =  cedalion.nirs.cw.conc2od(hrf, geo3d, dpf)
             od_mse = xr.dot(ec**2, mse, dim =['chromo']) * 1 * units.mm**2
 
         else:
@@ -330,3 +330,5 @@ def main():
             
 if __name__ == "__main__":
     main()
+
+

@@ -1,6 +1,6 @@
 import cedalion
-import cedalion.datasets as datasets
-import cedalion.imagereco.forward_model as fw
+import cedalion.data as datasets
+import cedalion.dot.forward_model as fw
 import cedalion.io as io
 import cedalion.nirs as nirs
 import xarray as xr
@@ -9,7 +9,7 @@ import cedalion.dataclasses as cdc
 import numpy as np
 import os.path
 import pickle
-from cedalion.imagereco.solver import pseudo_inverse_stacked
+# # from cedalion.dot.solver import pseudo_inverse_stacked  # Not available in current cedalion  # Not available in current cedalion
 import cedalion.xrutils as xrutils
 
 import matplotlib.pyplot as p
@@ -519,4 +519,7 @@ def get_Adot_parcels( Adot = None ):
     )
 
     return Adot_parcels_lev1_xr, Adot_parcels_lev2_xr, unique_parcels_lev1, unique_parcels_lev2
+
+
+
 
