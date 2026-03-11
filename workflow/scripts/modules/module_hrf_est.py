@@ -2,10 +2,8 @@
 # functions to perform GLM
 
 #%% Imports
-import os
 import cedalion
 import cedalion.nirs
-import cedalion.sigproc.quality as quality
 import cedalion.sigproc.frequency as frequency
 import cedalion.sigproc.motion as motion_correct
 import cedalion.xrutils as xrutils
@@ -19,8 +17,6 @@ import numpy as np
 import pandas as pd
 from functools import reduce
 import operator
-
-import json
 
 #%% Functions
 

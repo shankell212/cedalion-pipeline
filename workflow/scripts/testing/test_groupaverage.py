@@ -22,15 +22,17 @@ import groupaverage as groupavg
 import importlib
 importlib.reload(groupavg)
 
-config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_STS_Q.yml"
+#config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_STS_Q.yml"
 #config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml" # CHANGE if testing
 #config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/regression_testing/config_BS_reg_test.yml" # CHANGE if testing
+config_path = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_test_imgrecon/config_STS_Q.yml"
+
 
 with open(config_path, 'r') as file:
     config = yaml.safe_load(file)
 
 # CHANGE
-blockavg = True  # if true, group average done on blockavg, false, done on img recon
+blockavg = False  # if true, group average done on blockavg, false, done on img recon
 
 cfg_dataset = config['dataset']
 cfg_hrf = config['hrf_estimation']
@@ -42,7 +44,7 @@ subjects = cfg_dataset['subject']
 #subjects = ["01", "03", "04", "05", "07", "08", "09", "10", "12", "13", "15", "19", "20", "21", "22", "23", "24", "25", "26", "28"]
 task = cfg_dataset['task'][0]
 
-blockavg_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "hrf_estimate")  #, f"sub-{subj}")
+blockavg_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", "cedalion", cfg_dataset['derivatives_subfolder'], "hrf_estimate")  #, f"sub-{subj}")
 if blockavg:
     blockavg_files = [os.path.join(blockavg_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_nirs_hrf_estimate_{cfg_hrf['rec_str']}.pkl.gz") for subj in subjects ]
 else:
@@ -50,13 +52,14 @@ else:
         #f"Xs_sub-{subj}_{task}"
         f"_cov_alpha_spatial_{config['image_recon']['alpha_spatial']}"
         + f"_alpha_meas_{config['image_recon']['alpha_meas']}"
-        + ("_direct" if config["image_recon"]["DIRECT"]["enable"] else "_indirect")
+        + (f"_recon_mode_{config['image_recon']['recon_mode']}")
         + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
+        + (f"_{config['image_recon']['mag']['t_win'][0]}_{config['image_recon']['mag']['t_win'][1]}" if config["image_recon"]["mag"]["enable"] else "")
         + ".pkl.gz"
     )
-    image_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "image_results")
+    image_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", "cedalion", cfg_dataset['derivatives_subfolder'], "image_results")
     image_files =  [os.path.join(image_dir, f"sub-{subj}", (f"Xs_sub-{subj}_{task}" + file_name)) for subj in subjects ]
 
 
@@ -73,15 +76,15 @@ geo_files = [os.path.join(blockavg_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_
 #save_path = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "groupaverage")
 
 if blockavg:
-    save_path = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "groupaverage")
+    save_path = os.path.join(cfg_dataset['root_dir'], "derivatives", "cedalion", cfg_dataset['derivatives_subfolder'], "groupaverage")
     out = os.path.join(save_path, f"task-{task}_nirs_groupaverage_chanspace_{cfg_hrf['rec_str']}.pkl")
 else:
-    save_path = os.path.join(cfg_dataset['root_dir'], 'derivatives',  cfg_dataset['derivatives_subfolder'], 'image_results')
+    save_path = os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'image_results')
     file_name = (
         f"Xs_groupavg_{task}"
         + f"_cov_alpha_spatial_{config['image_recon']['alpha_spatial']}"
         + f"_alpha_meas_{config['image_recon']['alpha_meas']}"
-        + ("_direct" if config["image_recon"]["DIRECT"]["enable"] else "_indirect")
+        + (f"_recon_mode_{config['image_recon']['recon_mode']}")
         + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")

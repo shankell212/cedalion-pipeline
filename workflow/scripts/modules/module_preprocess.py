@@ -4,17 +4,15 @@ Created on Mon Jun  2 15:39:59 2025
 
 @author: shank
 """
-
-import os
 import cedalion
 import cedalion.nirs
 import cedalion.sigproc.quality as quality
 import cedalion.sigproc.frequency as frequency
-import cedalion.sigproc.motion as motion_correct
 import cedalion.xrutils as xrutils
 import cedalion.models.glm as glm
-import cedalion.data as datasets
 import xarray as xr
+import cedalion.xrutils as xrutils
+import cedalion.data as datasets
 import matplotlib.pyplot as p
 import cedalion.vis as plots
 from cedalion import units
@@ -22,9 +20,6 @@ import numpy as np
 import pandas as pd
 from functools import reduce
 import operator
-
-import json
-
 
 #%%
 

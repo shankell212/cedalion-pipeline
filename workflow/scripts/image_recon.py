@@ -10,28 +10,25 @@ Created on Fri Jun 13 07:17:55 2025
 import os
 import cedalion
 import cedalion.nirs
-import cedalion.xrutils as xrutils
 
 from cedalion.physunits import units
 import xarray as xr
+from cedalion.sigproc.quality import measurement_variance
+import cedalion.dot as dot
+import cedalion.io as io
 import cedalion.vis as plots
 import numpy as np
-
 import gzip
 import pickle
-import json
-import pdb
-
 import sys
 script_dir = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.join(script_dir, 'modules')
 sys.path.append(modules_path)
 
 import module_image_recon as img_recon 
-import module_spatial_basis_funs as sbf 
+#import module_spatial_basis_funs as sbf 
 import pyvista as pv
 pv.OFF_SCREEN = True
-import pandas as pd
 
 # Turn off all warnings
 import warnings
@@ -40,9 +37,8 @@ warnings.filterwarnings('ignore')
 
 #%%
 
-def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
-                
-    
+def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[]):
+
     # Convert str vals to units from config
     cfg_mse = cfg_img_recon['mse']
     cfg_sb = cfg_img_recon['spatial_basis']
@@ -61,19 +57,25 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
         cfg_img_recon["alpha_meas"] = float(cfg_img_recon["alpha_meas"])
     if isinstance(cfg_img_recon["alpha_spatial"], str):
         cfg_img_recon["alpha_spatial"] = float(cfg_img_recon["alpha_spatial"])
+
+    if isinstance(cfg_img_recon["lambda_spatial_depth"], str):
+            cfg_img_recon["lambda_spatial_depth"] = float(eval(cfg_img_recon["lambda_spatial_depth"]))
     
         
-    #%% Load head model 
-    head, PARCEL_DIR = img_recon.load_head_model(cfg_img_recon['head_model'], with_parcels=False)
-    Adot, meas_list, geo3d, amp = img_recon.load_probe(cfg_img_recon['probe_dir'], snirf_name=cfg_img_recon['snirf_name_probe'])
-    
+    #%% Load head model and sensitivity matrix
+
+    head = dot.get_standard_headmodel(cfg_img_recon['head_model'])
+    Adot = io.forward_model.load_Adot(Adot_path)
+
     ec = cedalion.nirs.get_extinction_coefficients(cfg_img_recon['spectrum'], Adot.wavelength)
-    einv = cedalion.xrutils.pinv(ec)
     
+    # load amp and geo3d
+    recordings = io.read_snirf(cfg_img_recon['probe_dir'] + cfg_img_recon['snirf_name_probe'])
+    rec = recordings[0]
+    geo3d = rec.geo3d
+    amp = rec['amp']
+
     #%% run image recon
-    # # Make Adot and blockaverage channel order the same
-    # blockaverage_subj = blockaverage_subj.sel(channel=Adot.channel.values)
-    # blockaverage_mse_subj = blockaverage_mse_subj.sel(channel=Adot.channel.values)
     
     """
     do the image reconstruction of each subject independently 
@@ -82,101 +84,162 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
     - then get the weighted average in image space 
     - get the total standard error using between + within subject MSE 
     """
-    F = None
-    D = None
-    G = None
-
-    all_trial_X_hrf_mag = None
     
-    for idxt, trial_type in enumerate(cfg_hrf['stim_lst']):
-        
-        print(f'Getting images for trial type = {trial_type}')
-
-        # load in block average files
-        with gzip.open(hrf_file, 'rb') as f:
+    
+    # load files
+    if 'hrf' in file_name:
+        with gzip.open(file_name, 'rb') as f:
             results = pickle.load(f)
-        hrf_est = results['hrf_est']
+        ts = results['hrf_est']
         mse_t = results['mse_t'] 
-        bad_channels = results['bad_indices']        
+        bad_channels = results['bad_indices'] 
 
-        hrf = hrf_est.sel(trial_type=trial_type) 
-        mse = mse_t.sel(trial_type=trial_type).drop_vars(['trial_type'])
+    elif 'preprocess' in file_name:
+        with gzip.open(file_name, 'rb') as f:
+            record = pickle.load(f)
+        rec = record[0]
+        ts = rec['od_corrected'].copy()
+        mse_t = None
+        # add bad_indices to file that also has rec in it
 
-        if 'measurement' in mse.dims and isinstance(mse.get_index('measurement'), pd.MultiIndex):
-            mse = mse.unstack('measurement')
+    # Loop through trial types
+    all_trial_Xs = None
+    for idxt, trial_type in enumerate(cfg_hrf['stim_lst']): #NOTE: do we still need to loop through trial types here?
+        
+        print(f'Getting images for trial type = {trial_type}')       
+
+        ts_trial = ts.sel(trial_type=trial_type) 
+        if mse_t is not None: # if hrf data loaded in
+            mse_trial = mse_t.sel(trial_type=trial_type).drop_vars(['trial_type'])
 
         # Convert conc to od and units for cfg
-        if 'chromo' in hrf_est.dims:
+        if 'chromo' in ts.dims:
             dpf = xr.DataArray(
                     [1, 1],
                     dims="wavelength",
                     coords={"wavelength": amp.wavelength},
                     )
-            od_hrf =  cedalion.nirs.cw.conc2od(hrf, geo3d, dpf)
-            od_mse = xr.dot(ec**2, mse, dim =['chromo']) * 1 * units.mm**2
+            od_ts =  cedalion.nirs.cw.conc2od(ts_trial, geo3d, dpf)
+            if mse_t is not None:  # would not need this in theory bc if loading in ts, then conc should not be there 
+                od_mse = xr.dot(ec**2, mse_trial, dim =['chromo']) * 1 * units.mm**2  
 
         else:
-            od_hrf = hrf.copy()
-            od_mse = mse.copy()
+            od_ts = ts_trial.copy()
+            if mse_t is not None: # if mse variable exists, i.e. loading in hrf not ts
+                od_mse = mse_trial.copy()
+            else:
+                mse = measurement_variance(od_ts, calc_covariance=False) #NOTE: CHECK DIMS 
+                od_mse = mse.sel(trial_type=trial_type).drop_vars(['trial_type'])
 
-        print(f'Calculating subject = {hrf_file}')
+        print(f'Calculating subject = {file_name}')
 
         # replace bad vals
-        od_hrf.loc[dict(channel=bad_channels)] = cfg_mse['hrf_val']
+        od_ts.loc[dict(channel=bad_channels)] = cfg_mse['hrf_val']
         od_mse.loc[dict(channel=bad_channels)] = cfg_mse['mse_val_for_bad_data']
         od_mse = xr.where(od_mse < cfg_mse['mse_min_thresh'], cfg_mse['mse_min_thresh'], od_mse)  # !!! maybe can be removed when we have the between subject mse
         
         # if doing magnitude image
         if cfg_img_recon['mag']['enable']:
-            if 'reltime' in od_hrf.dims:
-                od_hrf_mag = od_hrf.sel(reltime=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('reltime')
-                od_mse_mag = od_mse.sel(reltime=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('reltime')
+            if 'reltime' in od_ts.dims:
+                od_ts_mag = od_ts.sel(reltime=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('reltime')
+                #od_mse_mag = od_mse.sel(reltime=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('reltime')
             else:
-                od_hrf_mag = od_hrf.sel(time=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('time')
-                od_mse_mag = od_mse.sel(time=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('time')
+                od_ts_mag = od_ts.sel(time=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('time')
+                #od_mse_mag = od_mse.sel(time=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('time')
         else:
-            od_hrf_mag = od_hrf.copy()
-            if 'reltime' in od_hrf.dims:
+            od_ts_mag = od_ts.copy()
+
+        if mse_t is not None: # if hrf loaded in, get mse magnitude
+            if 'reltime' in od_ts.dims:
                 od_mse_mag = od_mse.mean('reltime')
             else:
-                 od_mse_mag = od_mse.mean('time')
+                od_mse_mag = od_mse.mean('time')
+        else:
+             od_mse_mag = od_mse.copy() # if mse not loaded in, copy od_mse
 
         C_meas = od_mse_mag.pint.dequantify()
-        C_meas = C_meas.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
-        
-        # save G in derivatives/cedalion/forward_model  -> for brain and scalp separately and sigma
-        # save in derivatives sub dirs -> make symbolic link to another folder. and then create those folders in optional deriv folder. 
-        X_hrf_mag, W, D, F, G = img_recon.do_image_recon(od_hrf_mag, head = head, Adot = Adot, C_meas_flag = cfg_img_recon['Cmeas']['enable'], 
-                                                            C_meas = C_meas, wavelength = [od_hrf.wavelength[0].item(), od_hrf.wavelength[1].item()], 
-                                                            BRAIN_ONLY = cfg_img_recon['BRAIN_ONLY']['enable'], 
-                                                            DIRECT = cfg_img_recon['DIRECT']['enable'], SB = cfg_sb['enable'], 
-                                                    cfg_sbf = cfg_sb, alpha_spatial = cfg_img_recon['alpha_spatial'], 
-                                                    alpha_meas = cfg_img_recon['alpha_meas'],F = F, D = D, G = G)
-        # save od_mse time series 
-        if cfg_img_recon['mag']['enable']:
-            X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag, W, DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
-        else:
-             if 'reltime' in od_hrf.dims:
-                X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag.isel(reltime=0).squeeze(), W, DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
-             else:
-                X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag.isel(time=0).squeeze(), W, DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
+        #C_meas = np.diag(C_meas)
 
-                
+        #C_meas = C_meas.stack(measurement=('channel', 'wavelength')).sortby('wavelength') #NOTE: do we need to do this anymore? check shape of c_meas from output func
+        
+        # save G (spatial basis) in derivatives/cedalion/forward_model  -> for brain and scalp separately and sigma
+       
+        if cfg_sb['enable'] and SB:  # do I need both
+            #fil_path, after = Adot_path.split("fw", 1)
+            print('Performing image recon with SB')
+            with gzip.open(SB, 'rb') as f:
+                sbf = pickle.load(f)
+
+            recon = dot.ImageRecon(
+                    Adot,
+                    recon_mode=cfg_img_recon['recon_mode'],
+                    brain_only = cfg_img_recon['BRAIN_ONLY']['enable'],
+                    alpha_meas = cfg_img_recon['alpha_meas'],
+                    alpha_spatial = cfg_img_recon['alpha_spatial'],
+                    apply_c_meas = cfg_img_recon['Cmeas']['enable'],
+                    spatial_basis_functions = sbf,
+                )
+        else:
+             sbf = None
+             print('Performing image recon without SB')
+             recon = dot.ImageRecon(
+                    Adot,
+                    recon_mode=cfg_img_recon['recon_mode'],  # conc is direct, mua2conc is indirect
+                    brain_only = cfg_img_recon['BRAIN_ONLY']['enable'],
+                    alpha_meas = cfg_img_recon['alpha_meas'],
+                    alpha_spatial = cfg_img_recon['alpha_spatial'],
+                    apply_c_meas = cfg_img_recon['Cmeas']['enable'],
+                    spatial_basis_functions = None,
+                )
+
+        if cfg_img_recon['Cmeas']['enable']:
+             Xs = recon.reconstruct(od_ts_mag, C_meas)
+        else:
+             Xs = recon.reconstruct(od_ts_mag)
+        
+        
+        #X_mse = recon.get_image_noise(C_meas) # get image noise   #NOTE: how to handle noise computation in pipeline workflow when not using Cmeas?
+        if cfg_img_recon['recon_mode']=='conc':
+             DIRECT = True
+        elif cfg_img_recon['recon_mode'] == 'mua2conc':
+             DIRECT = False
+            
+        X_mse = img_recon.get_image_noise_posterior(Adot, C_meas, alpha_meas = cfg_img_recon['alpha_meas'], 
+                                                    alpha_spatial_depth = cfg_img_recon['alpha_meas'], 
+                                                lambda_spatial_depth =  cfg_img_recon['lambda_spatial_depth'], 
+                                                DIRECT=DIRECT, SB=cfg_img_recon['spatial_basis']['enable'], G=sbf)       
+
         # concatenate trial 
-        X_hrf_mag = X_hrf_mag.assign_coords(trial_type=trial_type) # add trial type name as a coordinate
+        Xs = Xs.assign_coords(trial_type=trial_type) # add trial type name as a coordinate
         X_mse = X_mse.assign_coords(trial_type=trial_type)
         
-        if all_trial_X_hrf_mag is None:
-            all_trial_X_hrf_mag = X_hrf_mag.expand_dims(trial_type=[trial_type])
+        if all_trial_Xs is None:
+            all_trial_Xs = Xs.expand_dims(trial_type=[trial_type])
             all_trial_X_mse = X_mse.expand_dims(trial_type=[trial_type])
         else:
-            all_trial_X_hrf_mag = xr.concat([all_trial_X_hrf_mag, X_hrf_mag], dim='trial_type')
+            all_trial_Xs = xr.concat([all_trial_Xs, Xs], dim='trial_type')
             all_trial_X_mse = xr.concat([all_trial_X_mse, X_mse], dim='trial_type')
 
+    # IF loading in time series, save in parcel space instead of vertex for smaller file size
+    if mse_t is None: # if time series data loaded in
+         Xs_parcel_weighted = (
+                    (all_trial_Xs / all_trial_X_mse)            # numerator weights: X * (1/var)
+                    .groupby("parcel")
+                    .sum("vertex")
+                    /
+                    (1 / all_trial_X_mse)
+                    .groupby("parcel")
+                    .sum("vertex")
+                )
+
     # END OF TRIAL TYPE LOOP
-    results = { 'hrf_est': all_trial_X_hrf_mag,
-                'mse_t': all_trial_X_mse,
-               }
+    if mse_t is not None:
+        results = { 'Xs': all_trial_Xs,  #NOTE: change name later
+                    'mse': all_trial_X_mse,
+                }
+    else:
+         results = { 'Xs': Xs_parcel_weighted,  #NOTE: change name later
+                                    }
     
     # Save data to a compressed pickle file 
     print(f'   Saving to {out}')
@@ -317,15 +380,19 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
 def main():
     config = snakemake.config
     
-    cfg_dataset = snakemake.params.cfg_dataset  # get params
+    # get params
     cfg_img_recon = snakemake.params.cfg_img_recon
     cfg_hrf = snakemake.params.cfg_hrf
     
     hrf_data = snakemake.input.hrf_data
+    Adot_path = snakemake.input.Adot
+    SB_path = snakemake.input.SB
+
+    Adot_path = str(Adot_path) if not isinstance(Adot_path, str) else Adot_path
     
     out = snakemake.output[0]
     
-    img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_data, out)
+    img_recon_func(cfg_img_recon, cfg_hrf, hrf_data, Adot_path, out, SB_path)
     
             
 if __name__ == "__main__":

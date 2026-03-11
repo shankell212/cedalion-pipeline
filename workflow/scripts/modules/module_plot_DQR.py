@@ -4,12 +4,15 @@ import cedalion
 import cedalion.nirs
 import cedalion.sigproc.quality as quality
 import cedalion.sigproc.frequency as frequency
-import cedalion.sigproc.motion as motion_correct
 import cedalion.xrutils as xrutils
 import cedalion.data as datasets
 import xarray as xr
+import matplotlib
+matplotlib.use("Agg")   # Force non-interactive backend
 import matplotlib.pyplot as p
 import matplotlib.colors as clrs
+import cedalion.vis as vis
+from cedalion.vis.anatomy import scalp_plot
 import cedalion.vis as plots
 from cedalion.vis.blocks import plot_stim_markers
 from cedalion.vis.anatomy.scalp_plot import scalp_plot
@@ -19,13 +22,12 @@ import numpy as np
 from scipy.signal import filtfilt
 from scipy.signal.windows import gaussian
 
-import pdb
 
 
 def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str): #, out_dqr, out_gvtd):
 
     # make sure save folder exists, if not, create it
-    der_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'],'plots', 'DQR')
+    der_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'],'plots', 'DQR')
     os.makedirs(der_dir, exist_ok=True)
     
     f, ax = p.subplots(3, 2, figsize=(11, 14))
@@ -40,12 +42,12 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
     ax[0][0].set_xlabel("time / s")
     ax[0][0].set_title(f"{filenm}")
     thresh = quality._get_gvtd_threshold(rec.aux_ts['gvtd'], 'histogram_mode', n_std = 10)
-    ax[0][0].axhline(thresh.values, color='b', linestyle='--', label=f'Thresh {thresh:.1e}')
+    ax[0][0].axhline(thresh.pint.dequantify().values, color='b', linestyle='--', label=f'Thresh {thresh:.1e}')
     if 'gvtd_corrected' in rec.aux_ts.keys():
         thresh_corrected = quality._get_gvtd_threshold(rec.aux_ts['gvtd_corrected'], 'histogram_mode', n_std = 10)
-        ax[0][0].axhline(thresh_corrected.values, color='#ff4500', linestyle='--', label=f'Thresh {thresh_corrected:.1e}')
+        ax[0][0].axhline(thresh_corrected.pint.dequantify().values, color='#ff4500', linestyle='--', label=f'Thresh {thresh_corrected:.1e}')
     ax[0][0].legend()
-    ax[0][0].set_ylim(0, 3*thresh)
+    ax[0][0].set_ylim(0, 3*thresh.pint.dequantify())
 
     stim = rec.stim.copy()
     if stim_lst_str is not None:
@@ -92,7 +94,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
     # Plot variance of OD along time axis for wavelength 1 (post corrected) 
     #
     ax1 = ax[1][0]
-    variance_vals = np.log10( rec['od_corrected'].values.var(axis=2))
+    variance_vals = np.log10( rec['od_corrected'].pint.dequantify().values.var(axis=2))
     variance_vals_da = xr.DataArray(variance_vals, dims=["channel", "wavelength"], coords={"channel": rec["od"].channel, "wavelength": rec["od"].wavelength})
     max_variance = np.nanmax(variance_vals)
     min_variance = np.nanmin(variance_vals)
@@ -116,7 +118,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
     # Plot variance of OD along time axis for wavelength 2 (post correction) 
     #
     ax1 = ax[1][1]
-    variance_vals = np.log10( rec['od_corrected'].values.var(axis=2))
+    variance_vals = np.log10( rec['od_corrected'].pint.dequantify().values.var(axis=2))
     variance_vals_da = xr.DataArray(variance_vals, dims=["channel", "wavelength"], coords={"channel": rec["od"].channel, "wavelength": rec["od"].wavelength})
     max_variance = np.nanmax(variance_vals)
     min_variance = np.nanmin(variance_vals)
@@ -198,7 +200,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
     
     p.suptitle(fig_title)
 
-    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'],'plots', 'DQR', filenm + "_DQR.png") )
+    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'],'plots', 'DQR', filenm + "_DQR.png") )
     #p.savefig(out_dqr)
     p.close()
 
@@ -218,13 +220,13 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
     
     # GVTD plots
     if 'gvtd_corrected' in rec.aux_ts.keys():
-        der_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'gvtd')
+        der_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'gvtd')
         if not os.path.exists(der_dir):
             os.makedirs(der_dir)
         
         thresh_b4, thresh_corrected = make_gvtd_hist_compare_corrected(rec.aux_ts['gvtd'], rec.aux_ts['gvtd_corrected'], plot_thresh=True, stat_type='histogram_mode', n_std=10)
         p.suptitle(filenm)
-        p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR','gvtd', filenm + "_DQR_gvtd_hist.png") )
+        p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR','gvtd', filenm + "_DQR_gvtd_hist.png") )
         #p.savefig(out_gvtd)
         p.close()
     
@@ -267,18 +269,18 @@ def make_gvtd_hist_compare_corrected(gvtd_time_trace_1, gvtd_time_trace_2, plot_
 
     # Calculate bin size if not provided
     min_counts_each_bin = 5
-    n_bins_1 = round(len(gvtd_time_trace_1) / min_counts_each_bin)
-    bin_size_1 = np.max(gvtd_time_trace_1) / n_bins_1
+    n_bins_1 = round(len(gvtd_time_trace_1.pint.dequantify().values) / min_counts_each_bin)
+    bin_size_1 = np.max(gvtd_time_trace_1.pint.dequantify().values) / n_bins_1
     
-    n_bins_2 = round(len(gvtd_time_trace_2) / min_counts_each_bin)
-    bin_size_2 = np.max(gvtd_time_trace_2) / n_bins_2
+    n_bins_2 = round(len(gvtd_time_trace_2.pint.dequantify().values) / min_counts_each_bin)
+    bin_size_2 = np.max(gvtd_time_trace_2.pint.dequantify().values) / n_bins_2
 
     f, ax = p.subplots(1, 2, figsize=(11, 5))
 
     # B4 correction
     # Create the histogram
-    bins_1 = np.arange(0, np.max(gvtd_time_trace_1) + bin_size_1, bin_size_1)
-    ax[0].hist(gvtd_time_trace_1, bins=bins_1, edgecolor='black', alpha=0.75)
+    bins_1 = np.arange(0, np.max(gvtd_time_trace_1.pint.dequantify().values) + bin_size_1, bin_size_1)
+    ax[0].hist(gvtd_time_trace_1.pint.dequantify().values, bins=bins_1, edgecolor='black', alpha=0.75)
     ax[0].set_title('GVTD Histogram')
     ax[0].set_xlabel('GVTD')
     ax[0].set_ylabel('Counts')
@@ -289,14 +291,14 @@ def make_gvtd_hist_compare_corrected(gvtd_time_trace_1, gvtd_time_trace_2, plot_
         threshold_1 = quality._get_gvtd_threshold(gvtd_time_trace_1, stat_type, n_std)
 
         # Plot the threshold line
-        ax[0].axvline(threshold_1.values, color='red', linestyle='--', label=f'Threshold: {threshold_1:.4f}')
+        ax[0].axvline(threshold_1.pint.dequantify().values, color='red', linestyle='--', label=f'Threshold: {threshold_1.pint.dequantify().values:.4f}')
         ax[0].legend()
         
         
     # After correction
     # Create the histogram
-    bins_2 = np.arange(0, np.max(gvtd_time_trace_2) + bin_size_2, bin_size_2)
-    ax[1].hist(gvtd_time_trace_2, bins=bins_2, edgecolor='black', alpha=0.75)
+    bins_2 = np.arange(0, np.max(gvtd_time_trace_2.pint.dequantify().values) + bin_size_2, bin_size_2)
+    ax[1].hist(gvtd_time_trace_2.pint.dequantify().values, bins=bins_2, edgecolor='black', alpha=0.75)
     ax[1].set_title('GVTD Histogram - corrected')
     ax[1].set_xlabel('GVTD')
     ax[1].set_ylabel('Counts')
@@ -307,7 +309,7 @@ def make_gvtd_hist_compare_corrected(gvtd_time_trace_1, gvtd_time_trace_2, plot_
         threshold_2 = quality._get_gvtd_threshold(gvtd_time_trace_2, stat_type, n_std)
 
         # Plot the threshold line
-        ax[1].axvline(threshold_2.values, color='red', linestyle='--', label=f'Threshold: {threshold_2:.4f}')
+        ax[1].axvline(threshold_2.pint.dequantify().values, color='red', linestyle='--', label=f'Threshold: {threshold_2.pint.dequantify().values:.4f}')
         ax[1].legend()
 
     return threshold_1, threshold_2
@@ -382,7 +384,7 @@ def plot_slope(rec = None, slope = None, cfg_preprocess=None, filenm = None, cfg
     '''
     Plot slope before and after correction on a scalp plot.
     '''
-    der_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'slope')
+    der_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'slope')
     if not os.path.exists(der_dir):
         os.makedirs(der_dir)
     
@@ -440,7 +442,7 @@ def plot_slope(rec = None, slope = None, cfg_preprocess=None, filenm = None, cfg
     
     p.suptitle(fig_title)
 
-    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'slope', filenm + "_slope.png") )
+    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'slope', filenm + "_slope.png") )
     #p.savefig(out_file)
     p.close()
     
@@ -606,7 +608,7 @@ def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
     # give a title to the figure
     p.suptitle(filenm)
 
-    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_sigVdis.png") )
+    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_sigVdis.png") )
     p.close()
 
 
@@ -680,7 +682,7 @@ def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
     # give a title to the figure
     p.suptitle(filenm)
 
-    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_calib.png") )
+    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_calib.png") )
     p.close()
 
 
@@ -710,7 +712,7 @@ def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
     # give a title to the figure
     p.suptitle(filenm)
 
-    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_crosstalk.png") )
+    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_crosstalk.png") )
     p.close()
 
 
@@ -944,7 +946,7 @@ def plot_tIncCh_dqr( rec, cfg_dataset, filenm_lst, iqr_threshold_std=2, iqr_thre
             # give a title to the figure and save it
             filenm = filenm_lst[subj_idx][file_idx]
             p.suptitle(filenm)
-            p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + '_DQR_tIncCh.png') )
+            p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + '_DQR_tIncCh.png') )
 #            p.close()
 
             if flag_plot:
@@ -1061,7 +1063,7 @@ def plot_group_dqr( n_subjects, n_files_per_subject, chs_pruned_subjs, slope_bas
     dirnm = os.path.basename(os.path.normpath(cfg_dataset['root_dir']))
     p.suptitle(f'Data set - {dirnm}')
 
-    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', "DQR_group.png") )
+    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', "DQR_group.png") )
     
     if flag_plot:
         p.show()
@@ -1146,7 +1148,7 @@ def plot_gradCPT_VTC( stim, cfg_dataset, filenm ):
     # give a title to the figure
     p.suptitle(filenm)
 
-    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_gradCPT_VTC.png") )
+    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_gradCPT_VTC.png") )
     p.close()
 
 

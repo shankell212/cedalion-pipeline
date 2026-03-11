@@ -19,7 +19,6 @@ import cedalion.xrutils as xrutils
 import cedalion.data as datasets
 import numpy as np
 import xarray as xr
-import pint
 import matplotlib.pyplot as plt
 import cedalion.vis as plots
 from cedalion.vis.blocks import plot_stim_markers
@@ -32,14 +31,11 @@ import pandas as pd
 # from cedalion.vis.timeseries import TimeSeries as vts  # Commented out - module not available in current cedalion
 #from circle_probe_cedalion import plot_circle_probe
 from sklearn.linear_model import LinearRegression
-
 #import pywt
 from scipy import signal
 from scipy.interpolate import interp1d
 from sklearn.decomposition import FastICA
 from scipy.signal import butter, sosfilt
-
-
 import pdb
 
 
