@@ -22,7 +22,8 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.join(script_dir, 'modules')
 sys.path.append(modules_path)
 
-import module_image_recon as img_recon 
+# import module_image_recon as img_recon 
+import image_recon_func as img_recon
 import module_spatial_basis_funs as sbf 
 import pyvista as pv
 pv.OFF_SCREEN = True
@@ -57,9 +58,9 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
     if isinstance(cfg_img_recon["alpha_spatial"], str):
         cfg_img_recon["alpha_spatial"] = float(cfg_img_recon["alpha_spatial"])
 
-    if 'lambda_spatial_depth' in cfg_img_recon:
-        if isinstance(cfg_img_recon["lambda_spatial_depth"], str):
-            cfg_img_recon["lambda_spatial_depth"] = float(eval(cfg_img_recon["lambda_spatial_depth"]))
+    if 'lambda_R' in cfg_img_recon:
+        if isinstance(cfg_img_recon["lambda_R"], str):
+            cfg_img_recon["lambda_R"] = float(eval(cfg_img_recon["lambda_R"]))
         
         
     #%% Load head model 
@@ -86,6 +87,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
     F = None
     D = None
     G = None
+    max_eig = None
 
     all_trial_X_hrf_mag = None
     
@@ -148,12 +150,32 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
         
         # save G in derivatives/cedalion/forward_model  -> for brain and scalp separately and sigma
         # save in derivatives sub dirs -> make symbolic link to another folder. and then create those folders in optional deriv folder. 
-        X_hrf_mag, W, D, F, G = img_recon.do_image_recon(od_hrf_mag, head = head, Adot = Adot, C_meas_flag = cfg_img_recon['Cmeas']['enable'], 
-                                                            C_meas = C_meas, wavelength = [od_hrf.wavelength[0].item(), od_hrf.wavelength[1].item()], 
-                                                            BRAIN_ONLY = cfg_img_recon['BRAIN_ONLY']['enable'], 
-                                                            DIRECT = cfg_img_recon['DIRECT']['enable'], SB = cfg_sb['enable'], 
-                                                    cfg_sbf = cfg_sb, alpha_spatial = cfg_img_recon['alpha_spatial'], 
-                                                    alpha_meas = cfg_img_recon['alpha_meas'],F = F, D = D, G = G)
+        # X_hrf_mag, W, D, F, G, max_eig = img_recon.do_image_recon(od_hrf_mag, head = head, Adot = Adot, C_meas_flag = cfg_img_recon['Cmeas']['enable'], 
+        #                                                     C_meas = C_meas, wavelength = [od_hrf.wavelength[0].item(), od_hrf.wavelength[1].item()], 
+        #                                                     BRAIN_ONLY = cfg_img_recon['BRAIN_ONLY']['enable'], 
+        #                                                     DIRECT = cfg_img_recon['DIRECT']['enable'], SB = cfg_sb['enable'], 
+        #                                             cfg_sbf = cfg_sb, alpha_spatial = cfg_img_recon['alpha_spatial'], 
+        #                                             alpha_meas = cfg_img_recon['alpha_meas'],F = F, D = D, G = G)
+        
+        # Perform image reconstruction
+        X_hrf_mag, W, D, F, G, max_eig = img_recon.do_image_recon(
+                od = od_hrf_mag, 
+                head = head, 
+                Adot = Adot, 
+                C_meas_flag = cfg_img_recon['Cmeas']['enable'], 
+                C_meas = C_meas, 
+                wavelength = [od_hrf.wavelength[0].item(), od_hrf.wavelength[1].item()], 
+                DIRECT = cfg_img_recon['DIRECT']['enable'],
+                SB = cfg_sb['enable'], 
+                cfg_sbf = cfg_sb, 
+                lambda_R = cfg_img_recon['lambda_R'], 
+                alpha_spatial = cfg_img_recon['alpha_spatial'], 
+                alpha_meas = cfg_img_recon['alpha_meas'], 
+                D = D, 
+                F = F, 
+                G = G, 
+                max_eig = max_eig)
+
         # # save od_mse time series 
         # if cfg_img_recon['mag']['enable']:
         #     X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag, W, DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
@@ -162,11 +184,21 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
         #         X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag.isel(reltime=0).squeeze(), W, DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
         #      else:
         #         X_mse = img_recon.get_image_noise(C_meas, X_hrf_mag.isel(time=0).squeeze(), W, DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
-            
-        X_mse = img_recon.get_image_noise_posterior(Adot, C_meas, alpha_meas=cfg_img_recon['alpha_meas'], alpha_spatial_depth=cfg_img_recon['alpha_spatial'], 
-                                lambda_spatial_depth=cfg_img_recon['lambda_spatial_depth'],
-                                DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
+
+        # # Get image noise  
+        # X_mse = img_recon.get_image_noise_posterior(Adot, C_meas, alpha_meas=cfg_img_recon['alpha_meas'], alpha_spatial_depth=cfg_img_recon['alpha_spatial'], 
+        #                         lambda_spatial_depth=cfg_img_recon['lambda_spatial_depth'],
+        #                         DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
         
+        X_mse = img_recon.get_image_noise_posterior(Adot, 
+                            W, 
+                            alpha_spatial = cfg_img_recon['alpha_spatial'], 
+                            lambda_R = cfg_img_recon['lambda_R'],
+                            DIRECT = cfg_img_recon['DIRECT']['enable'], 
+                            SB = cfg_sb['enable'], 
+                            G = G)
+
+
         # concatenate trial 
         X_hrf_mag = X_hrf_mag.assign_coords(trial_type=trial_type) # add trial type name as a coordinate
         X_mse = X_mse.assign_coords(trial_type=trial_type)

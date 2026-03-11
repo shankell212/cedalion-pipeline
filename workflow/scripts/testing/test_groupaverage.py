@@ -22,7 +22,8 @@ import groupaverage as groupavg
 import importlib
 importlib.reload(groupavg)
 
-config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_STS_Q.yml"
+config_path = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_2_newnoise_update/config_STS_Q.yml"
+# config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_STS_Q.yml"
 #config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml" # CHANGE if testing
 #config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/regression_testing/config_BS_reg_test.yml" # CHANGE if testing
 
@@ -30,7 +31,7 @@ with open(config_path, 'r') as file:
     config = yaml.safe_load(file)
 
 # CHANGE
-blockavg = True  # if true, group average done on blockavg, false, done on img recon
+blockavg = False  # if true, group average done on blockavg, false, done on img recon
 
 cfg_dataset = config['dataset']
 cfg_hrf = config['hrf_estimation']
@@ -54,6 +55,7 @@ else:
         + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
+        + (f"_{config['image_recon']['mag']['t_win'][0]}_{config['image_recon']['mag']['t_win'][1]}" if config["image_recon"]["mag"]["enable"] else "")
         + ".pkl.gz"
     )
     image_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "image_results")

@@ -1,7 +1,7 @@
 # Snakefile
 from snakemake.io import glob_wildcards
 
-configfile: "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_2_newnoise/config_STS_Q.yml"
+configfile: "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_2_newnoise_update/config_IWHD_Q.yml"
 #configfile: "scripts/testing/config_test_BS.yaml"
 #configfile: "scripts/testing/regression_testing/config_BS_reg_test.yml"
 
@@ -247,7 +247,7 @@ use rule groupaverage as groupaverage_imgspace with:
 rule imagerecon:
     input:
         hrf_data = rules.hrf_estimation.output.pickle,
-        module4 = "scripts/modules/module_image_recon.py",
+        module4 = "scripts/modules/image_recon_func.py", #module_image_recon.py",
         module5 = "scripts/modules/module_spatial_basis_funs.py"
     output:
         get_imagerecon_output()
