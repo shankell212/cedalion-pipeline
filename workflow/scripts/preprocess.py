@@ -64,6 +64,7 @@ import matplotlib.pyplot as plt
 
 def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, stim_lst, mse_amp_thresh, out_files):
     
+    cedalion.xrutils.unit_stripping_is_error(True)
     # Load in snirf file
     if not cfg_dataset['derivatives_subfolder']:   # !!! do we need this?
         cfg_dataset['derivatives_subfolder'] = ''
@@ -203,7 +204,7 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
         # GVTD for Corrected OD before bandpass filtering  
         elif step_name in ("calc_gvtd_af", "calc_gvtd_after", "gvtd_after", "gvtd_af"):
             amp_corrected = rec['od_corrected'].copy()  
-            amp_corrected.values = np.exp(-amp_corrected.values)
+            amp_corrected.values = np.exp(-amp_corrected.pint.dequantify().values)
             amp_corrected_masked = preproc.prune_mask_ts(amp_corrected, pruned_chans)  # get "pruned" amp data post tddr
             rec.aux_ts['gvtd_corrected'], _ = quality.gvtd(amp_corrected_masked)  
             rec.aux_ts['gvtd_corrected'].name = 'gvtd_corrected'
@@ -236,8 +237,8 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             lambda1 = rec['amp_pruned'].wavelength[1].wavelength.values
             snr0, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda0), cfg_preprocess['steps']["prune"]['snr_thresh'])
             snr1, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda1), cfg_preprocess['steps']["prune"]['snr_thresh'])
-            snr0 = np.nanmedian(snr0.values)
-            snr1 = np.nanmedian(snr1.values)
+            snr0 = np.nanmedian(snr0.pint.dequantify().values)
+            snr1 = np.nanmedian(snr1.pint.dequantify().values)
             
             plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, cfg_dataset, stim_lst) #, out_files['out_dqr'], out_files['out_gvtd'] )
             
