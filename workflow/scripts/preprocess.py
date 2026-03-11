@@ -33,6 +33,9 @@ import cedalion
 import cedalion.nirs
 import cedalion.sigproc.quality as quality
 import cedalion.sigproc.motion_correct as motion_correct
+import cedalion.sigproc.frequency as frequency
+import cedalion.xrutils as xrutils
+import cedalion.models.glm as glm
 import xarray as xr
 import numpy as np
 import pandas as pd
@@ -319,3 +322,4 @@ def main():
     
 if __name__ == "__main__":
     main()
+

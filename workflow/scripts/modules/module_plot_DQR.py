@@ -3,6 +3,9 @@ import os
 import cedalion
 import cedalion.nirs
 import cedalion.sigproc.quality as quality
+import cedalion.sigproc.frequency as frequency
+import cedalion.xrutils as xrutils
+import cedalion.data as datasets
 import xarray as xr
 import matplotlib
 matplotlib.use("Agg")   # Force non-interactive backend
@@ -10,6 +13,9 @@ import matplotlib.pyplot as p
 import matplotlib.colors as clrs
 import cedalion.vis as vis
 from cedalion.vis.anatomy import scalp_plot
+import cedalion.vis as plots
+from cedalion.vis.blocks import plot_stim_markers
+from cedalion.vis.anatomy.scalp_plot import scalp_plot
 from cedalion import units
 import numpy as np
 
@@ -45,7 +51,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
 
     stim = rec.stim.copy()
     if stim_lst_str is not None:
-        vis.blocks.plot_stim_markers(ax[0][0], stim[stim.trial_type.isin(stim_lst_str)], y=1)
+        plot_stim_markers(ax[0][0], stim[stim.trial_type.isin(stim_lst_str)], y=1)
     # add stim_lst_str to the legend
     handles, labels = ax[0][0].get_legend_handles_labels()
     labels.append(stim_lst_str)
@@ -914,7 +920,7 @@ def plot_tIncCh_dqr( rec, cfg_dataset, filenm_lst, iqr_threshold_std=2, iqr_thre
             ax1.plot( rec[subj_idx][file_idx]['od'].time, tInc_all_tddr, label='tInc_tddr', color='b' )
             if 'od_tddr_ica' in rec[subj_idx][file_idx].timeseries.keys():
                 ax1.plot( rec[subj_idx][file_idx]['od'].time, tInc_all_tddr_ica, label='tInc_tddr_ica', color='m' )
-            plots.plot_stim_markers(ax1, rec[subj_idx][file_idx].stim, y=1)
+            plot_stim_markers(ax1, rec[subj_idx][file_idx].stim, y=1)
             ax1.set_title( f"Subject:{subj_idx+1}, Pruned: {(len(nan_chs)-len(idx_good))*100/len(nan_chs):.1f}%" )
             #    p.xlabel( 'Time' )
             #    p.ylabel( 'tInc_all' )
@@ -934,7 +940,7 @@ def plot_tIncCh_dqr( rec, cfg_dataset, filenm_lst, iqr_threshold_std=2, iqr_thre
                 thresh_tddr = quality.find_gvtd_thresh(gvtd_tddr_ica.values, quality.gvtd_stat_type.Histogram_Mode, n_std = 10)
                 ax2.axhline(thresh_tddr, color='m', linestyle='--', label=f'Thresh {thresh_tddr:.1e}')
             ax2.set_xlabel("time (s)")
-            plots.plot_stim_markers(ax2, rec[subj_idx][file_idx].stim, y=1)
+            plot_stim_markers(ax2, rec[subj_idx][file_idx].stim, y=1)
             ax2.legend()
 
             # give a title to the figure and save it
@@ -1144,6 +1150,11 @@ def plot_gradCPT_VTC( stim, cfg_dataset, filenm ):
 
     p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_gradCPT_VTC.png") )
     p.close()
+
+
+
+
+
 
 
 

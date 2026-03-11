@@ -16,9 +16,10 @@ import xarray as xr
 from cedalion.sigproc.quality import measurement_variance
 import cedalion.dot as dot
 import cedalion.io as io
+import cedalion.vis as plots
+import numpy as np
 import gzip
 import pickle
-
 import sys
 script_dir = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.join(script_dir, 'modules')
@@ -396,3 +397,5 @@ def main():
             
 if __name__ == "__main__":
     main()
+
+
