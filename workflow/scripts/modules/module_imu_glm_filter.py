@@ -16,18 +16,20 @@ Created on Fri Jan 24 14:37:57 2025
 import cedalion
 import cedalion.nirs
 import cedalion.xrutils as xrutils
-import cedalion.datasets as datasets
+import cedalion.data as datasets
 import numpy as np
 import xarray as xr
 import pint
 import matplotlib.pyplot as plt
-import cedalion.plots as plots
+import cedalion.vis as plots
+from cedalion.vis.blocks import plot_stim_markers
+from cedalion.vis.anatomy.scalp_plot import scalp_plot
 from cedalion import units
 import scipy.signal
 import os.path
 import pandas as pd
-from cedalion.vis import plot_probe as vpp
-from cedalion.vis import time_series as vts
+# from cedalion.vis import plot_probe as vpp  # plot_probe not available in cedalion.vis
+# from cedalion.vis.timeseries import TimeSeries as vts  # Commented out - module not available in current cedalion
 #from circle_probe_cedalion import plot_circle_probe
 from sklearn.linear_model import LinearRegression
 
@@ -290,7 +292,7 @@ def plotGaitRatio(rec, dod, gaitRatio_b4, gaitRatio_af, filenm = None, cfg_datas
     foo = gaitRatio_b4[0,:]
 
     f, ax = plt.subplots(2, 1, figsize=(10, 10))
-    plots.scalp_plot( 
+    scalp_plot( 
             dod,
             rec.geo3d,
             foo,
@@ -304,7 +306,7 @@ def plotGaitRatio(rec, dod, gaitRatio_b4, gaitRatio_af, filenm = None, cfg_datas
         )
         
     foo2 = gaitRatio_af[0,:]
-    plots.scalp_plot( 
+    scalp_plot( 
             dod,
             rec.geo3d,
             foo2,
@@ -328,7 +330,7 @@ def plotVarExp(rec, dod, z_resamp, varExp, filenm = None, cfg_dataset = None):
 
     for ic in range(z_resamp.shape[1]):
         foo = varExp[0,:,ic]*100
-        plots.scalp_plot( 
+        scalp_plot( 
                 dod,
                 rec.geo3d,
                 foo,
@@ -345,3 +347,8 @@ def plotVarExp(rec, dod, z_resamp, varExp, filenm = None, cfg_dataset = None):
 
     plt.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots','DQR', 'walking_filter', filenm + "_imu_glm_varExp.png") )
     plt.close()
+
+
+
+
+

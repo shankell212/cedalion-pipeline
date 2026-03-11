@@ -15,7 +15,7 @@ import cedalion.nirs
 import cedalion.sigproc.quality as quality
 
 import cedalion.models.glm as glm
-import cedalion.plots as plots
+import cedalion.vis as plots
 
 import numpy as np
 import xarray as xr
@@ -299,3 +299,4 @@ def main():
     
 if __name__ == "__main__":
     main()
+

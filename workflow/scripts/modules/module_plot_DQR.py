@@ -4,13 +4,15 @@ import cedalion
 import cedalion.nirs
 import cedalion.sigproc.quality as quality
 import cedalion.sigproc.frequency as frequency
-import cedalion.sigproc.motion_correct as motion_correct
+import cedalion.sigproc.motion as motion_correct
 import cedalion.xrutils as xrutils
-import cedalion.datasets as datasets
+import cedalion.data as datasets
 import xarray as xr
 import matplotlib.pyplot as p
 import matplotlib.colors as clrs
-import cedalion.plots as plots
+import cedalion.vis as plots
+from cedalion.vis.blocks import plot_stim_markers
+from cedalion.vis.anatomy.scalp_plot import scalp_plot
 from cedalion import units
 import numpy as np
 
@@ -47,7 +49,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
 
     stim = rec.stim.copy()
     if stim_lst_str is not None:
-        plots.plot_stim_markers(ax[0][0], stim[stim.trial_type.isin(stim_lst_str)], y=1)
+        plot_stim_markers(ax[0][0], stim[stim.trial_type.isin(stim_lst_str)], y=1)
     # add stim_lst_str to the legend
     handles, labels = ax[0][0].get_legend_handles_labels()
     labels.append(stim_lst_str)
@@ -68,7 +70,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
     cb_ticks_labels = [(0.08,'SDS'), (0.24,'Low Signal'), (0.4,'Poor SNR'), (0.58,'Good SNR'), (0.76,'SCI/PSP'), (0.92,'Saturated')]
     #pdb.set_trace()
     idx_good = np.where(chs_pruned.values == 0.58)[0]
-    plots.scalp_plot( 
+    scalp_plot( 
             rec["amp"],
             rec.geo3d,
             chs_pruned,
@@ -95,7 +97,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
     max_variance = np.nanmax(variance_vals)
     min_variance = np.nanmin(variance_vals)
     wav = rec['amp'].wavelength.values[0]  # first wav
-    plots.scalp_plot(
+    scalp_plot(
             rec["od"],
             rec.geo3d,
             variance_vals_da.isel(wavelength=0),  # first wav
@@ -119,7 +121,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
     max_variance = np.nanmax(variance_vals)
     min_variance = np.nanmin(variance_vals)
     wav = rec['amp'].wavelength.values[1]  # 2nd wav
-    plots.scalp_plot(
+    scalp_plot(
             rec["od"],
             rec.geo3d,
             variance_vals_da.isel(wavelength=1),  # 2nd wav
@@ -145,7 +147,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
     num_above_thresh = snr_mask_wav.sum().item() # count 'True' (num chans where SNR > thresh)
     
     wav = rec['amp'].wavelength.values[0]
-    plots.scalp_plot(
+    scalp_plot(
             rec["amp"],
             rec.geo3d,
             snr.isel(wavelength=0),
@@ -171,7 +173,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
     num_above_thresh = snr_mask_wav.sum().item() # count 'True' (num chans where SNR > thresh)
     
     wav = rec['amp'].wavelength.values[1]
-    plots.scalp_plot(
+    scalp_plot(
             rec["amp"],
             rec.geo3d,
             snr.isel(wavelength=1),
@@ -394,7 +396,7 @@ def plot_slope(rec = None, slope = None, cfg_preprocess=None, filenm = None, cfg
         slope_vals_da = xr.DataArray(slope_vals, dims=["channel", "wavelength"], coords={"channel": rec["od"].channel, "wavelength": rec["od"].wavelength})
         # get max of the absolute value of the slope values
         max_slope = np.nanmax(np.abs(slope_vals))
-        plots.scalp_plot(
+        scalp_plot(
                 rec["od"],
                 rec.geo3d,
                 slope_vals_da.isel(wavelength=0),
@@ -415,7 +417,7 @@ def plot_slope(rec = None, slope = None, cfg_preprocess=None, filenm = None, cfg
     slope_vals_da = xr.DataArray(slope_vals, dims=["channel", "wavelength"], coords={"channel": rec["od_corrected"].channel, "wavelength": rec["od_corrected"].wavelength})
     # get max of the absolute value of the slope values
     max_slope = np.nanmax(np.abs(slope_vals))
-    plots.scalp_plot(
+    scalp_plot(
             rec["od_corrected"],
             rec.geo3d,
             slope_vals_da.isel(wavelength=0),
@@ -565,7 +567,7 @@ def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
         dims="channel",
         coords={"channel": rec["amp"].channel},
     )
-    plots.scalp_plot(
+    scalp_plot(
             rec["conc"],
             rec.geo3d,
             power_level,
@@ -588,7 +590,7 @@ def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
         dims="channel",
         coords={"channel": rec["amp"].channel},
     )
-    plots.scalp_plot(
+    scalp_plot(
             rec["conc"],
             rec.geo3d,
             power_level,
@@ -854,7 +856,7 @@ def plot_tIncCh_dqr( rec, cfg_dataset, filenm_lst, iqr_threshold_std=2, iqr_thre
             else:
                 f, ax = p.subplots(2, 2, figsize=(9, 10))
 
-            plots.scalp_plot(
+            scalp_plot(
                     rec[0][0]['od'],
                     rec[0][0].geo3d,
                     tIncCh_n_per_ch_tddr,
@@ -867,7 +869,7 @@ def plot_tIncCh_dqr( rec, cfg_dataset, filenm_lst, iqr_threshold_std=2, iqr_thre
                     title='# Motion Artifacts after TDDR'
                 )
 
-            plots.scalp_plot(
+            scalp_plot(
                     rec[0][0]['od'],
                     rec[0][0].geo3d,
                     100*(1 - tIncCh_n_per_ch_tddr / tIncCh_n_per_ch),
@@ -881,7 +883,7 @@ def plot_tIncCh_dqr( rec, cfg_dataset, filenm_lst, iqr_threshold_std=2, iqr_thre
                 )
 
             if 'od_tddr_ica' in rec[subj_idx][file_idx].timeseries.keys():
-                plots.scalp_plot(
+                scalp_plot(
                         rec[0][0]['od'],
                         rec[0][0].geo3d,
                         tIncCh_n_per_ch_tddr_ica,
@@ -894,7 +896,7 @@ def plot_tIncCh_dqr( rec, cfg_dataset, filenm_lst, iqr_threshold_std=2, iqr_thre
                         title='# after TDDR ICA'
                     )
 
-                plots.scalp_plot(
+                scalp_plot(
                         rec[0][0]['od'],
                         rec[0][0].geo3d,
                         100*(1 - tIncCh_n_per_ch_tddr_ica / tIncCh_n_per_ch_tddr),
@@ -916,7 +918,7 @@ def plot_tIncCh_dqr( rec, cfg_dataset, filenm_lst, iqr_threshold_std=2, iqr_thre
             ax1.plot( rec[subj_idx][file_idx]['od'].time, tInc_all_tddr, label='tInc_tddr', color='b' )
             if 'od_tddr_ica' in rec[subj_idx][file_idx].timeseries.keys():
                 ax1.plot( rec[subj_idx][file_idx]['od'].time, tInc_all_tddr_ica, label='tInc_tddr_ica', color='m' )
-            plots.plot_stim_markers(ax1, rec[subj_idx][file_idx].stim, y=1)
+            plot_stim_markers(ax1, rec[subj_idx][file_idx].stim, y=1)
             ax1.set_title( f"Subject:{subj_idx+1}, Pruned: {(len(nan_chs)-len(idx_good))*100/len(nan_chs):.1f}%" )
             #    p.xlabel( 'Time' )
             #    p.ylabel( 'tInc_all' )
@@ -936,7 +938,7 @@ def plot_tIncCh_dqr( rec, cfg_dataset, filenm_lst, iqr_threshold_std=2, iqr_thre
                 thresh_tddr = quality.find_gvtd_thresh(gvtd_tddr_ica.values, quality.gvtd_stat_type.Histogram_Mode, n_std = 10)
                 ax2.axhline(thresh_tddr, color='m', linestyle='--', label=f'Thresh {thresh_tddr:.1e}')
             ax2.set_xlabel("time (s)")
-            plots.plot_stim_markers(ax2, rec[subj_idx][file_idx].stim, y=1)
+            plot_stim_markers(ax2, rec[subj_idx][file_idx].stim, y=1)
             ax2.legend()
 
             # give a title to the figure and save it
@@ -1146,6 +1148,11 @@ def plot_gradCPT_VTC( stim, cfg_dataset, filenm ):
 
     p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_gradCPT_VTC.png") )
     p.close()
+
+
+
+
+
 
 
 
