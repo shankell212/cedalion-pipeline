@@ -5,13 +5,9 @@
 import cedalion
 import cedalion.nirs
 import cedalion.sigproc.frequency as frequency
-import cedalion.sigproc.motion as motion_correct
-import cedalion.xrutils as xrutils
 import cedalion.models.glm as glm
-import cedalion.data as datasets
 import xarray as xr
 import matplotlib.pyplot as p
-import cedalion.vis as plots
 from cedalion import units
 import numpy as np
 import pandas as pd

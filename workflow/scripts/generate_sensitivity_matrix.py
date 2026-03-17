@@ -3,17 +3,17 @@
 
 import os
 import cedalion
-import cedalion.nirs
 import cedalion.dot as dot
 import cedalion.io as io
-import yaml
-from cedalion.io.forward_model import load_Adot
+import gzip
+import pickle
 
 
-def generate_Adot_func(cfg_Adot, probe_dir, snirf_name, head_model, save_dir):
+def generate_Adot_func(cfg_Adot, cfg_dataset, head_model, save_dir_Adot, save_dir_geo):
     #%%
-    # Load probe snirf
-    recordings = io.read_snirf(probe_dir + snirf_name)
+    # Load recording obj from first subject/task/run
+    snirf_path = os.path.join(cfg_dataset['root_dir'], f"sub-{cfg_dataset['subject'][0]}", "nirs", f"sub-{cfg_dataset['subject'][0]}_task-{cfg_dataset['task'][0]}_run-{cfg_dataset['run'][0]}_nirs.snirf")
+    recordings = io.read_snirf(snirf_path)
     rec = recordings[0]
     geo3d_meas = rec.geo3d
     meas_list = rec._measurement_lists["amp"]
@@ -28,7 +28,7 @@ def generate_Adot_func(cfg_Adot, probe_dir, snirf_name, head_model, save_dir):
     fwm = dot.ForwardModel(head, geo3d_snapped_ijk, meas_list)
 
     #%% Run the simulation
-    save_dir_fl = save_dir.split("sensitivity")[0]
+    save_dir_fl = save_dir_Adot.split("sensitivity")[0]
 
     # calculate fluence
     print ('Calculating fluence')
@@ -42,26 +42,33 @@ def generate_Adot_func(cfg_Adot, probe_dir, snirf_name, head_model, save_dir):
 
     # Calculate the sensitivity matrix
     print('Calculating the sensitivity matrix')
-    sensitivity_fname = os.path.join(save_dir)
+    sensitivity_fname = os.path.join(save_dir_Adot)
     fwm.compute_sensitivity(fluence_fname, sensitivity_fname)
-    #Adot = load_Adot(sensitivity_fname)
+
+    # Save geometric 2d and 3d positions to sidecar file
+    geo_sidecar = {
+        'geo2d': rec.geo2d,
+        'geo3d': rec.geo3d
+        }
+    file = gzip.GzipFile(save_dir_geo, 'wb')
+    file.write(pickle.dumps(geo_sidecar))
+    file.close()
 
 
 #%%
 
 def main():
-    config = snakemake.config
     
     # get params
     #cfg_img_recon = snakemake.params.cfg_img_recon
     cfg_Adot = snakemake.params.cfg_Adot
-    probe_dir = snakemake.params.probe_dir
-    snirf_name = snakemake.params.snirf_name
+    cfg_dataset = snakemake.params.cfg_dataset
     head_model = snakemake.params.head_model
 
-    out = snakemake.output[0]
+    out_Adot = snakemake.output.Adot
+    out_geo = snakemake.output.geometry
     
-    generate_Adot_func(cfg_Adot, probe_dir, snirf_name, head_model, out)
+    generate_Adot_func(cfg_Adot, cfg_dataset, head_model, out_Adot, out_geo)
     
             
 if __name__ == "__main__":

@@ -13,7 +13,8 @@ from pathlib import Path
 SNAKEFILE_DIR = Path(workflow.snakefile).parent
 
 # Use --configfile to specify config, or use default
-default_config = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_test_imgrecon_newnoise_2/config_STS_Q.yml" # have snakemake copy this file into derivatives folder
+# default_config = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_test_imgrecon_newnoise_2/config_STS_Q.yml" # have snakemake copy this file into derivatives folder
+default_config = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion_pipeline_regression_test/tests/data/derivatives/cedalion/test_newnoise_ced/config_BS.yml" # have snakemake copy this file into derivatives folder
 if not workflow.overwrite_configfiles:
     configfile: default_config
 
@@ -230,13 +231,13 @@ rule generate_sensitivity:
     input:
         in1 = []
     output:
-        protected(join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'fw', 'probe', 'sensitivity.nc'))
+        Adot = protected(join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sensitivity.nc')),
+        geometry = protected(join(config['dataset']['root_dir'], 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'probe_geometry.sidecar'),)
     resources:
         gpu=1
     params:
-        probe_dir = config['image_recon']['probe_dir'],
+        cfg_dataset = config['dataset'],
         head_model = config['image_recon']['head_model'],
-        snirf_name = config['image_recon']['snirf_name_probe'],
         cfg_Adot = config['image_recon']['generate_sensitivity']
     script:
         "scripts/generate_sensitivity_matrix.py"
@@ -244,8 +245,8 @@ rule generate_sensitivity:
 if config['image_recon']['spatial_basis']['enable']: # run generate sbf rule if enable is true
     rule generate_sbf:
         input:
-            #Adot = ancient(rules.generate_sensitivity.output)
-            Adot = ancient(join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'fw', 'probe', 'sensitivity.nc'))
+            Adot = ancient(rules.generate_sensitivity.output)
+            #Adot = ancient(join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'fw', 'probe', 'sensitivity.nc'))
         output: # CHANGE file ext when save and load sbf in ced updated
             join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sbf.pkl.gz')
         params:
@@ -264,7 +265,8 @@ def get_optional_input(SB_flag):
 rule imagerecon:
     input:
         hrf_data = rules.hrf_estimation.output.pickle,
-        Adot = ancient(rules.generate_sensitivity.output),
+        Adot = ancient(rules.generate_sensitivity.output.Adot),
+        geometry = ancient(rules.generate_sensitivity.output.geometry),
         SB = get_optional_input(config['image_recon']['spatial_basis']['enable']),
         module4 = SNAKEFILE_DIR / "scripts/modules/module_image_recon.py",
         module5 = SNAKEFILE_DIR / "scripts/modules/module_spatial_basis_funs.py"
