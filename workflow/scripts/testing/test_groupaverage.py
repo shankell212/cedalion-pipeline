@@ -22,11 +22,11 @@ import groupaverage as groupavg
 import importlib
 importlib.reload(groupavg)
 
-#config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_STS_Q.yml"
-#config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml" # CHANGE if testing
-#config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/regression_testing/config_BS_reg_test.yml" # CHANGE if testing
-config_path = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_test_imgrecon/config_STS_Q.yml"
+root_dir = "/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/"
+config_path = os.path.join(root_dir, 'derivatives', 'cedalion', 'test', 'test_3', 'config_test_3.yml')
 
+#config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml" # CHANGE if testing
+# config_path = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_test_imgrecon/config_STS_Q.yml"
 
 with open(config_path, 'r') as file:
     config = yaml.safe_load(file)
@@ -72,7 +72,6 @@ geo_files = [os.path.join(blockavg_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_
 # preproc_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "preprocessed_data")  #, f"sub-{subj}")
 # data_quality_files = [os.path.join(preproc_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_run-{cfg_dataset['run'][-1]}_nirs_dataquality_geo.sidecar") for subj in subjects ]
 
-
 #save_path = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "groupaverage")
 
 if blockavg:
@@ -88,6 +87,7 @@ else:
         + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
+        + (f"_{config['image_recon']['mag']['t_win'][0]}_{config['image_recon']['mag']['t_win'][1]}" if config["image_recon"]["mag"]["enable"] else "")
         #+"_20subs"
         + ".pkl"
     )
@@ -101,3 +101,5 @@ if blockavg:
 else:
     groupavg.groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, image_files, geo_files, out)
 
+
+# %%

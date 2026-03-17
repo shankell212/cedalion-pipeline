@@ -157,8 +157,8 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, file_names, geo_fi
         mse_weighted_between_subjects = mse_weighted_between_subjects * mse_mean_within_subject # normalized by the within subject variances as weights
      
         # get the weighted average
-        mse_weighted_between_subjects = mse_weighted_between_subjects.pint.dequantify()
-        mse_subj = mse_subj.pint.dequantify()
+        #mse_weighted_between_subjects = mse_weighted_between_subjects.pint.dequantify()
+        #mse_subj = mse_subj.pint.dequantify()
         mse_btw_within_sum_subj = mse_subj + mse_weighted_between_subjects
         denom = (1/mse_btw_within_sum_subj).sum('subj')
         
@@ -168,7 +168,7 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, file_names, geo_fi
         mse_total = 1/denom
       
         total_stderr_hrf_est = np.sqrt( mse_total )
-        groupaverage_weighted = groupaverage_weighted.pint.dequantify() # dequant for tstat calc
+        #groupaverage_weighted = groupaverage_weighted.pint.dequantify() # dequant for tstat calc
 
         tstat = groupaverage_weighted / total_stderr_hrf_est
         total_stderr_hrf_est = total_stderr_hrf_est.assign_coords(trial_type=groupaverage_weighted.trial_type)
