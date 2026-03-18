@@ -15,9 +15,10 @@ import xarray as xr
 import cedalion.dot as dot
 import gzip
 import pickle
-import json
+import cedalion.io as io
 
 import sys
+
 script_dir = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.join(script_dir, 'modules')
 sys.path.append(modules_path)
@@ -67,11 +68,19 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
     head = dot.get_standard_headmodel(cfg_img_recon['head_model'])
     #Adot = io.forward_model.load_Adot(Adot_path)
     #head, PARCEL_DIR = img_recon.load_head_model(cfg_img_recon['head_model'], with_parcels=False)
-    Adot, meas_list, geo3d, amp = img_recon.load_probe(cfg_img_recon['probe_dir'], head_model= cfg_img_recon['head_model'], snirf_name=cfg_img_recon['snirf_name_probe'])
+    #Adot, meas_list, geo3d, amp = img_recon.load_probe(cfg_img_recon['probe_dir'], head_model= cfg_img_recon['head_model'], snirf_name=cfg_img_recon['snirf_name_probe'])
     
+    Adot_path = os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', 'forward', 'shannon', "sensitivity.nc")
+    Adot = io.forward_model.load_Adot(Adot_path)
+
     ec = cedalion.nirs.get_extinction_coefficients(cfg_img_recon['spectrum'], Adot.wavelength)
-    einv = cedalion.xrutils.pinv(ec)
-    
+
+    # load geometry 
+    geo_path = os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', 'forward', 'shannon', "probe_geometry.sidecar")
+    with gzip.open(geo_path, 'rb') as f:
+        geo_pos = pickle.load(f)
+        geo3d = geo_pos['geo3d']    
+
     #%% run image recon
     # # Make Adot and blockaverage channel order the same
     # blockaverage_subj = blockaverage_subj.sel(channel=Adot.channel.values)
@@ -113,7 +122,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
             dpf = xr.DataArray(
                     [1, 1],
                     dims="wavelength",
-                    coords={"wavelength": amp.wavelength},
+                    coords={"wavelength": Adot.wavelength},
                     )
             od_hrf =  cedalion.nirs.cw.conc2od(hrf, geo3d, dpf)
             od_mse = xr.dot(ec**2, mse, dim =['chromo']) * 1 * units.mm**2
@@ -133,10 +142,8 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
         if cfg_img_recon['mag']['enable']:
             if 'reltime' in od_hrf.dims:
                 od_hrf_mag = od_hrf.sel(reltime=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('reltime')
-                #od_mse_mag = od_mse.sel(reltime=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('reltime')
             else:
                 od_hrf_mag = od_hrf.sel(time=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('time')
-                #od_mse_mag = od_mse.sel(time=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('time')
         else:
             od_hrf_mag = od_hrf.copy()
             
@@ -146,7 +153,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
             od_mse_mag = od_mse.mean('time')
 
         C_meas = od_mse_mag.pint.dequantify()
-        C_meas = C_meas.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
+        #C_meas = C_meas.stack(measurement=('channel', 'wavelength')).sortby('wavelength')
         
         # save G in derivatives/cedalion/forward_model  -> for brain and scalp separately and sigma
         # save in derivatives sub dirs -> make symbolic link to another folder. and then create those folders in optional deriv folder. 
@@ -191,7 +198,7 @@ def img_recon_func(cfg_dataset, cfg_img_recon, cfg_hrf, hrf_file, out):
         #                         DIRECT=cfg_img_recon['DIRECT']['enable'], SB=cfg_sb['enable'], G=G)
         
         X_mse = img_recon.get_image_noise_posterior(Adot, 
-                            W, 
+                            C_meas, 
                             alpha_spatial = cfg_img_recon['alpha_spatial'], 
                             lambda_R = cfg_img_recon['lambda_R'],
                             DIRECT = cfg_img_recon['DIRECT']['enable'], 

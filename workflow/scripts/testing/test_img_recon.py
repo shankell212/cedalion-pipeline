@@ -23,10 +23,11 @@ import image_recon as img_recon
 import importlib
 importlib.reload(img_recon)
 # 
-config_path = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_2_newnoise/config_STS_Q.yml"
-# config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_IWHD_Q.yml"
-# config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml"
-#config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/regression_testing/config_BS_reg_test.yml" # CHANGE if testing
+# config_path = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_2_newnoise/config_STS_Q.yml"
+
+root_dir = "/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/"
+config_path = os.path.join(root_dir, 'derivatives', 'cedalion', 'reference', 'ref_1', 'config_ref_1_tmp.yml')
+
 
 
 with open(config_path, 'r') as file:
@@ -66,6 +67,7 @@ for idx, subj in enumerate(subjects):
         + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
+        + (f"_{config['image_recon']['mag']['t_win'][0]}_{config['image_recon']['mag']['t_win'][1]}" if config["image_recon"]["mag"]["enable"] else "")
         + ".pkl.gz"
     )
 
