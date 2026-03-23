@@ -32,7 +32,7 @@ import os
 import cedalion
 import cedalion.nirs
 import cedalion.sigproc.quality as quality
-import cedalion.sigproc.motion_correct as motion_correct
+import cedalion.sigproc.motion as motion_correct
 import cedalion.sigproc.frequency as frequency
 import cedalion.xrutils as xrutils
 import cedalion.models.glm as glm
