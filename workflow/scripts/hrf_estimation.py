@@ -11,15 +11,15 @@ Created on Thu Jun  5 09:40:42 2025
 
 import os
 import cedalion
-import cedalion.nirs
 import numpy as np
 import xarray as xr
 import pint
 from cedalion import units
+from cedalion.dataclasses.geometry import PointType
 import gzip
 import pickle
 import json
-
+import pandas as pd
 import sys
 script_dir = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.join(script_dir, 'modules')
@@ -30,7 +30,7 @@ import module_hrf_est as mhrf
 
 #%% Block average func
 
-def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_file, out_json, out_geo):  #, out_blkavg_nc, out_epoch_nc):
+def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_file): #, out_json, out_geo):  #, out_blkavg_nc, out_epoch_nc):
     print(f'run_files: {run_files}')
         
     # update units 
@@ -44,34 +44,44 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_file, 
         cfg_GLM['distance_threshold']= units(cfg_GLM['distance_threshold'])
     
     # Loop through files
-    idx_sat_runs = []
-    idx_amp_runs = []
-    bad_chans_sat_runs = []
-    bad_chans_amp_runs = []
+    # bad_chans_sat_runs = []
+    # bad_chans_amp_runs = []
     pruned_chans_lst = []
+    bad_channels_runs = []
     # loop through files and concatinate runs for GLM and epochs for blockaverage
     for file_idx, run in enumerate(run_files):     
         
         # if file path/ current run does not exist for this file, continue without it  (i.e. subj dropped out)
-        if not os.path.isfile(run):  # !!! do not need tis check anymore?
+        if not os.path.isfile(run):  
             continue   
         
         # # Load in snirf for curr subj and run
-        # records = cedalion.io.read_snirf( run ) 
-        # rec = records[0]
-        with gzip.open(run, 'rb') as f:
-            record = pickle.load(f)
-            rec = record[0]
+        records = cedalion.io.read_snirf(fname = run, time_units = 'second' ) #FIXME: HARD CODED TIME UNITS
+        rec = records[0]
+        # with gzip.open(run, 'rb') as f:
+        #     record = pickle.load(f)
+        #     rec = record[0]
         ts = rec[cfg_hrf['rec_str']].copy()
         stim = rec.stim.copy() # select the stim for the given file 
+
+
+        # Load in data quality info for current run
+        # with gzip.open(data_quality_files[file_idx], 'rb') as f:
+        #     data_quality_run = pickle.load(f) 
+        ds = xr.open_dataset(data_quality_files[file_idx])
+        pruned_channels = ds['pruned_channels'].values
+        bad_channels = ds['bad_channels'].values
+        geo2d = ds['geo2d']
+        geo3d = ds['geo3d']
+        ds.close()
+
+        geo2d = geo2d.pint.quantify().rename({'pos2d': 'pos'}) # re-cast type coord from string back to PointType enum 
+        geo2d['type'] = xr.DataArray(pd.Series(geo2d['type'].values).map(lambda s: PointType[s.split('.')[-1]]).values,
+            dims=geo2d['type'].dims)
+        geo3d = geo3d.pint.quantify().rename({'pos3d': 'pos'})
+        geo3d['type'] = xr.DataArray(pd.Series(geo3d['type'].values).map(lambda s: PointType[s.split('.')[-1]]).values,
+            dims=geo3d['type'].dims)
         
-        with gzip.open(data_quality_files[file_idx], 'rb') as f:
-            data_quality_run = pickle.load(f)
-            
-        geo2d = data_quality_run['geo2d']
-        geo3d = data_quality_run['geo3d']
-        chs_pruned = data_quality_run['chs_pruned']
-            
         # check if ts has dimension chromo
         if 'chromo' in ts.dims:
             ts = ts.transpose('chromo', 'channel', 'time')  # !!! try transpose(..., 'channel', 'time') to get rid of if statement
@@ -101,26 +111,19 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_file, 
 
 
         # Concatenate all data qual stuff
-        pruned_chans = chs_pruned.where(chs_pruned != 0.58, drop=True).channel.values # get array of channels that were pruned
-        pruned_chans_lst.append(pruned_chans)
-
-        idx_sat_runs.append(data_quality_run['idx_sat'])
-        bad_chans_sat_runs.append(data_quality_run['bad_chans_sat'])
-        idx_amp_runs.append(data_quality_run['idx_amp'])
-        bad_chans_amp_runs.append(data_quality_run['bad_chans_amp'])
+        pruned_chans_lst.append(pruned_channels)
+        bad_channels_runs.append(bad_channels)
 
         # DONE LOOP OVER FILES
     
     # Flatten list of bad channels and take only unique chan values
-    idx_sat_flat = [x for xs in idx_sat_runs for x in xs] # flatten list of bad chans indices for all runs
-    idx_amp_flat = [x for xs in idx_amp_runs for x in xs]
-    bad_chans_sat_flat = [x for xs in bad_chans_sat_runs for x in xs]
-    bad_chans_amp_flat = [x for xs in bad_chans_amp_runs for x in xs]
+    bad_channels_flat = [x for xs in bad_channels_runs for x in xs]
+    bad_channels_tmp = list(set(bad_channels_flat))
 
-    idx_sat = list(set(idx_sat_flat)) # get unique channel values only # !!! FIXME: want to not mark a chan bad thats only bad in 1 run in future
-    idx_amp = list(set(idx_amp_flat))
-    bad_chans_sat = list(set(bad_chans_sat_flat))
-    bad_chans_amp = list(set(bad_chans_amp_flat))
+    # bad_chans_sat_flat = [x for xs in bad_chans_sat_runs for x in xs]
+    # bad_chans_amp_flat = [x for xs in bad_chans_amp_runs for x in xs]
+    # bad_chans_sat = list(set(bad_chans_sat_flat))
+    # bad_chans_amp = list(set(bad_chans_amp_flat))
     
 
     if cfg_hrf['GLM']['enable']:
@@ -136,99 +139,46 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_file, 
     bad_chans_mse_flat = [x for xs in bad_chans_mse_lst for x in xs]
     bad_chans_mse = list(set(bad_chans_mse_flat))
 
-    bad_indices = np.unique(np.concat([bad_chans_sat, bad_chans_amp, bad_chans_mse]))
-
-    '''
-    # # create new rec variable that only includes blockaverage for all rusn for this sub/task
-    # rec["blockaverage"] = blockaverage
-    # rec['epochs'] = epochs
-    
-    # # remove all other keys except blockaverage timeseries
-    # for key in list(rec.timeseries.keys()):
-    #     if key == "blockaverage" or key == "epochs":
-    #         continue
-    #     del rec.timeseries[key]
-    
-    # rec.stim.duration = 1
-    # rec.stim.onset = 1
-    # rec.stim.value = 1
-        
-    # for key in list(rec.aux_ts.keys()):
-    #     del rec.aux_ts[key]
-    '''
+    bad_channels_all = np.unique(np.concat([bad_channels_tmp, bad_chans_mse]))
     
     
     # Save geometric 2d and 3d positions to sidecar file
-    geo_sidecar = {
-        'geo2d': geo2d,
-        'geo3d': geo3d
-        }
-    file = gzip.GzipFile(out_geo, 'wb')
-    file.write(pickle.dumps(geo_sidecar))
-    file.close()
+    # geo_sidecar = {
+    #     'geo2d': geo2d,
+    #     'geo3d': geo3d
+    #     }
+    # file = gzip.GzipFile(out_geo, 'wb')
+    # file.write(pickle.dumps(geo_sidecar))
+    # file.close()
     
-    results = {
-        'hrf_est': hrf_estimate,
-        'mse_t': hrf_mse,
-        'bad_indices': bad_indices,
-        }
+    # Save results as xr dataset to netcdf file
+    ds_results = xr.Dataset()
+    ds_results['hrf_est'] = hrf_estimate.pint.dequantify()  # dequant to save, will re-quant in groupaverage
+    ds_results['mse_t'] = hrf_mse.pint.dequantify() # dequant to save, will re-quant in groupaverage
+    ds_results['bad_channels'] = xr.DataArray(bad_channels_all, dims='bad_channel')
+    geo2d_clean = rec.geo2d.pint.dequantify().rename({'pos': 'pos2d'}) # dequant to save, and rename pos to pos2d to avoid confusion with geo3d pos coords
+    geo2d_clean['type'] = geo2d_clean['type'].astype(str) # convert type to str
+    ds_results['geo2d'] = geo2d_clean
+    geo3d_clean = rec.geo3d.pint.dequantify().rename({'pos': 'pos3d'}) # dequant to save, and rename pos to pos3d to avoid confusion with geo2d pos coords
+    geo3d_clean['type'] = geo3d_clean['type'].astype(str) # convert type to str
+    ds_results['geo3d'] = geo3d_clean
+
+    # SAVE AS NETCDF FILE
+    ds_results.to_netcdf(out_file, mode='w')
+
+    # results = {
+    #     'hrf_est': hrf_estimate,
+    #     'mse_t': hrf_mse,
+    #     'bad_indices': bad_channels_all,
+    #     }
     
-    file = gzip.GzipFile(out_file, 'wb')  # save as gzipped pickle file
-    file.write(pickle.dumps(results))
-    file.close()    
-
-    # # save as netcdf file
-    # ds = xr.Dataset({
-    # 'hrf_est':     ('hrf_dim',  hrf_estimate),  # variable, dimensions, data
-    # 'mse_t':       ('mse_dim',  hrf_mse),
-    # 'bad_indices': ('bad_dim',  bad_indices),
-    # })
-    # ds.to_netcdf(out_file)
-
-    # # save glm results
-    # if glm_results is not None:
-    #     glm_weights = mhrf.save_weights(glm_results)
-    #     idx = out_json.find("sub-")
-    #     sub_dir = out_json[: out_json.find("/", idx)]
-    #     subject_num = out_json.split("sub-")[1].split("/")[0]
-    #     out_glm = os.path.join(sub_dir, f"sub-{subject_num}_task-{cfg_dataset['task'][0]}_nirs_glm_weights.pkl.gz") # NOTE: assumes only 1 task
-    #     file = gzip.GzipFile(out_glm, 'wb')  # sav eas gzipped pickle file
-    #     file.write(pickle.dumps(glm_weights))
-    #     file.close()    
+    # file = gzip.GzipFile(out_file, 'wb')  # save as gzipped pickle file
+    # file.write(pickle.dumps(results))
+    # file.close()    
 
     
-    print("Hrf estimation data saved successfully")
+    print(f"Hrf estimation data saved successfully to {out_file}!")
 
-    data_quality = {       
-        "idx_sat": idx_sat,
-        "bad_chans_sat": bad_chans_sat,
-        "idx_amp": idx_amp,
-        "bad_chans_amp": bad_chans_amp,
-        "bad_chans_mse": bad_chans_mse
-        }
-    
-    # # SAVE data quality dict as a sidecar json file   # !!! change to just keeping in xarray as a dim?
-    file = gzip.GzipFile(out_json, 'wb')
-    file.write(pickle.dumps(data_quality))
-    file.close()
-
-
-    # file = gzip.GzipFile('out_sidecar', 'wb')  # save as sidecar instead of json
-    # file.write(pickle.dumps(data_quality))
-    
-    # # Debugging issue with save snirf:
-    # for key, timeseries in rec.timeseries.items():
-    #     data_type = rec.get_timeseries_type(key)
-    #     print(key)
-    #     print(data_type)
-    #     print(timeseries.dims)
-        
-    #     print('\n')
-        
-    #cedalion.io.snirf.write_snirf(out, rec)
-    
-    # PROCEED w/ saving as a pickle file for now
-        # post prob on cedalion implementation
     
 
 
@@ -253,13 +203,11 @@ def main():
     run_files = snakemake.input.preproc  #.preproc_runs
     data_quality_files = snakemake.input.quality
     
-    out_file = snakemake.output.pickle
-    out_json = snakemake.output.json
-    out_geo = snakemake.output.geo
-    #out_blkavg_nc = snakemake.output.bl_nc
-    #out_epoch_nc = snakemake.output.ep_nc
+    out_file = snakemake.output.net_hrf
+    # out_json = snakemake.output.json
+    # out_geo = snakemake.output.geo
     
-    hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_file, out_json, out_geo)  #, out_blkavg_nc, out_epoch_nc)
+    hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_file) #, out_json, out_geo)  #, out_blkavg_nc, out_epoch_nc)
     
    
     

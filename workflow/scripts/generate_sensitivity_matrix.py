@@ -9,7 +9,7 @@ import gzip
 import pickle
 
 
-def generate_Adot_func(cfg_Adot, cfg_dataset, head_model, save_dir_Adot, save_dir_geo):
+def generate_Adot_func(cfg_Adot, cfg_dataset, head_model, save_dir_Adot):
     #%%
     # Load recording obj from first subject/task/run
     snirf_path = os.path.join(cfg_dataset['root_dir'], f"sub-{cfg_dataset['subject'][0]}", "nirs", f"sub-{cfg_dataset['subject'][0]}_task-{cfg_dataset['task'][0]}_run-{cfg_dataset['run'][0]}_nirs.snirf")
@@ -45,14 +45,14 @@ def generate_Adot_func(cfg_Adot, cfg_dataset, head_model, save_dir_Adot, save_di
     sensitivity_fname = os.path.join(save_dir_Adot)
     fwm.compute_sensitivity(fluence_fname, sensitivity_fname)
 
-    # Save geometric 2d and 3d positions to sidecar file
-    geo_sidecar = {
-        'geo2d': rec.geo2d,
-        'geo3d': rec.geo3d
-        }
-    file = gzip.GzipFile(save_dir_geo, 'wb')
-    file.write(pickle.dumps(geo_sidecar))
-    file.close()
+    # # Save geometric 2d and 3d positions to sidecar file
+    # geo_sidecar = {
+    #     'geo2d': rec.geo2d,
+    #     'geo3d': rec.geo3d
+    #     }
+    # file = gzip.GzipFile(save_dir_geo, 'wb')
+    # file.write(pickle.dumps(geo_sidecar))
+    # file.close()
 
 
 #%%
@@ -66,9 +66,8 @@ def main():
     head_model = snakemake.params.head_model
 
     out_Adot = snakemake.output.Adot
-    out_geo = snakemake.output.geometry
     
-    generate_Adot_func(cfg_Adot, cfg_dataset, head_model, out_Adot, out_geo)
+    generate_Adot_func(cfg_Adot, cfg_dataset, head_model, out_Adot)
     
             
 if __name__ == "__main__":

@@ -1,9 +1,9 @@
 dataset:
-  root_dir: "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD" # where your BIDS data lives
-  derivatives_subfolder: "cedalion"  # where to save results. Saves as: derivatives/cedalion/
-  subject: ["01", "02", "03", "04", "05", "06", "07", "08"] # subject IDs you want to include. DO NOT INCL EXCLUDED SUBS
-  task: ["STS"] # task list. Currently only do ONE task at a time.                  
-  run: ["01"]   # number of runs for this task. 
+  root_dir: "/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data" # where your BIDS data lives
+  derivatives_subfolder: "TEST_SMK"  # where to save results. Saves as: derivatives/cedalion/YOURSTRING
+  subject: ["586", "587", "592", "618", "621"]  # subject IDs you want to include. DO NOT INCL EXCLUDED SUBS
+  task: ["BS"]  # task list. Currently only do ONE task at a time.                  
+  run: ["01", "02", "03"]   # number of runs for this task. 
 
 preprocess:
   steps:
@@ -55,10 +55,10 @@ preprocess:
       enable: true
 
 hrf_estimation:   
-  stim_lst: ["STS_Q"]  # list of stims from events.tsv you want to estimate the HRF of
+  rec_str: "conc"   # MUST BE 'conc' OR 'od_02'    - what you want to block average
+  stim_lst: ["left", "right"]  # list of stims from events.tsv you want to estimate the HRF of
   t_pre: "2 second"   # time before stim onset you want to model 
-  t_post: "35 second" # time after stim onset you want to model
-  rec_str: "conc"   # conc or od_corrected  - what you want to block average
+  t_post: "10 second" # time after stim onset you want to model
   GLM:        
    enable: true  # if true do GLM, false do block averaging
    do_drift: false  # if true, does normal drift correction, false does not
@@ -67,7 +67,7 @@ hrf_estimation:
    drift_order: 3
    distance_threshold: "20 mm"
    short_channel_method : "mean"
-   noise_model: "arirls"
+   noise_model: "ar_irls"
    t_delta: "1 second"
    t_std: "1 second"
 
@@ -77,7 +77,7 @@ groupaverage:
    mse_amp_thresh: 1e-3 
    mse_val_for_bad_data: "1e7 micromolar**2"
    mse_min_thresh: "1e0 micromolar**2"
-   blockaverage_val: "0 micromolar**2"
+   hrf_val: "0 micromolar"
   # mse:  # od
   #  mse_val_for_bad_data: 1e1
   #  mse_min_thresh: 1e-6
@@ -85,9 +85,12 @@ groupaverage:
    
    
 image_recon:   # need to create sensitivity matrix first. Not included here yet.
+  generate_sensitivity: 
+    sub_folder: 'shannon'  # optional subfolder in /derivatives/cedalion/{folder}/probe/fw  # probe must be placed in folder/probe
+    forward_model: "MCX"  # MCX or NIRFASTER
   mag:   
-    enable: false  # perform image recon on magnitude of HRF averaged between time window (t_win)
-    t_win: [5, 15]
+    enable: true  # perform image recon on magnitude of HRF averaged between time window (t_win)
+    t_win: [5, 8]
   recon_mode: "mua2conc"
   Cmeas: 
     enable: true
@@ -101,16 +104,16 @@ image_recon:   # need to create sensitivity matrix first. Not included here yet.
     sigma_brain: "1 mm"
     sigma_scalp: "5 mm"
   mse:  # od   - for changing bad values IDed in prune channels mask
-    mse_amp_thresh: 1e-3 #1.1e-6
+    mse_amp_thresh: 1e-3   #1.1e-6
     mse_val_for_bad_data: 1e1
     mse_min_thresh: 1e-6
     hrf_val: 0
-  probe_dir: "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/probe/"
-  snirf_name_probe: "fullhead_56x144_NN22_System1.snirf"
-  head_model: 'ICBM152'
+  head_model: 'icbm152'
   alpha_meas: 1e4
   alpha_spatial: 1e-3
   spectrum: 'prahl'
+  lambda_spatial_depth: 1e-6   # old val for od 1.6e-09  , now 1e-6 for both od and conc 
+
 
 
   

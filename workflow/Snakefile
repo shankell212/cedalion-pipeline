@@ -4,16 +4,14 @@ import os
 from os.path import join
 from pathlib import Path
 
-# configfile: "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_test_imgrecon_newnoise_2/config_STS_Q.yml" # have snakemake copy this file into derivatives folder
-# ROOT = config['dataset']["root_dir"]
-# DERIV = config['dataset']["derivatives_subfolder"]
-# SAVE_DIR = join(ROOT, 'derivatives', 'cedalion', DERIV)
 
 # Get the directory where the Snakefile is located
 SNAKEFILE_DIR = Path(workflow.snakefile).parent
 # Use --configfile to specify config, or use default
 # default_config = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_test_imgrecon_newnoise_2/config_STS_Q.yml" # have snakemake copy this file into derivatives folder
-default_config = "/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/derivatives/cedalion/test/test_1/config_test_1.yml" # have snakemake copy this file into derivatives folder
+# default_config = "/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/derivatives/cedalion/test/test_1/config_test_1.yml" # have snakemake copy this file into derivatives folder
+default_config = "/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/derivatives/cedalion/test_new_file_struct_postcov_ced/test_1/config_test_1.yml" # have snakemake copy this file into derivatives folder
+
 if not workflow.overwrite_configfiles:
     configfile: default_config
 
@@ -34,7 +32,7 @@ def get_imagerecon_output(): # create file name for image recon output
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
         + (f"_{config['image_recon']['mag']['t_win'][0]}_{config['image_recon']['mag']['t_win'][1]}" if config["image_recon"]["mag"]["enable"] else "")
-        + ".pkl.gz"
+        + ".nc"
     )
 
 def get_groupavg_imagerecon_output():
@@ -48,14 +46,14 @@ def get_groupavg_imagerecon_output():
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
         + (f"_{config['image_recon']['mag']['t_win'][0]}_{config['image_recon']['mag']['t_win'][1]}" if config["image_recon"]["mag"]["enable"] else "")
-        + ".pkl"
+        + ".nc"
     )
 
 
 def get_hrf_output():
     return (
         f"{SAVE_DIR}/hrf_estimate/sub-{{subject}}/"
-        f"sub-{{subject}}_task-{{task}}_nirs_hrf_estimate_{config['hrf_estimation']['rec_str']}.pkl.gz"
+        f"sub-{{subject}}_task-{{task}}_nirs_hrf_estimate_{config['hrf_estimation']['rec_str']}.nc"
     )
 
 rule all_default:
@@ -63,7 +61,7 @@ rule all_default:
         # Groupaverage channel space 
         [expand(
             f"{SAVE_DIR}/groupaverage/"
-            f"task-{{task}}_nirs_groupaverage_chanspace_{config['hrf_estimation']['rec_str']}.pkl",
+            f"task-{{task}}_nirs_groupaverage_chanspace_{config['hrf_estimation']['rec_str']}.nc",
             task=config["dataset"]["task"],
         ),
 
@@ -82,7 +80,7 @@ rule all_groupavg_imagerecon:
 rule all_preprocess:
     input:
         expand([
-            (f"{SAVE_DIR}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.pkl"),  #  preprocessed_dataessed snirf
+            (f"{SAVE_DIR}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.nc"),  #  preprocessed_dataessed snirf
             (f"{SAVE_DIR}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_dataquality_geo.sidecar"), # data qual sidecar 
             ],
             subject = config["dataset"]["subject"],
@@ -93,9 +91,9 @@ rule all_preprocess:
 rule all_hrf_estimation:
     input:
         expand([
-        get_hrf_output(),
-            (f"{SAVE_DIR}/hrf_estimate/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json"),  # blockaverage dataqual
-            (f"{SAVE_DIR}/hrf_estimate/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_geo.sidecar")
+            get_hrf_output(),
+            #(f"{SAVE_DIR}/hrf_estimate/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json"),  # blockaverage dataqual
+            #(f"{SAVE_DIR}/hrf_estimate/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_geo.sidecar")
             ],
             subject = config["dataset"]["subject"],
             task = config["dataset"]["task"],
@@ -104,7 +102,7 @@ rule all_hrf_estimation:
 rule all_groupaverage:
     input:
         expand([  
-            (f"{SAVE_DIR}/groupaverage/task-{{task}}_nirs_groupaverage_chanspace_{config['hrf_estimation']['rec_str']}.pkl") # groupaverage
+            (f"{SAVE_DIR}/groupaverage/task-{{task}}_nirs_groupaverage_chanspace_{config['hrf_estimation']['rec_str']}.nc") # groupaverage
             ],
             task = config["dataset"]["task"],
             )      
@@ -116,7 +114,7 @@ rule all_imagerecon:
 if config['image_recon']['spatial_basis']['enable']: # run generate sbf rule if enable is true
     rule all_generate_sbf:
         input:
-            join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sbf.pkl.gz')
+            join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sbf.nc')
 
 rule preprocess:
     input:
@@ -126,8 +124,8 @@ rule preprocess:
         module1 = SNAKEFILE_DIR / "scripts/modules/module_preprocess.py",
         module2 = SNAKEFILE_DIR / "scripts/modules/module_plot_DQR.py"
     output:
-        snirf = (f"{SAVE_DIR}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.pkl"), # preprocessed snirf
-        sidecar = (f"{SAVE_DIR}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_dataquality_geo.sidecar"), # data qual sidecar
+        snirf = (f"{SAVE_DIR}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.snirf"), # preprocessed snirf
+        sidecar = (f"{SAVE_DIR}/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_dataquality.nc"), # data qual sidecar
     params:
         cfg_preprocess = config['preprocess'],
         cfg_dataset = config['dataset'],
@@ -143,12 +141,12 @@ def all_preprocessed_runs(wc):
     
     run_paths =  [
         f"{SAVE_DIR}/preprocessed_data/sub-{wc.subject}/"
-        f"sub-{wc.subject}_task-{wc.task}_run-{run}_nirs_preprocessed.pkl"
+        f"sub-{wc.subject}_task-{wc.task}_run-{run}_nirs_preprocessed.snirf"
         for run in config["dataset"]["run"]
     ]
     data_quality_paths = [
         f"{SAVE_DIR}/preprocessed_data/sub-{wc.subject}/"
-        f"sub-{wc.subject}_task-{wc.task}_run-{run}_nirs_dataquality_geo.sidecar"
+        f"sub-{wc.subject}_task-{wc.task}_run-{run}_nirs_dataquality.nc"
         for run in config["dataset"]["run"]
     ]
     return {
@@ -164,9 +162,8 @@ rule hrf_estimation:
         module3 = SNAKEFILE_DIR / "scripts/modules/module_hrf_est.py",
     output:
         # HRF for each task
-        pickle = get_hrf_output(),
-        json = (f"{SAVE_DIR}/hrf_estimate/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json"),
-        geo = (f"{SAVE_DIR}/hrf_estimate/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_geo.sidecar")
+        net_hrf = get_hrf_output(),
+        #geo = (f"{SAVE_DIR}/hrf_estimate/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_geo.sidecar")
     params:
         cfg_hrf = config['hrf_estimation'],
         cfg_dataset = config['dataset']
@@ -174,36 +171,23 @@ rule hrf_estimation:
         SNAKEFILE_DIR / "scripts/hrf_estimation.py"
     
     
+
 def all_hrf_files(wc):
-    ''' Return a list of all hrf .pkl files for this subject+task (i.e. all subs)'''  
+    ''' Return a list of all hrf files for this subject+task (i.e. all subs)'''  
     
     hrf_paths =  [
-        f"{SAVE_DIR}/hrf_estimate/sub-{subject}/sub-{subject}_task-{wc.task}_nirs_hrf_estimate_{config['hrf_estimation']['rec_str']}.pkl.gz" 
-        for subject in config["dataset"]["subject"]
-    ]
-    data_quality_paths = [
-        f"{SAVE_DIR}/hrf_estimate/sub-{subject}/sub-{subject}_task-{wc.task}_nirs_dataquality.json"
-        for subject in config["dataset"]["subject"]
-    ]
-    geo_paths = [
-        f"{SAVE_DIR}/hrf_estimate/sub-{subject}/sub-{subject}_task-{wc.task}_nirs_geo.sidecar"
+        f"{SAVE_DIR}/hrf_estimate/sub-{subject}/sub-{subject}_task-{wc.task}_nirs_hrf_estimate_{config['hrf_estimation']['rec_str']}.nc" 
         for subject in config["dataset"]["subject"]
     ]
 
-    #blockavg_nc_paths = [
-     #   f"{SAVE_DIR}/hrf_estimate/sub-{subject}/sub-{subject}_task-{wc.task}_nirs_hrf_estimate.nc"
-      #  for subject in config["dataset"]["subject"]
-    #]
-    #epoch_nc_paths = [
-     #   f"{SAVE_DIR}/hrf_estimate/sub-{subject}/sub-{subject}_task-{wc.task}_nirs_epochs.nc"
-     #   for subject in config["dataset"]["subject"]
-    #]
+    # geo_paths = [
+    #     f"{SAVE_DIR}/hrf_estimate/sub-{subject}/sub-{subject}_task-{wc.task}_nirs_geo.sidecar"
+    #     for subject in config["dataset"]["subject"]
+    # ]
+
     return {
         "hrf":  hrf_paths,
-        "quality":  data_quality_paths, 
-        "geo": geo_paths
-        #"blockavg_nc": blockavg_nc_paths, 
-        #"epochs_nc": epoch_nc_paths
+        # "geo": geo_paths
     }
     
 
@@ -211,11 +195,9 @@ def all_hrf_files(wc):
 rule groupaverage:
     input: 
         hrf_subs  = lambda wc: all_hrf_files(wc)["hrf"], # block avg data
-        quality  = lambda wc: all_hrf_files(wc)["quality"],    # quality metrics
-        geo  = lambda wc: all_hrf_files(wc)["geo"]    # geometric pos and landmarks
     output:
         # group averaged data
-        (f"{SAVE_DIR}/groupaverage/task-{{task}}_nirs_groupaverage_chanspace_{config['hrf_estimation']['rec_str']}.pkl")   
+        (f"{SAVE_DIR}/groupaverage/task-{{task}}_nirs_groupaverage_chanspace_{config['hrf_estimation']['rec_str']}.nc")   
     params:
         cfg_groupaverage = config["groupaverage"],
         cfg_dataset = config['dataset'],
@@ -231,7 +213,7 @@ rule generate_sensitivity:
         in1 = []
     output:
         Adot = protected(join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sensitivity.nc')),
-        geometry = protected(join(config['dataset']['root_dir'], 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'probe_geometry.sidecar'),)
+        #geometry = protected(join(config['dataset']['root_dir'], 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'probe_geometry.sidecar'),)
     resources:
         gpu=1
     params:
@@ -247,25 +229,25 @@ if config['image_recon']['spatial_basis']['enable']: # run generate sbf rule if 
             Adot = ancient(rules.generate_sensitivity.output)
             #Adot = ancient(join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'fw', 'probe', 'sensitivity.nc'))
         output: # CHANGE file ext when save and load sbf in ced updated
-            join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sbf.pkl.gz')
+            join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sbf.nc')
         params:
             cfg_sb = config['image_recon']['spatial_basis'],
             head_model = config['image_recon']['head_model']
         script:
-            "scripts/generate_sbf.py"
+            "scripts/generate_sbf.py"  #FIXME: this file is not finished
 
 def get_optional_input(SB_flag):
     if SB_flag:
-        return join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sbf.pkl.gz')
+        return join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sbf.nc')
     else:
         return [] # Return an empty list if the input is not needed
 
 
 rule imagerecon:
     input:
-        hrf_data = rules.hrf_estimation.output.pickle,
+        hrf_data = rules.hrf_estimation.output.net_hrf,
         Adot = ancient(rules.generate_sensitivity.output.Adot),
-        geometry = ancient(rules.generate_sensitivity.output.geometry),
+        #geometry = ancient(rules.generate_sensitivity.output.geometry),
         SB = get_optional_input(config['image_recon']['spatial_basis']['enable']),
         module4 = SNAKEFILE_DIR / "scripts/modules/module_image_recon.py",
         module5 = SNAKEFILE_DIR / "scripts/modules/module_spatial_basis_funs.py"
@@ -282,7 +264,7 @@ rule imagerecon:
       
 
 def all_img_files(wc):
-    ''' Return a list of all img .pkl files for this subject and task (i.e. all subs)'''  
+    ''' Return a list of all img files for this subject and task (i.e. all subs)'''  
     img_paths =  [
         (
         f"{SAVE_DIR}/image_results/sub-{subject}/"
@@ -294,7 +276,7 @@ def all_img_files(wc):
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
         + (f"_{config['image_recon']['mag']['t_win'][0]}_{config['image_recon']['mag']['t_win'][1]}" if config["image_recon"]["mag"]["enable"] else "")
-        + ".pkl.gz"
+        + ".nc"
     )
         for subject in config["dataset"]["subject"]
     ]
@@ -305,8 +287,8 @@ def all_img_files(wc):
 use rule groupaverage as groupaverage_imgspace with:
     input:
         hrf_subs = lambda wc: all_img_files(wc)["image"],  # img data from all subs for this task
-        quality  = lambda wc: all_hrf_files(wc)["quality"],    # quality metrics
-        geo  = lambda wc: all_hrf_files(wc)["geo"]    # geometric pos and landmarks
+        #quality  = lambda wc: all_hrf_files(wc)["quality"],    # quality metrics
+        #geo  = lambda wc: all_hrf_files(wc)["geo"]    # geometric pos and landmarks
     output:
         get_groupavg_imagerecon_output()
     params:

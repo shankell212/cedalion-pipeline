@@ -69,12 +69,8 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
     if not cfg_dataset['derivatives_subfolder']:   # !!! do we need this?
         cfg_dataset['derivatives_subfolder'] = ''
     
-    records = cedalion.io.read_snirf( snirf_path ) 
+    records = cedalion.io.read_snirf( snirf_path, time_units = 'second') #FIXME: HARD CODED TIME UNITS
     rec = records[0]
-
-    # if no time units, then assume seconds and add units (ASSUMING SECONDS)
-    if not rec['amp'].time.attrs:
-        rec['amp'] = rec['amp'].assign_coords(time=rec['amp'].time.pint.quantify('second'))
 
     # Load in events.tsv file 
     if not os.path.exists( events_path ):  
@@ -144,7 +140,6 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
                 rec["od"] = cedalion.nirs.cw.int2od(rec['amp_pruned'])                
             else:
                 rec["od"] = cedalion.nirs.cw.int2od(rec['amp'])
-                #del rec.timeseries['amp_pruned']   # delete pruned amp from time series
             
             rec["od_corrected"] = rec["od"]
             units_od = rec["od"].pint.units
@@ -154,7 +149,6 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             
         elif step_name in ("calc_gvtd_b4", "calc_gvtd_before", "gvtd_b4", "gvtd_before"):
             # Calculate GVTD on pruned data
-            #amp_masked = preproc.prune_mask_ts(rec['amp'], pruned_chans)  # use chs_pruned to get gvtd w/out pruned data (could also zscore in gvtd func)
             rec.aux_ts["gvtd"], _ = quality.gvtd(rec['amp_pruned']) 
             rec.aux_ts["gvtd"].name = "gvtd"
         
@@ -252,8 +246,6 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
 
             if os.path.exists( file_json_path ):
                 plot_dqr.plotDQR_sidecar(file_json, rec, cfg_dataset, filnm)
-
-            # !!! how to add in plot_group_DQR ?  - make separate rule?
     
         # If you get here, that means this step is enabled but unrecognized. 
         else:
@@ -271,29 +263,41 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
     idx_amp = np.where(amp < mse_amp_thresh)[0]   # COMES FROM GROUP AVG CFG
     amp_ch_coords = chs_pruned.channel[idx_amp].values
 
-    data_quality = {       
-        "chs_pruned": chs_pruned,  # !!! cannot save matrix or xarray as json
-        "idx_sat": idx_sat.tolist(),
-        "bad_chans_sat": sat_ch_coords.tolist(),
-        "bad_chans_amp": amp_ch_coords.tolist(),
-        "idx_amp": idx_amp.tolist(),
-        'slope_base': slope_base,   # for group DQR plot
-        'slope_corrected': slope_corrected,  # for Group DQR plot
-        'gvtd_base': rec.aux_ts['gvtd'],
-        'gvtd_corrected': rec.aux_ts['gvtd_corrected'],
-        'snr0': snr0,
-        'snr1': snr1,
-        'geo2d': rec.geo2d,
-        'geo3d': rec.geo3d
-        }
-    # Save data quality dict as a sidecar json file
-    file = gzip.GzipFile(out_files['out_sidecar'], 'wb')
-    file.write(pickle.dumps(data_quality))
-    
+    # Concat bad indices
+    bad_channels = np.unique(np.concat([amp_ch_coords, sat_ch_coords]))
+
+    # build a data quality xr dataset 
+    ds = xr.Dataset()
+    ds.attrs['snr0'] = float(snr0)
+    ds.attrs['snr1'] = float(snr1)
+    ds = xr.merge([ds,slope_base.rename({'slope': 'slope_base'}),
+                   slope_corrected.rename({'slope': 'slope_corrected'})])
+    ds['chs_pruned'] = chs_pruned  
+    ds['bad_channels'] = xr.DataArray(bad_channels, dims='bad_channels') # both sat and amp bad channels
+    ds['pruned_channels'] = xr.DataArray(pruned_chans, dims='pruned_channels')  # same as chs_pruned but just the coordinates of bad channels 
+    ds['bad_chans_amp'] = xr.DataArray(amp_ch_coords, dims='bad_chans_amp') # make xarrays and add
+    ds['bad_chans_sat'] = xr.DataArray(sat_ch_coords, dims='bad_chans_sat')
+    ds['idx_amp'] = xr.DataArray(idx_amp, dims='idx_amp')
+    ds['idx_sat'] = xr.DataArray(idx_sat, dims='idx_sat')
+    ds['gvtd_base']      = rec.aux_ts['gvtd'].pint.dequantify()
+    ds['gvtd_corrected'] = rec.aux_ts['gvtd_corrected'].pint.dequantify()
+    geo2d_clean = rec.geo2d.pint.dequantify().rename({'pos': 'pos2d'}) # dequant to save, and rename pos to pos2d to avoid confusion with geo3d pos coords
+    geo2d_clean['type'] = geo2d_clean['type'].astype(str) # convert type to str
+    ds['geo2d'] = geo2d_clean
+    geo3d_clean = rec.geo3d.pint.dequantify().rename({'pos': 'pos3d'}) # dequant to save, and rename pos to pos3d to avoid confusion with geo2d pos coords
+    geo3d_clean['type'] = geo3d_clean['type'].astype(str) # convert type to str
+    ds['geo3d'] = geo3d_clean
+
+    # save quality info as netcdf file
+    ds.to_netcdf(out_files['out_sidecar'],  mode='w')
+
+
     # # Save preprocessed data as a snirf file
-    # cedalion.io.snirf.write_snirf(out_files['out_snirf'], rec)
-    file = gzip.GzipFile(out_files['out_snirf'], 'wb')
-    file.write(pickle.dumps([rec]))
+    cedalion.io.snirf.write_snirf(out_files['out_snirf'], rec)  
+        # this has a bug - untis for time do not save and od_corrected becomes od_02
+
+    # file = gzip.GzipFile(out_files['out_snirf'], 'wb')
+    # file.write(pickle.dumps([rec]))
     
     print("Snirf file saved successfuly")
 

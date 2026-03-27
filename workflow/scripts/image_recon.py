@@ -13,6 +13,7 @@ import cedalion.nirs
 
 from cedalion.physunits import units
 import xarray as xr
+from cedalion.dataclasses.geometry import PointType
 from cedalion.sigproc.quality import measurement_variance
 import cedalion.dot as dot
 import cedalion.io as io
@@ -22,6 +23,7 @@ import numpy as np
 import gzip
 import pickle
 import sys
+import pandas as pd
 script_dir = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.join(script_dir, 'modules')
 sys.path.append(modules_path)
@@ -38,7 +40,7 @@ warnings.filterwarnings('ignore')
 
 #%%
 
-def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, geo_path, out, SB=[]):
+def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[]):
 
     # Convert str vals to units from config
     cfg_mse = cfg_img_recon['mse']
@@ -65,15 +67,9 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, geo_path, out, 
         
     #%% Load head model and sensitivity matrix
 
-    head = dot.get_standard_headmodel(cfg_img_recon['head_model'])
     Adot = io.forward_model.load_Adot(Adot_path)
 
     ec = cedalion.nirs.get_extinction_coefficients(cfg_img_recon['spectrum'], Adot.wavelength)
-    
-    # load geometry 
-    with gzip.open(geo_path, 'rb') as f:
-        geo_pos = pickle.load(f)
-        geo3d = geo_pos['geo3d']
 
     #%% run image recon
     
@@ -85,32 +81,53 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, geo_path, out, 
     - get the total standard error using between + within subject MSE 
     """
     
-    
     # load files
     if 'hrf' in file_name:
-        with gzip.open(file_name, 'rb') as f:
-            results = pickle.load(f)
-        ts = results['hrf_est']
-        mse_t = results['mse_t'] 
-        bad_channels = results['bad_indices'] 
+        results = xr.open_dataset(file_name) # load in data
+        ts = results['hrf_est'].pint.quantify() 
+        mse_t = results['mse_t'].pint.quantify()      
+        if 'bad_channels' in results.keys(): # this is only results for hrf_est 
+            bad_channels = results['bad_channels']
+
+        geo2d = results['geo2d'] # grab geometry vals
+        geo3d = results['geo3d']
+        geo2d = geo2d.pint.quantify().rename({'pos2d': 'pos'}) # re-cast type coord from string back to PointType enum 
+        geo2d['type'] = xr.DataArray(pd.Series(geo2d['type'].values).map(lambda s: PointType[s.split('.')[-1]]).values,
+            dims=geo2d['type'].dims)
+        geo3d = geo3d.pint.quantify().rename({'pos3d': 'pos'})
+        geo3d['type'] = xr.DataArray(pd.Series(geo3d['type'].values).map(lambda s: PointType[s.split('.')[-1]]).values,
+            dims=geo3d['type'].dims)
 
     elif 'preprocess' in file_name:
-        with gzip.open(file_name, 'rb') as f:
-            record = pickle.load(f)
-        rec = record[0]
-        ts = rec['od_corrected'].copy()
+        records = cedalion.io.read_snirf(fname = file_name, time_units = 'second' ) #FIXME: HARD CODED TIME UNITS
+        rec = records[0]
+        if 'od_corrected' in rec.timeseries.keys(): #naming conventions change based on what file we load
+            ts = rec['od_corrected'].copy()
+        else:
+             ts = rec['od_02'].copy()  # name if saved as snirf
         mse_t = None
-        # add bad_indices to file that also has rec in it
+
+        # FIXME: add bad_indices to file that also has rec in it (FOR IMG RECON ON PREPROC TIME SERIES)
+            # FIXME: ADD optional input to img recon rule in snakefile 
+            # this also has geo coords so no longer have to save in with sens mat
+            # ds = xr.open_dataset(data_quality_files)
+            # pruned_channels = ds['pruned_channels'].values
+            # bad_channels = ds['bad_channels'].values
+            # geo2d = ds['geo2d']
+            # geo3d = ds['geo3d']
+            # ds.close()
+
+    print(f'Performing image recon on subject = {file_name}')
 
     # Loop through trial types
     all_trial_Xs = None
-    for idxt, trial_type in enumerate(cfg_hrf['stim_lst']): #NOTE: do we still need to loop through trial types here?
+    for trial_type in cfg_hrf['stim_lst']: #NOTE: do we still need to loop through trial types here?
         
-        print(f'Getting images for trial type = {trial_type}')       
+        print( f'   Getting images for trial type = {trial_type}')       
 
         ts_trial = ts.sel(trial_type=trial_type) 
         if mse_t is not None: # if hrf data loaded in
-            mse_trial = mse_t.sel(trial_type=trial_type).drop_vars(['trial_type'])
+            mse_trial = mse_t.sel(trial_type=trial_type)
 
         # Convert conc to od and units for cfg
         if 'chromo' in ts.dims:
@@ -124,17 +141,16 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, geo_path, out, 
                 od_mse = xr.dot(ec**2, mse_trial, dim =['chromo']) * 1 * units.mm**2  
             else:
                 od_mse = measurement_variance(od_ts, calc_covariance=False) #NOTE: CHECK DIMS 
+        # already in OD space
         else:
             od_ts = ts_trial.copy()
             if mse_t is not None: # if mse variable exists, i.e. loading in hrf not ts
                 od_mse = mse_trial.copy()
             else:
                 mse = measurement_variance(od_ts, calc_covariance=False) #NOTE: CHECK DIMS 
-                od_mse = mse.sel(trial_type=trial_type).drop_vars(['trial_type'])
+                od_mse = mse.sel(trial_type=trial_type)
 
-        print(f'Calculating subject = {file_name}')
-
-        # replace bad vals
+        # replace bad vals #FIXME: this will fail if running on preprocessed time series and not hrf
         od_ts.loc[dict(channel=bad_channels)] = cfg_mse['hrf_val']
         od_mse.loc[dict(channel=bad_channels)] = cfg_mse['mse_val_for_bad_data']
         od_mse = xr.where(od_mse < cfg_mse['mse_min_thresh'], cfg_mse['mse_min_thresh'], od_mse)  # !!! maybe can be removed when we have the between subject mse
@@ -158,14 +174,12 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, geo_path, out, 
              od_mse_mag = od_mse.copy() # if mse not loaded in, copy od_mse
 
         C_meas = od_mse_mag.pint.dequantify()
-        #C_meas = np.diag(C_meas)
-        #C_meas = C_meas.stack(measurement=('channel', 'wavelength')).sortby('wavelength') #NOTE: do we need to do this anymore? check shape of c_meas from output func
-        
-        # save G (spatial basis) in derivatives/cedalion/forward_model  -> for brain and scalp separately and sigma
+       
+        #FIXME: save G (spatial basis) in derivatives/cedalion/forward_model  -> for brain and scalp separately and sigma
        
         if cfg_sb['enable'] and SB:  # do I need both
             #fil_path, after = Adot_path.split("fw", 1)
-            print('Performing image recon with SB')
+            #print(  'Performing image recon with SB')
             with gzip.open(SB, 'rb') as f:
                 sbf = pickle.load(f)
 
@@ -181,7 +195,7 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, geo_path, out, 
                 )
         else:
              sbf = None
-             print('Performing image recon without SB')
+             #print(  'Performing image recon without SB')
              recon_obj = ir.ImageRecon(
                     Adot,
                     recon_mode=cfg_img_recon['recon_mode'],  # conc is direct, mua2conc is indirect
@@ -192,31 +206,21 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, geo_path, out, 
                     apply_c_meas = cfg_img_recon['Cmeas']['enable'],
                     spatial_basis_functions = None,
                 )
-
+        # reconstruct image with or without C_meas, depending on config
         if cfg_img_recon['Cmeas']['enable']:
-             Xs = recon_obj.reconstruct(od_ts_mag, c_meas=C_meas)
+            Xs = recon_obj.reconstruct(od_ts_mag, c_meas=C_meas)
         else:
-             Xs = recon_obj.reconstruct(od_ts_mag)
+            Xs = recon_obj.reconstruct(od_ts_mag)
         
-        Xs = Xs.pint.to('molar')
-        X_mse = recon_obj.get_image_noise_posterior(C_meas)
+        # calculate image noise
+        #FIXME: HAVE OPTION IN CONFIG IF CALCULATING NORMAL OR POSTERIOR?
+            # is the old way just wrong or can it still be an option?
+        X_mse = recon_obj.get_image_noise_posterior(C_meas) #FIXME: this gets rid of trial type coord somewhere
+        if 'trial_type' not in X_mse.coords:
+            X_mse = X_mse.assign_coords(trial_type=trial_type) # add back trial type coord  
+
         X_mse = X_mse.pint.to('molar**2')
-
-
-        # #X_mse = recon.get_image_noise(C_meas) # get image noise   #NOTE: how to handle noise computation in pipeline workflow when not using Cmeas?
-        # if cfg_img_recon['recon_mode']=='conc':
-        #      DIRECT = True
-        # elif cfg_img_recon['recon_mode'] == 'mua2conc':
-        #      DIRECT = False
-        # X_mse = img_recon.get_image_noise_posterior(Adot, C_meas, alpha_meas = cfg_img_recon['alpha_meas'], 
-        #                                             alpha_spatial_depth = cfg_img_recon['alpha_meas'], 
-        #                                         lambda_spatial_depth =  cfg_img_recon['lambda_spatial_depth'], 
-        #                                         DIRECT=DIRECT, SB=cfg_img_recon['spatial_basis']['enable'], G=sbf)       
-
-        
-        # concatenate trial 
-        Xs = Xs.assign_coords(trial_type=trial_type) # add trial type name as a coordinate
-        X_mse = X_mse.assign_coords(trial_type=trial_type)
+        Xs = Xs.pint.to('molar')
         
         if all_trial_Xs is None:
             all_trial_Xs = Xs.expand_dims(trial_type=[trial_type])
@@ -224,6 +228,7 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, geo_path, out, 
         else:
             all_trial_Xs = xr.concat([all_trial_Xs, Xs], dim='trial_type')
             all_trial_X_mse = xr.concat([all_trial_X_mse, X_mse], dim='trial_type')
+
 
     # IF loading in time series, save in parcel space instead of vertex for smaller file size
     if mse_t is None: # if time series data loaded in
@@ -238,19 +243,44 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, geo_path, out, 
                 )
 
     # END OF TRIAL TYPE LOOP
-    if mse_t is not None:
-        results = { 'Xs': all_trial_Xs,  #NOTE: change name later
-                    'mse': all_trial_X_mse,
-                }
+
+    geo2d_clean = geo2d.pint.dequantify().rename({'pos': 'pos2d'}) # dequant to save, and rename pos to pos2d to avoid confusion with geo3d pos coords
+    geo2d_clean['type'] = geo2d_clean['type'].astype(str) # convert type to str
+    geo3d_clean = geo3d.pint.dequantify().rename({'pos': 'pos3d'}) # dequant to save, and rename pos to pos3d to avoid confusion with geo2d pos coords
+    geo3d_clean['type'] = geo3d_clean['type'].astype(str) # convert type to str
+
+    ds_results = xr.Dataset()
+    if mse_t is not None: 
+        ds_results['Xs'] = all_trial_Xs.pint.dequantify()  
+        ds_results['X_mse'] = all_trial_X_mse.pint.dequantify() 
+        ds_results['geo2d'] = geo2d_clean
+        ds_results['geo3d'] = geo3d_clean
     else:
-        results = { 'Xs': Xs_parcel_weighted,  #NOTE: change name later
-                                    }
-    
-    # Save data to a compressed pickle file 
-    print(f'   Saving to {out}')
-    file = gzip.GzipFile(out, 'wb')
-    file.write(pickle.dumps(results))
-    file.close()     
+        ds_results['Xs'] = Xs_parcel_weighted.pint.dequantify()   # IF loading in time series, save in parcel space instead of vertex for smaller file size
+        ds_results['X_mse'] = all_trial_X_mse.pint.dequantify() 
+        ds_results['geo2d'] = geo2d_clean
+        ds_results['geo3d'] = geo3d_clean
+
+    ds_results.to_netcdf(out, mode='w') # save as netcdf file 
+
+    #NOTE: we have Xmse for if using Cmeas or not, so do we save for both cases?
+        # group avg would fail without. 
+        # we just did not take in account the covariance of the data when reconstructing the image
+
+
+
+    # if mse_t is not None:
+    #     results = { 'Xs': all_trial_Xs,  
+    #                 'X_mse': all_trial_X_mse}
+    # else:
+    #     results = { 'Xs': Xs_parcel_weighted, 
+    #                'X_mse': X_mse,}
+                                
+    # # Save data to a compressed pickle file 
+    # print(f'   Saving to {out}')
+    # file = gzip.GzipFile(out, 'wb')
+    # file.write(pickle.dumps(results))
+    # file.close()     
     
     
     #%% build and save plots
@@ -382,15 +412,12 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, geo_path, out, 
 
 #%%
 
-def main():
-    config = snakemake.config
-    
+def main():    
     # get params
     cfg_img_recon = snakemake.params.cfg_img_recon
     cfg_hrf = snakemake.params.cfg_hrf
     
     hrf_data = snakemake.input.hrf_data
-    geo_path = snakemake.input.geometry
     Adot_path = snakemake.input.Adot
     SB_path = snakemake.input.SB
 
@@ -398,7 +425,7 @@ def main():
     
     out = snakemake.output[0]
     
-    img_recon_func(cfg_img_recon, cfg_hrf, hrf_data, Adot_path, geo_path, out, SB_path)
+    img_recon_func(cfg_img_recon, cfg_hrf, hrf_data, Adot_path, out, SB_path)
     
             
 if __name__ == "__main__":
