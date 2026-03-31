@@ -39,13 +39,13 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_file):
 
     if cfg_hrf['GLM']['enable']:
         cfg_GLM = cfg_hrf['GLM']
-        cfg_GLM['t_std']= units(cfg_GLM['t_std'])
-        cfg_GLM['t_delta']= units(cfg_GLM['t_delta'])
-        cfg_GLM['distance_threshold']= units(cfg_GLM['distance_threshold'])
-    
+        cfg_GLM["basis_func_params"]
+        for param in cfg_GLM["basis_func_params"]:
+            cfg_GLM["basis_func_params"][param] = units(cfg_GLM["basis_func_params"][param])
+        if cfg_GLM['distance_threshold']:
+            cfg_GLM['distance_threshold'] = units(cfg_GLM['distance_threshold'])
+
     # Loop through files
-    # bad_chans_sat_runs = []
-    # bad_chans_amp_runs = []
     pruned_chans_lst = []
     bad_channels_runs = []
     # loop through files and concatinate runs for GLM and epochs for blockaverage

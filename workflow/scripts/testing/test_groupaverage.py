@@ -38,7 +38,12 @@ cfg_groupaverage = config['groupaverage']
 # flag_prune_channels = config['preprocess']['steps']['prune']['enable']
 
 
-subjects = cfg_dataset['subject']
+dirs = os.listdir(cfg_dataset['root_dir'])
+# subject_list = [d for d in dirs if "sub" in d and d not in cfg_dataset["subjects_to_exclude"]]
+subject_list = [d.replace("sub-", "") for d in dirs if "sub" in d and d not in cfg_dataset["subjects_to_exclude"]]
+
+
+subjects = subject_list #cfg_dataset['subject']
 task = cfg_dataset['task'][0]
 
 blockavg_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", "cedalion", cfg_dataset['derivatives_subfolder'], "hrf_estimate")  #, f"sub-{subj}")

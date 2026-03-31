@@ -8,9 +8,11 @@ from pathlib import Path
 # Get the directory where the Snakefile is located
 SNAKEFILE_DIR = Path(workflow.snakefile).parent
 # Use --configfile to specify config, or use default
+default_config = join(SNAKEFILE_DIR, "config", "config.yaml")  # default config file in workflow/config folder
+
+# default_config = "/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/derivatives/cedalion/test_new_file_struct_postcov_ced/test_1/config_test_1.yml" # have snakemake copy this file into derivatives folder
 # default_config = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_test_imgrecon_newnoise_2/config_STS_Q.yml" # have snakemake copy this file into derivatives folder
 # default_config = "/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/derivatives/cedalion/test/test_1/config_test_1.yml" # have snakemake copy this file into derivatives folder
-default_config = "/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/derivatives/cedalion/test_new_file_struct_postcov_ced/test_1/config_test_1.yml" # have snakemake copy this file into derivatives folder
 
 if not workflow.overwrite_configfiles:
     configfile: default_config
@@ -20,6 +22,11 @@ ROOT = config.get('root_dir', config['dataset']["root_dir"])
 DERIV = config.get('deriv_dir', config['dataset']["derivatives_subfolder"])
 SAVE_DIR = join(ROOT, 'derivatives', 'cedalion', DERIV)
 
+# Get subject list from BIDS directory, excluding any subjects in the exclude list in config
+dirs = os.listdir(ROOT) 
+subject_list = [d.replace("sub-", "") for d in dirs if "sub" in d and d.replace("sub-", "") not in cfg_dataset["subjects_to_exclude"]]
+config["dataset"]["subject"] = subject_list
+config["run"] = [f"{i:02d}" for i in range(1, int(config["dataset"]["num_runs"]) + 1)]
 
 def get_imagerecon_output(): # create file name for image recon output
     return (

@@ -18,7 +18,6 @@ import sys
 sys.path.append("/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts")
 import preprocess as preproc
 
-
 #%% Test
 import importlib
 importlib.reload(preproc)
@@ -35,9 +34,14 @@ cfg_preprocess = config['preprocess']
 cfg_hrf = config['hrf_estimation']
 mse_amp_thresh = config['groupaverage']['mse']['mse_amp_thresh']
 
-subjects = cfg_dataset['subject'] 
+# subjects = cfg_dataset['subject'] 
+dirs = os.listdir(cfg_dataset['root_dir'])
+subjects = [d.replace("sub-", "") for d in dirs if "sub" in d and d.replace("sub-", "") not in cfg_dataset["subjects_to_exclude"]]
+config["dataset"]["subject"] = subjects
+config["run"] = [f"{i:02d}" for i in range(1, int(config["dataset"]["num_runs"]) + 1)]
+runs = config["run"]
 tasks = cfg_dataset['task'] 
-runs = cfg_dataset['run'] 
+# runs = cfg_dataset['run']    
 
 # Loop through lists of tasks, subjects, and runs
 for subj in subjects:
@@ -61,9 +65,8 @@ for subj in subjects:
 
             print(f"Processing sub-{subj}, task-{task}, run-{run}...")
             
-            preproc.preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess_loop, cfg_hrf_loop, mse_amp_thresh_loop, out_files)
+            preproc.preprocess_func(snirf_path, events_path, cfg_dataset, cfg_preprocess_loop, cfg_hrf_loop['stim_lst'], mse_amp_thresh_loop, out_files)
             
 
 # %%
 
-# %%

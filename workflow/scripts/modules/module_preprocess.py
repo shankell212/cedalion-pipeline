@@ -49,6 +49,7 @@ def prune_mask_ts(ts, pruned_chans):
         raise ValueError("Expected input shape to be either (chan, dim, time) or (dim, chan, time)")
 
     ts_masked = ts.where(~mask_expanded, np.nan)
+
     return ts_masked
 
 
@@ -398,6 +399,14 @@ def quant_slope(rec, timeseries):
     slope = slope.assign_coords(wavelength = rec[timeseries].wavelength)
 
     return slope
+
+def get_gvtd(rec, pruned_chans, ts_name, save_name):
+    amp_corrected = rec[ts_name].copy()  
+    amp_corrected.values = np.exp(-amp_corrected.pint.dequantify().values)
+    amp_corrected_masked = prune_mask_ts(amp_corrected, pruned_chans)  # get "pruned" amp data post tddr
+    rec.aux_ts[save_name], _ = quality.gvtd(amp_corrected_masked)  
+    rec.aux_ts[save_name].name = save_name
+    return rec
 
 
 

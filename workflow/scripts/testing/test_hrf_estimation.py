@@ -11,7 +11,6 @@ import yaml
 import os
 import copy
 import sys
-    
 
 # script_dir = os.path.dirname(os.path.abspath(__file__))
 # parent_dir = os.path.dirname(script_dir)
@@ -36,11 +35,13 @@ with open(config_path, 'r') as file:
 cfg_dataset = config['dataset']
 cfg_hrf = config['hrf_estimation']
 
-subjects = cfg_dataset['subject']   # sub idx you want to test
-#subjects = ["01", "03", "04", "05", "07", "08", "09", "10", "12", "13", "15", "19", "20", "21", "22", "23", "24", "25", "26", "28"]
-#subjects = ['22']
+# subjects = cfg_dataset['subject']   # sub idx you want to test
+dirs = os.listdir(cfg_dataset['root_dir'])
+subjects = [d.replace("sub-", "") for d in dirs if "sub" in d and d not in cfg_dataset["subjects_to_exclude"]]
 tasks = cfg_dataset['task'] #[0]
-run = cfg_dataset['run']
+run = config["run"] = [f"{i:02d}" for i in range(1, int(config["dataset"]["num_runs"]) + 1)]
+# run = cfg_dataset['run']
+
 
 # Loop through lists of tasks and subjects
 for subj in subjects:
@@ -54,8 +55,6 @@ for subj in subjects:
                 
         save_path = os.path.join(cfg_dataset['root_dir'], "derivatives", "cedalion", cfg_dataset['derivatives_subfolder'], "hrf_estimate", f"sub-{subj}")
         out_pkl = os.path.join(save_path,f"sub-{subj}_task-{task}_nirs_hrf_estimate_{cfg_hrf['rec_str']}.nc")
-        #out_json = os.path.join(save_path,f"sub-{subj}_task-{task}_nirs_dataquality.json")
-        #out_geo = os.path.join(save_path,f"sub-{subj}_task-{task}_nirs_geo.sidecar")
         
         os.makedirs(save_path, exist_ok=True)
                 
