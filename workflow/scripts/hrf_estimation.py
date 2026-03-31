@@ -30,7 +30,7 @@ import module_hrf_est as mhrf
 
 #%% Block average func
 
-def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_file): #, out_json, out_geo):  #, out_blkavg_nc, out_epoch_nc):
+def hrf_est_func(cfg_hrf, run_files, data_quality_files, out_file): #, out_json, out_geo):  #, out_blkavg_nc, out_epoch_nc):
     print(f'run_files: {run_files}')
         
     # update units 
@@ -128,7 +128,7 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_file):
 
     if cfg_hrf['GLM']['enable']:
         print('Running GLM HRF estimation')
-        glm_results, hrf_estimate, hrf_mse, bad_chans_mse_lst = mhrf.GLM(all_runs, cfg_hrf['rec_str'], cfg_hrf, geo3d, pruned_chans_lst)
+        glm_results, hrf_estimate, hrf_mse, bad_chans_mse_lst = mhrf.GLM(all_runs, cfg_hrf, geo3d, pruned_chans_lst)
     else:
         print('Running Block Average HRF estimation')
         hrf_estimate, hrf_mse, bad_chans_mse_lst = mhrf.blockaverage(epochs_all, cfg_hrf)
@@ -140,16 +140,6 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_file):
     bad_chans_mse = list(set(bad_chans_mse_flat))
 
     bad_channels_all = np.unique(np.concat([bad_channels_tmp, bad_chans_mse]))
-    
-    
-    # Save geometric 2d and 3d positions to sidecar file
-    # geo_sidecar = {
-    #     'geo2d': geo2d,
-    #     'geo3d': geo3d
-    #     }
-    # file = gzip.GzipFile(out_geo, 'wb')
-    # file.write(pickle.dumps(geo_sidecar))
-    # file.close()
     
     # Save results as xr dataset to netcdf file
     ds_results = xr.Dataset()
@@ -195,10 +185,7 @@ def replace_bad_vals(data_array, bad_chans_amp, bad_chans_sat, bad_chans_mse, re
 #%%
 
 def main():
-
-    config = snakemake.config
     
-    cfg_dataset = snakemake.params.cfg_dataset
     cfg_hrf = snakemake.params.cfg_hrf
     run_files = snakemake.input.preproc  #.preproc_runs
     data_quality_files = snakemake.input.quality
@@ -207,7 +194,7 @@ def main():
     # out_json = snakemake.output.json
     # out_geo = snakemake.output.geo
     
-    hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_file) #, out_json, out_geo)  #, out_blkavg_nc, out_epoch_nc)
+    hrf_est_func(cfg_hrf, run_files, data_quality_files, out_file) #, out_json, out_geo)  #, out_blkavg_nc, out_epoch_nc)
     
    
     

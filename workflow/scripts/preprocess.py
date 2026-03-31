@@ -55,11 +55,9 @@ import module_preprocess as preproc
 
 #%% Load in data for current subject/task/run
 
-def preprocess_func(snirf_path, events_path, cfg_dataset, cfg_preprocess, stim_lst, mse_amp_thresh, out_files):
+def preprocess_func(snirf_path, events_path, root_dir, derivatives_subfolder, cfg_preprocess, stim_lst, mse_amp_thresh, out_files):
     cedalion.xrutils.unit_stripping_is_error(True)
     # Load in snirf file
-    if not cfg_dataset['derivatives_subfolder']:   # !!! do we need this?
-        cfg_dataset['derivatives_subfolder'] = ''
     
     records = cedalion.io.read_snirf( snirf_path, time_units = 'second') #FIXME: HARD CODED TIME UNITS
     rec = records[0]
@@ -141,9 +139,9 @@ def preprocess_func(snirf_path, events_path, cfg_dataset, cfg_preprocess, stim_l
             rec.aux_ts["gvtd"], _ = quality.gvtd(rec['amp_pruned'])  # Calculate GVTD on pruned data
             rec.aux_ts["gvtd"].name = "gvtd"
         
-        # Walking filter 
-        elif step_name == 'imu_glm': 
-            rec["od_corrected"] = imu_filt.filterWalking(rec, "od", params, filnm, cfg_dataset) 
+        # # Walking filter 
+        # elif step_name == 'imu_glm': 
+        #     rec["od_corrected"] = imu_filt.filterWalking(rec, "od", params, filnm, cfg_dataset) 
             
             
         #%% MOTION CORRECTION: 
@@ -238,13 +236,13 @@ def preprocess_func(snirf_path, events_path, cfg_dataset, cfg_preprocess, stim_l
             if 'od_unfiltered' in rec.timeseries.keys():
                 del rec.timeseries["od_unfiltered"]
 
-            plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, cfg_dataset, stim_lst) #, out_files['out_dqr'], out_files['out_gvtd'] )
+            plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, root_dir, derivatives_subfolder, stim_lst) #, out_files['out_dqr'], out_files['out_gvtd'] )
             
             # if MA correction was performed, plot slope b4 and after
             if not (rec["od_corrected"].data == rec["od"].data).all():
-                plot_dqr.plot_slope(rec, [slope_base, slope_corrected], cfg_preprocess['steps'], filnm, cfg_dataset) #, out_files['out_slope'])
+                plot_dqr.plot_slope(rec, [slope_base, slope_corrected], cfg_preprocess['steps'], filnm, root_dir, derivatives_subfolder) #, out_files['out_slope'])
             if os.path.exists( file_json_path ):
-                plot_dqr.plotDQR_sidecar(file_json, rec, cfg_dataset, filnm)
+                plot_dqr.plotDQR_sidecar(file_json, rec, root_dir, derivatives_subfolder, filnm)
     
         # If you get here, that means this step is enabled but unrecognized. 
         else:
@@ -308,7 +306,8 @@ def main():
     snirf_path = snakemake.input.snirf
     events_path = snakemake.input.events
     
-    cfg_dataset = snakemake.params.cfg_dataset
+    root_dir = snakemake.params.root_dir
+    derivatives_subfolder = snakemake.params.derivatives_subfolder
     cfg_preprocess = snakemake.params.cfg_preprocess
     stim_lst = snakemake.params.stim_lst
     mse_amp_thresh = snakemake.params.mse_amp_thresh
@@ -319,7 +318,7 @@ def main():
         "out_sidecar": snakemake.output.sidecar,
         }
     
-    preprocess_func(snirf_path, events_path, cfg_dataset, cfg_preprocess, stim_lst, mse_amp_thresh, out_files)
+    preprocess_func(snirf_path, events_path, root_dir, derivatives_subfolder, cfg_preprocess, stim_lst, mse_amp_thresh, out_files)
  
     
 if __name__ == "__main__":

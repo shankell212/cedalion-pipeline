@@ -9,10 +9,10 @@ import gzip
 import pickle
 
 
-def generate_Adot_func(cfg_Adot, cfg_dataset, head_model, save_dir_Adot):
+def generate_Adot_func(cfg_Adot, root_dir, sub, head_model, save_dir_Adot):
     #%%
     # Load recording obj from first subject/task/run
-    snirf_path = os.path.join(cfg_dataset['root_dir'], f"sub-{cfg_dataset['subject'][0]}", "nirs", f"sub-{cfg_dataset['subject'][0]}_task-{cfg_dataset['task'][0]}_run-{cfg_dataset['run'][0]}_nirs.snirf")
+    snirf_path = os.path.join(root_dir, f"sub-{sub}", "nirs", f"sub-{sub}_task-{cfg_Adot['task'][0]}_run-{cfg_Adot['run'][0]}_nirs.snirf")
     recordings = io.read_snirf(snirf_path)
     rec = recordings[0]
     geo3d_meas = rec.geo3d
@@ -62,12 +62,15 @@ def main():
     # get params
     #cfg_img_recon = snakemake.params.cfg_img_recon
     cfg_Adot = snakemake.params.cfg_Adot
-    cfg_dataset = snakemake.params.cfg_dataset
+    root_dir = snakemake.params.root_dir
     head_model = snakemake.params.head_model
+
+    dirs = sorted(d.replace("sub-", "")for d in os.listdir(root_dir)if d.startswith("sub-")) # get list of subject folders
+    sub = dirs[0] # grab first subject
 
     out_Adot = snakemake.output.Adot
     
-    generate_Adot_func(cfg_Adot, cfg_dataset, head_model, out_Adot)
+    generate_Adot_func(cfg_Adot, root_dir, sub, head_model, out_Adot)
     
             
 if __name__ == "__main__":

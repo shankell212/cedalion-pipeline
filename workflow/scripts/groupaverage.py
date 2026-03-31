@@ -60,11 +60,7 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, file_names, out):
         all_subj_hrf_est = []
         all_subj_mse= []
         for subj in file_names:
-            # Load in hrf estimation & mse
-
-            # with gzip.open(subj, 'rb') as f:
-            #     results = pickle.load(f)
-
+            # Load in hrf estimation & mse for current subject
             results = xr.open_dataset(subj) # load in data
 
             geo2d = results['geo2d'] # grab geometry vals
@@ -176,103 +172,6 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, file_names, out):
     groupavg_dataset.to_netcdf(out, mode='w')  # write mode to overwrite if file already exists
     
     print(f"Group average data saved successfully to {out}!")
-    
-    
-
-
-# #%%
-#             # gather the hrf_est across subjects
-#             if hrf_est_subj is None:
-            
-#                 groupaverage_weighted = hrf_weighted / mse_t # groupavg weighted by within subj variance
-#                 sum_mse_inv = 1/mse_t
-                
-#                 # add a subject dimension and coordinate
-#                 hrf_est_subj = hrf_est.expand_dims('subj')
-#                 hrf_est_subj = hrf_est_subj.assign_coords(subj=[cfg_dataset['subject'][subj_idx]])
-#                 mse_subj = mse_t.expand_dims('subj') 
-#                 mse_subj = mse_subj.assign_coords(subj=[cfg_dataset['subject'][subj_idx]])
-                
-#             else:
-                                        
-#                 groupaverage_weighted = groupaverage_weighted + hrf_weighted/mse_t 
-#                 sum_mse_inv = sum_mse_inv + 1 / mse_t
-                
-#                 hrf_est_tmp = hrf_est.expand_dims('subj')
-#                 hrf_est_tmp = hrf_est_tmp.assign_coords(subj=[cfg_dataset['subject'][subj_idx]])
-#                 hrf_est_subj = xr.concat([hrf_est_subj, hrf_est_tmp], dim='subj')
-    
-#                 mse_subj_tmp = mse_t.expand_dims('subj')
-#                 mse_subj_tmp = mse_subj_tmp.assign_coords(subj=[cfg_dataset['subject'][subj_idx]])
-#                 mse_subj = xr.concat([mse_subj, mse_subj_tmp], dim='subj')
-    
-            
-#         # DONE LOOP OVER SUBJECTS
-
-#         # get the unweighted average
-#         hrf_est_mean = hrf_est_subj.mean('subj')
-    
-#         # get the mean mse within subjects
-#         mse_mean_within_subject = 1 / sum_mse_inv
-        
-#         # 1. est group average using within subject variance
-#         groupaverage_weighted = groupaverage_weighted / sum_mse_inv 
-
-#         # get the mean between subject variance
-#         mse_weighted_between_subjects_tmp = (hrf_est_subj - groupaverage_weighted)**2 / mse_subj
-#         mse_weighted_between_subjects = mse_weighted_between_subjects_tmp.mean('subj')
-#         mse_weighted_between_subjects = mse_weighted_between_subjects * mse_mean_within_subject # normalized by the within subject variances as weights
-     
-#         # get the weighted average
-#         #mse_weighted_between_subjects = mse_weighted_between_subjects.pint.dequantify()
-#         #mse_subj = mse_subj.pint.dequantify()
-#         mse_btw_within_sum_subj = mse_subj + mse_weighted_between_subjects
-#         denom = (1/mse_btw_within_sum_subj).sum('subj')
-        
-#         groupaverage_weighted = (hrf_est_subj / mse_btw_within_sum_subj).sum('subj')
-#         groupaverage_weighted = groupaverage_weighted / denom
-        
-#         mse_total = 1/denom
-      
-#         total_stderr_hrf_est = np.sqrt( mse_total )
-#         #groupaverage_weighted = groupaverage_weighted.pint.dequantify() # dequant for tstat calc
-
-#         tstat = groupaverage_weighted / total_stderr_hrf_est
-#         total_stderr_hrf_est = total_stderr_hrf_est.assign_coords(trial_type=groupaverage_weighted.trial_type)
-#         tstat = tstat.assign_coords(trial_type=groupaverage_weighted.trial_type)
-
-#         groupaverage_weighted = groupaverage_weighted.pint.quantify(units=target_units) # requant units
-
-#         if all_trial_groupaverage is None:
-            
-#             all_trial_groupaverage = hrf_est_mean
-#             all_trial_groupaverage_weighted = groupaverage_weighted
-#             all_trial_total_stderr = total_stderr_hrf_est
-            
-#             all_trial_hrf_est_subj = hrf_est_subj
-#             all_trial_mse_subj = mse_subj 
-#             all_trial_tstat = tstat 
-
-#             all_trial_mse_weighted_betwn_subj = mse_weighted_between_subjects
-#             all_trial_mse_mean_within_subj = mse_mean_within_subject
-#             all_trial_mse_btw_within_sum_subj = mse_btw_within_sum_subj
-            
-#         else:
-
-#             all_trial_groupaverage = xr.concat([all_trial_groupaverage, hrf_est_mean], dim='trial_type')
-#             all_trial_groupaverage_weighted = xr.concat([all_trial_groupaverage_weighted, groupaverage_weighted], dim='trial_type')
-#             all_trial_total_stderr = xr.concat([all_trial_total_stderr, total_stderr_hrf_est], dim='trial_type')
-            
-#             all_trial_hrf_est_subj = xr.concat([all_trial_hrf_est_subj, hrf_est_subj], dim='trial_type') 
-#             all_trial_mse_subj = xr.concat([all_trial_mse_subj, mse_subj], dim='trial_type')
-#             all_trial_tstat = xr.concat([all_trial_tstat, tstat], dim='trial_type')
-
-#             all_trial_mse_weighted_betwn_subj = xr.concat([all_trial_mse_weighted_betwn_subj, mse_weighted_between_subjects], dim='trial_type')
-#             all_trial_mse_mean_within_subj = xr.concat([all_trial_mse_mean_within_subj, mse_mean_within_subject], dim='trial_type')
-#             all_trial_mse_btw_within_sum_subj = xr.concat([all_trial_mse_btw_within_sum_subj, mse_btw_within_sum_subj], dim='trial_type')
-#     # DONE LOOP OVER TRIAL_TYPES
-    
-    
    
 #     # Plot scalp plot of mean, tstat,rsme + Plot mse hist
 #      # !!! need to add funcs to a module or at the end of this script 
@@ -282,42 +181,6 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, file_names, out):
 #     #                      all_trial_total_stderr, mse_mean_within_subject, mse_weighted_between_subjects, geo3d)
 #     #     plot_mse_hist(rec_test[0], 'amp', trial_type, cfg_dataset, all_trial_mse_subj, cfg_mse['mse_val_for_bad_data'], cfg_mse['mse_min_thresh'])  # !!! not sure if these r working correctly tbh
         
-#     geo2d_clean = geo2d.pint.dequantify().rename({'pos': 'pos2d'}) # dequant to save, and rename pos to pos2d to avoid confusion with geo3d pos coords
-#     geo2d_clean['type'] = geo2d_clean['type'].astype(str) # convert type to str
-#     geo3d_clean = geo3d.pint.dequantify().rename({'pos': 'pos3d'}) # dequant to save, and rename pos to pos3d to avoid confusion with geo2d pos coords
-#     geo3d_clean['type'] = geo3d_clean['type'].astype(str) # convert type to str
-
-#     groupavg_results = {'group_average': all_trial_groupaverage.pint.dequantify(),              # unweighted group avg 
-#                    'group_average_weighted': all_trial_groupaverage_weighted.pint.dequantify(),   # weighted group aaverage
-#                    'total_stderr': all_trial_total_stderr.pint.dequantify(),  # noise
-#                    'tstat' : all_trial_tstat.pint.dequantify(),  # tstat of group average
-#                    'blockaverage_subj': all_trial_hrf_est_subj.pint.dequantify(),  # unweighted subj block average
-#                    'blockaverage_mse_subj': all_trial_mse_subj.pint.dequantify(), # within subject variance 
-#                    'blockaverage_weighted_subj': all_trial_hrf_weighted_subj.pint.dequantify(),  # weighted subj blockaverage
-                    
-#                     'mse_weighted_btwn_subjs': all_trial_mse_weighted_betwn_subj.pint.dequantify(), # between subject variance,
-#                     'mse_mean_within_subj': all_trial_mse_mean_within_subj.pint.dequantify(),  # mean within subject variance  1/sum_mse_inv
-#                     'mse_btw_within_sum_subj': all_trial_mse_btw_within_sum_subj.pint.dequantify(),  # within + between subject variance
-#                    'geo2d' : geo2d_clean,
-#                    'geo3d' : geo3d_clean,    
-#                }
-    
-#     # save result as xr dataset to netcdf file
-#     groupavg_dataset = xr.Dataset()
-#     for key, value in groupavg_results.items(): # add each item in the groupavg_results dict to the xr dataset as a data variable
-#         print(key)
-#         groupavg_dataset[key] = value  
-#     groupavg_dataset.to_netcdf(out, mode='w')  # write mode to overwrite if file already exists
-    
-#     # # Save data a pickle for now  # !!! Change to snirf in future when its debugged
-#     # with open(out, "wb") as f:        # if output is a single string, it wraps it in an output object and need to index in
-#     #     pickle.dump(groupavg_results, f, protocol=pickle.HIGHEST_PROTOCOL)
-        
-#     print(f"Group average data saved successfully to {out}!")
-    
-    
-
-
 
 #%% Plot funcs
 def plot_mean_stderr(rec, rec_str, trial_type, cfg_dataset, cfg_blockavg, groupaverage_weighted, hrf_est_stderr_weighted, mse_mean_within_subject, mse_weighted_between_subjects, geo3d):
@@ -451,14 +314,14 @@ def plot_mean_stderr(rec, rec_str, trial_type, cfg_dataset, cfg_blockavg, groupa
             )
                 
         # give a title to the figure and save it
-        dirnm = os.path.basename(os.path.normpath(cfg_dataset['root_dir']))
+        dirnm = os.path.basename(os.path.normpath(cfg_dataset["root_dir"]))
         if 'chromo' in foo_da.dims:
             title_str = f"{dirnm} - {name_conc_od} {trial_type} {foo_da.chromo.values[i_wav_chromo]} ({cfg_blockavg['trange_hrf_stat'][0]} to {cfg_blockavg['trange_hrf_stat'][1]} s)"
         else:
             title_str = f"{dirnm} - {name_conc_od} {trial_type} {foo_da.wavelength.values[i_wav_chromo]:.0f}nm ({cfg_blockavg['trange_hrf_stat'][0]} to {cfg_blockavg['trange_hrf_stat'][1]} s)"
         p.suptitle(title_str)
 
-        save_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'group_weighted_avg')
+        save_dir = os.path.join(cfg_dataset["root_dir"], 'derivatives', cfg_dataset["derivatives_subfolder"], 'plots', 'DQR', 'group_weighted_avg')
         os.makedirs(save_dir, exist_ok=True)
         
         if 'chromo' in foo_da.dims:
@@ -468,7 +331,7 @@ def plot_mean_stderr(rec, rec_str, trial_type, cfg_dataset, cfg_blockavg, groupa
         p.close()
 
 
-def plot_mse_hist(rec, rec_str, trial_type, cfg_dataset, hrf_est_mse_subj, mse_val_for_bad_data, mse_min_thresh):
+def plot_mse_hist(trial_type, cfg_dataset, hrf_est_mse_subj, mse_val_for_bad_data, mse_min_thresh):
     # plot the MSE histogram
     ########################################################
 
@@ -518,10 +381,10 @@ def plot_mse_hist(rec, rec_str, trial_type, cfg_dataset, hrf_est_mse_subj, mse_v
     ax1.set_xlabel('log10(cov_diag)')
 
     # give a title to the figure and save it
-    dirnm = os.path.basename(os.path.normpath(cfg_dataset['root_dir']))
+    dirnm = os.path.basename(os.path.normpath(cfg_dataset["root_dir"]))
     p.suptitle(f'Data set - {dirnm}')
 
-    save_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'group_weighted_avg')
+    save_dir = os.path.join(cfg_dataset["root_dir"], 'derivatives', 'cedalion', cfg_dataset["derivatives_subfolder"], 'plots', 'DQR', 'group_weighted_avg')
     os.makedirs(save_dir, exist_ok=True)
 
     p.savefig( os.path.join(save_dir, f'DQR_group_mse_histogram_{name_conc_od}_{trial_type}.png') )
@@ -533,9 +396,9 @@ def plot_mse_hist(rec, rec_str, trial_type, cfg_dataset, hrf_est_mse_subj, mse_v
 
 def main():
     
-    cfg_dataset = snakemake.params.cfg_dataset  # get params
-    cfg_hrf = snakemake.params.cfg_hrf
+    cfg_dataset = snakemake.params.cfg_dataset
     cfg_groupaverage = snakemake.params.cfg_groupaverage
+    cfg_hrf = snakemake.params.cfg_hrf
     
     hrf_files = snakemake.input.hrf_subs  
     

@@ -24,10 +24,10 @@ from scipy.signal.windows import gaussian
 
 
 
-def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str): #, out_dqr, out_gvtd):
+def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, root_dir, derivatives_subfolder, stim_lst_str): #, out_dqr, out_gvtd):
 
     # make sure save folder exists, if not, create it
-    der_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'],'plots', 'DQR')
+    der_dir = os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder,'plots', 'DQR')
     os.makedirs(der_dir, exist_ok=True)
     
     f, ax = p.subplots(3, 2, figsize=(11, 14))
@@ -200,7 +200,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
     
     p.suptitle(fig_title)
 
-    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'],'plots', 'DQR', filenm + "_DQR.png") )
+    p.savefig( os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder, 'plots', 'DQR', filenm + "_DQR.png") )
     #p.savefig(out_dqr)
     p.close()
 
@@ -220,12 +220,12 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
     
     # GVTD plots
     if 'gvtd_corrected' in rec.aux_ts.keys():
-        der_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'gvtd')
+        der_dir = os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder, 'plots', 'DQR', 'gvtd')
         os.makedirs(der_dir, exist_ok=True)
         
         thresh_b4, thresh_corrected = make_gvtd_hist_compare_corrected(rec.aux_ts['gvtd'], rec.aux_ts['gvtd_corrected'], plot_thresh=True, stat_type='histogram_mode', n_std=10)
         p.suptitle(filenm)
-        p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR','gvtd', filenm + "_DQR_gvtd_hist.png") )
+        p.savefig( os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder, 'plots', 'DQR','gvtd', filenm + "_DQR_gvtd_hist.png") )
         #p.savefig(out_gvtd)
         p.close()
     
@@ -379,11 +379,11 @@ def make_gvtd_hist(gvtd_time_trace, plot_thresh=True, stat_type=None, n_std=None
 
 
 
-def plot_slope(rec = None, slope = None, cfg_preprocess=None, filenm = None, cfg_dataset = None):  #, out_file=None):
+def plot_slope(rec = None, slope = None, cfg_preprocess=None, filenm = None, root_dir = None, derivatives_subfolder = None):  #, out_file=None):
     '''
     Plot slope before and after correction on a scalp plot.
     '''
-    der_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'slope')
+    der_dir = os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder, 'plots', 'DQR', 'slope')
     if not os.path.exists(der_dir):
         os.makedirs(der_dir)
     
@@ -441,7 +441,7 @@ def plot_slope(rec = None, slope = None, cfg_preprocess=None, filenm = None, cfg
     
     p.suptitle(fig_title)
 
-    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'slope', filenm + "_slope.png") )
+    p.savefig( os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder, 'plots', 'DQR', 'slope', filenm + "_slope.png") )
     #p.savefig(out_file)
     p.close()
     
@@ -450,7 +450,7 @@ def plot_slope(rec = None, slope = None, cfg_preprocess=None, filenm = None, cfg
     
     
 
-def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
+def plotDQR_sidecar(file_json, rec, root_dir, derivatives_subfolder, filenm):
 
     # get the variables from the json file
     dataSDWP_LowHigh = file_json['dataSDWP_LowHigh']
@@ -607,7 +607,7 @@ def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
     # give a title to the figure
     p.suptitle(filenm)
 
-    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_sigVdis.png") )
+    p.savefig( os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder, 'plots', 'DQR', filenm + "_DQR_sigVdis.png") )
     p.close()
 
 
@@ -681,7 +681,7 @@ def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
     # give a title to the figure
     p.suptitle(filenm)
 
-    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_calib.png") )
+    p.savefig( os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder, 'plots', 'DQR', filenm + "_DQR_calib.png") )
     p.close()
 
 
@@ -711,7 +711,7 @@ def plotDQR_sidecar(file_json, rec, cfg_dataset, filenm):
     # give a title to the figure
     p.suptitle(filenm)
 
-    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_crosstalk.png") )
+    p.savefig( os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder, 'plots', 'DQR', filenm + "_DQR_crosstalk.png") )
     p.close()
 
 
@@ -761,7 +761,7 @@ def plot_crosstalk(SD, dataCrosstalk, ax1, lst1, strTitle ):
 
 
 
-def plot_tIncCh_dqr( rec, cfg_dataset, filenm_lst, iqr_threshold_std=2, iqr_threshold_grad=1.5, flag_plot=False ):
+def plot_tIncCh_dqr( rec, root_dir, derivatives_subfolder, filenm_lst, iqr_threshold_std=2, iqr_threshold_grad=1.5, flag_plot=False ):
 
     n_subjects = len(rec)
     n_files_per_subject = len(rec[0])
@@ -945,7 +945,7 @@ def plot_tIncCh_dqr( rec, cfg_dataset, filenm_lst, iqr_threshold_std=2, iqr_thre
             # give a title to the figure and save it
             filenm = filenm_lst[subj_idx][file_idx]
             p.suptitle(filenm)
-            p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + '_DQR_tIncCh.png') )
+            p.savefig( os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder, 'plots', 'DQR', filenm + '_DQR_tIncCh.png') )
 #            p.close()
 
             if flag_plot:
@@ -1069,7 +1069,7 @@ def plot_group_dqr( n_subjects, n_files_per_subject, chs_pruned_subjs, slope_bas
 
 
 
-def plot_gradCPT_VTC( stim, cfg_dataset, filenm ):
+def plot_gradCPT_VTC( stim, root_dir, derivatives_subfolder, filenm ):
 
     RT = np.zeros((stim.shape[0], 4))
     RT[:,0] = np.array([stim.reaction_time.values])
@@ -1147,7 +1147,7 @@ def plot_gradCPT_VTC( stim, cfg_dataset, filenm ):
     # give a title to the figure
     p.suptitle(filenm)
 
-    p.savefig( os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', filenm + "_DQR_gradCPT_VTC.png") )
+    p.savefig( os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder, 'plots', 'DQR', filenm + "_DQR_gradCPT_VTC.png") )
     p.close()
 
 

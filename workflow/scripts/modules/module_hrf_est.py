@@ -71,8 +71,9 @@ def blockaverage(epochs_all, cfg_hrf_estimation):
     return all_trial_blockaverage, all_trial_mse, bad_chans_mse_lst
 
 
-def GLM(runs, rec_str, cfg_hrf_estimation, geo3d, pruned_chans_list):
+def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list):
     cfg_GLM = cfg_hrf_estimation['GLM']
+    rec_str = cfg_hrf_estimation['rec_str']
 
     # 1. need to concatenate runs 
     Y_all, stim_df_tmp, runs_updated = concatenate_runs(runs, rec_str)

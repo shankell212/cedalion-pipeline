@@ -14,7 +14,6 @@ import gzip
 
 def sbf_func(cfg_sb, head_model, Adot_path, out):
 
-    #cfg_sb = cfg_img_recon['spatial_basis']
     # update units to config params
     cfg_sb["threshold_brain"] = units(cfg_sb["threshold_brain"])
     cfg_sb["threshold_scalp"] = units(cfg_sb["threshold_scalp"])
