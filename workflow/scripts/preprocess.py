@@ -32,7 +32,7 @@ import os
 import cedalion
 import cedalion.nirs
 import cedalion.sigproc.quality as quality
-import cedalion.sigproc.motion_correct as motion_correct
+import cedalion.sigproc.motion as motion_correct
 import cedalion.sigproc.frequency as frequency
 import cedalion.xrutils as xrutils
 import cedalion.models.glm as glm
@@ -71,7 +71,11 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
     
     records = cedalion.io.read_snirf( snirf_path ) 
     rec = records[0]
-    
+
+    # if no time units, then assume seconds and add units (ASSUMING SECONDS)
+    if not rec['amp'].time.attrs:
+        rec['amp'] = rec['amp'].assign_coords(time=rec['amp'].time.pint.quantify('second'))
+
     # Load in events.tsv file 
     if not os.path.exists( events_path ):  
         print( f"Error: File {events_path} does not exist" )
@@ -282,10 +286,7 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
         'geo2d': rec.geo2d,
         'geo3d': rec.geo3d
         }
-    
     # Save data quality dict as a sidecar json file
-    # with open(out_files['out_json'], 'w') as fp:
-    #     json.dump(data_quality, fp)
     file = gzip.GzipFile(out_files['out_sidecar'], 'wb')
     file.write(pickle.dumps(data_quality))
     
@@ -314,9 +315,6 @@ def main():
     out_files = {
         "out_snirf" : snakemake.output.snirf,
         "out_sidecar": snakemake.output.sidecar,
-        #"out_dqr": snakemake.output.dqr_plot,
-        #"out_gvtd": snakemake.output.gvtd_plot,
-        #"out_slope": snakemake.output.slope_plot
         }
     preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, stim_lst, mse_amp_thresh, out_files)
  

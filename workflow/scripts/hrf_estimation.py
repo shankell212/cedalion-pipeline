@@ -12,11 +12,6 @@ Created on Thu Jun  5 09:40:42 2025
 import os
 import cedalion
 import cedalion.nirs
-import cedalion.sigproc.quality as quality
-
-import cedalion.models.glm as glm
-import cedalion.vis as plots
-
 import numpy as np
 import xarray as xr
 import pint
@@ -33,10 +28,9 @@ sys.path.append(modules_path)
 import module_hrf_est as mhrf
 
 
-
 #%% Block average func
 
-def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_pkl, out_json, out_geo):  #, out_blkavg_nc, out_epoch_nc):
+def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_file, out_json, out_geo):  #, out_blkavg_nc, out_epoch_nc):
     print(f'run_files: {run_files}')
         
     # update units 
@@ -48,27 +42,6 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_pkl, o
         cfg_GLM['t_std']= units(cfg_GLM['t_std'])
         cfg_GLM['t_delta']= units(cfg_GLM['t_delta'])
         cfg_GLM['distance_threshold']= units(cfg_GLM['distance_threshold'])
-
-
-    # # Choose correct mse values based on if blockaveraging od or conc
-    # if 'conc' in cfg_hrf['rec_str']:
-    #     cfg_mse = cfg_hrf['mse_conc']
-    #     cfg_mse["mse_val_for_bad_data"] = units(cfg_mse["mse_val_for_bad_data"])
-    #     cfg_mse["mse_min_thresh"] = units(cfg_mse["mse_min_thresh"])
-    #     cfg_mse["blockaverage_val"] = units(cfg_mse["blockaverage_val"])
-    # else:
-    #     cfg_mse = cfg_hrf['mse_od']
-    #     if isinstance(cfg_mse["mse_val_for_bad_data"], str):
-    #         cfg_mse["mse_val_for_bad_data"] = float(cfg_mse["mse_val_for_bad_data"])
-    #     if isinstance(cfg_mse["mse_min_thresh"], str):
-    #         cfg_mse["mse_min_thresh"] = float(eval(cfg_mse["mse_min_thresh"]))
-    #     if isinstance(cfg_mse["blockaverage_val"], str):
-    #         cfg_mse["blockaverage_val"] = float(cfg_mse["blockaverage_val"])
-    # mse_amp_thresh = float(eval(cfg_hrf['mse_amp_thresh']))
-    # cfg_mse['mse_amp_thresh'] = mse_amp_thresh
-    # #mse_amp_thresh = [float(eval(x)) if isinstance(x,str) else x for x in cfg_blockaverage['mse_amp_thresh']] # convert str to float if str
-    # #cfg_mse['mse_amp_thresh'] = min(mse_amp_thresh) # get minimum amplitude threshold
-                            
     
     # Loop through files
     idx_sat_runs = []
@@ -200,14 +173,17 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_pkl, o
         'bad_indices': bad_indices,
         }
     
-    
-    # SAVE data a pickle for now  # !!! Change to snirf in future when its debugged
-    # with open(out_pkl, "wb") as f:        # if output is a single string, it wraps it in an output object and need to index in
-    #     pickle.dump(results, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-    file = gzip.GzipFile(out_pkl, 'wb')  # sav eas gzipped pickle file
+    file = gzip.GzipFile(out_file, 'wb')  # save as gzipped pickle file
     file.write(pickle.dumps(results))
     file.close()    
+
+    # # save as netcdf file
+    # ds = xr.Dataset({
+    # 'hrf_est':     ('hrf_dim',  hrf_estimate),  # variable, dimensions, data
+    # 'mse_t':       ('mse_dim',  hrf_mse),
+    # 'bad_indices': ('bad_dim',  bad_indices),
+    # })
+    # ds.to_netcdf(out_file)
 
     # # save glm results
     # if glm_results is not None:
@@ -216,19 +192,12 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_pkl, o
     #     sub_dir = out_json[: out_json.find("/", idx)]
     #     subject_num = out_json.split("sub-")[1].split("/")[0]
     #     out_glm = os.path.join(sub_dir, f"sub-{subject_num}_task-{cfg_dataset['task'][0]}_nirs_glm_weights.pkl.gz") # NOTE: assumes only 1 task
-
     #     file = gzip.GzipFile(out_glm, 'wb')  # sav eas gzipped pickle file
     #     file.write(pickle.dumps(glm_weights))
     #     file.close()    
+
     
-    # # SAVE data as netcdf in addition to snirf
-    # blockaverage.to_netcdf(path=out_blkavg_nc)
-    # blockaverage.close()
-    
-    # epochs.to_netcdf(path=out_epoch_nc)
-    # epochs.close()
-    
-    print("Block average data saved successfully")
+    print("Hrf estimation data saved successfully")
 
     data_quality = {       
         "idx_sat": idx_sat,
@@ -242,7 +211,8 @@ def hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_pkl, o
     file = gzip.GzipFile(out_json, 'wb')
     file.write(pickle.dumps(data_quality))
     file.close()
-    
+
+
     # file = gzip.GzipFile('out_sidecar', 'wb')  # save as sidecar instead of json
     # file.write(pickle.dumps(data_quality))
     
@@ -283,13 +253,13 @@ def main():
     run_files = snakemake.input.preproc  #.preproc_runs
     data_quality_files = snakemake.input.quality
     
-    out_pkl = snakemake.output.pickle
+    out_file = snakemake.output.pickle
     out_json = snakemake.output.json
     out_geo = snakemake.output.geo
     #out_blkavg_nc = snakemake.output.bl_nc
     #out_epoch_nc = snakemake.output.ep_nc
     
-    hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_pkl, out_json, out_geo)  #, out_blkavg_nc, out_epoch_nc)
+    hrf_est_func(cfg_dataset, cfg_hrf, run_files, data_quality_files, out_file, out_json, out_geo)  #, out_blkavg_nc, out_epoch_nc)
     
    
     

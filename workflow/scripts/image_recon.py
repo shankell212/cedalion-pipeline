@@ -37,7 +37,7 @@ warnings.filterwarnings('ignore')
 
 #%%
 
-def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[]):
+def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, geo_path, out, SB=[]):
 
     # Convert str vals to units from config
     cfg_mse = cfg_img_recon['mse']
@@ -69,11 +69,10 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[]):
 
     ec = cedalion.nirs.get_extinction_coefficients(cfg_img_recon['spectrum'], Adot.wavelength)
     
-    # load amp and geo3d
-    recordings = io.read_snirf(cfg_img_recon['probe_dir'] + cfg_img_recon['snirf_name_probe'])
-    rec = recordings[0]
-    geo3d = rec.geo3d
-    amp = rec['amp']
+    # load geometry 
+    with gzip.open(geo_path, 'rb') as f:
+        geo_pos = pickle.load(f)
+        geo3d = geo_pos['geo3d']
 
     #%% run image recon
     
@@ -117,7 +116,7 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[]):
             dpf = xr.DataArray(
                     [1, 1],
                     dims="wavelength",
-                    coords={"wavelength": amp.wavelength},
+                    coords={"wavelength": Adot.wavelength},
                     )
             od_ts =  cedalion.nirs.cw.conc2od(ts_trial, geo3d, dpf)
             if mse_t is not None:  # would not need this in theory bc if loading in ts, then conc should not be there 
@@ -385,6 +384,7 @@ def main():
     cfg_hrf = snakemake.params.cfg_hrf
     
     hrf_data = snakemake.input.hrf_data
+    geo_path = snakemake.input.geometry
     Adot_path = snakemake.input.Adot
     SB_path = snakemake.input.SB
 
@@ -392,7 +392,7 @@ def main():
     
     out = snakemake.output[0]
     
-    img_recon_func(cfg_img_recon, cfg_hrf, hrf_data, Adot_path, out, SB_path)
+    img_recon_func(cfg_img_recon, cfg_hrf, hrf_data, Adot_path, geo_path, out, SB_path)
     
             
 if __name__ == "__main__":

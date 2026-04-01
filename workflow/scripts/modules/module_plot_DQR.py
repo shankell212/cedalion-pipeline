@@ -221,8 +221,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, cfg_dataset, stim_lst_str)
     # GVTD plots
     if 'gvtd_corrected' in rec.aux_ts.keys():
         der_dir = os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'plots', 'DQR', 'gvtd')
-        if not os.path.exists(der_dir):
-            os.makedirs(der_dir)
+        os.makedirs(der_dir, exist_ok=True)
         
         thresh_b4, thresh_corrected = make_gvtd_hist_compare_corrected(rec.aux_ts['gvtd'], rec.aux_ts['gvtd_corrected'], plot_thresh=True, stat_type='histogram_mode', n_std=10)
         p.suptitle(filenm)
