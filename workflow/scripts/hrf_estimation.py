@@ -30,7 +30,7 @@ import module_hrf_est as mhrf
 
 #%% Block average func
 
-def hrf_est_func(cfg_hrf, run_files, data_quality_files, out_file): #, out_json, out_geo):  #, out_blkavg_nc, out_epoch_nc):
+def hrf_est_func(cfg_hrf, run_files, data_quality_files, out_file): 
     print(f'run_files: {run_files}')
         
     # update units 
@@ -48,8 +48,8 @@ def hrf_est_func(cfg_hrf, run_files, data_quality_files, out_file): #, out_json,
     # Loop through files
     pruned_chans_lst = []
     bad_channels_runs = []
-    # loop through files and concatinate runs for GLM and epochs for blockaverage
-    for file_idx, run in enumerate(run_files):     
+  
+    for file_idx, run in enumerate(run_files):        # loop through files and concatinate runs for GLM and epochs for blockaverage
         
         # if file path/ current run does not exist for this file, continue without it  (i.e. subj dropped out)
         if not os.path.isfile(run):  
@@ -58,16 +58,10 @@ def hrf_est_func(cfg_hrf, run_files, data_quality_files, out_file): #, out_json,
         # # Load in snirf for curr subj and run
         records = cedalion.io.read_snirf(fname = run, time_units = 'second' ) #FIXME: HARD CODED TIME UNITS
         rec = records[0]
-        # with gzip.open(run, 'rb') as f:
-        #     record = pickle.load(f)
-        #     rec = record[0]
         ts = rec[cfg_hrf['rec_str']].copy()
         stim = rec.stim.copy() # select the stim for the given file 
 
-
         # Load in data quality info for current run
-        # with gzip.open(data_quality_files[file_idx], 'rb') as f:
-        #     data_quality_run = pickle.load(f) 
         ds = xr.open_dataset(data_quality_files[file_idx])
         pruned_channels = ds['pruned_channels'].values
         bad_channels = ds['bad_channels'].values

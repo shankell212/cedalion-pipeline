@@ -25,6 +25,11 @@ from scipy.signal.windows import gaussian
 
 
 def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, root_dir, derivatives_subfolder, stim_lst_str): #, out_dqr, out_gvtd):
+    
+    # # make sure save folder exists, if not, create it
+    # sub_id = filenm.split("_")[0]
+    # save_dir = os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder, 'plots', sub_id)
+    # os.makedirs(save_dir, exist_ok=True)
 
     # make sure save folder exists, if not, create it
     der_dir = os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder,'plots', 'DQR')
@@ -70,7 +75,6 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, root_dir, derivatives_subf
     norm = clrs.BoundaryNorm(bounds, cmap.N)
         
     cb_ticks_labels = [(0.08,'SDS'), (0.24,'Low Signal'), (0.4,'Poor SNR'), (0.58,'Good SNR'), (0.76,'SCI/PSP'), (0.92,'Saturated')]
-    #pdb.set_trace()
     idx_good = np.where(chs_pruned.values == 0.58)[0]
     scalp_plot( 
             rec["amp"],
@@ -78,7 +82,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, root_dir, derivatives_subf
             chs_pruned,
             ax[0][1],
             min_dist = cfg_preprocess['prune']['sd_thresh_min'],
-            #max_dist = cfg_preprocess['prune']['sd_thresh_max'], 
+            # max_dist = cfg_preprocess['prune']['sd_thresh_max'], #FIXME: Cedalion does not have this
             cmap=cmap, #'gist_rainbow',
             #norm=norm,
             vmin=0,
@@ -105,7 +109,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, root_dir, derivatives_subf
             variance_vals_da.isel(wavelength=0),  # first wav
             ax1,
             min_dist = cfg_preprocess['prune']['sd_thresh_min'],
-            #max_dist = cfg_preprocess['prune']['sd_thresh_max'], 
+            # max_dist = cfg_preprocess['prune']['sd_thresh_max'], 
             cmap='jet',
             vmin=min_variance,
             vmax=max_variance,
@@ -129,7 +133,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, root_dir, derivatives_subf
             variance_vals_da.isel(wavelength=1),  # 2nd wav
             ax1,
             min_dist = cfg_preprocess['prune']['sd_thresh_min'],
-            #max_dist = cfg_preprocess['prune']['sd_thresh_max'], 
+            # max_dist = cfg_preprocess['prune']['sd_thresh_max'], #FIXME: Cedalion does not have this
             cmap='jet',
             vmin=min_variance,
             vmax=max_variance,
@@ -155,7 +159,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, root_dir, derivatives_subf
             snr.isel(wavelength=0),
             ax1,
             min_dist = cfg_preprocess['prune']['sd_thresh_min'],
-            #max_dist = cfg_preprocess['prune']['sd_thresh_max'], 
+            # max_dist = cfg_preprocess['prune']['sd_thresh_max'], #FIXME: Cedalion does not have this
             cmap='jet',
             vmin = 0,  #np.min(snr.isel(wavelength=0)),
             vmax = 25,  #np.max(snr.isel(wavelength=0)),
@@ -181,7 +185,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, root_dir, derivatives_subf
             snr.isel(wavelength=1),
             ax1,
             min_dist = cfg_preprocess['prune']['sd_thresh_min'],
-            #max_dist = cfg_preprocess['prune']['sd_thresh_max'], 
+            # max_dist = cfg_preprocess['prune']['sd_thresh_max'], #FIXME: Cedalion does not have this
             cmap='jet',
             vmin = 0,  #np.min(snr.isel(wavelength=1)),
             vmax = 25,  #np.max(snr.isel(wavelength=1)),
@@ -200,33 +204,18 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, root_dir, derivatives_subf
     
     p.suptitle(fig_title)
 
-    p.savefig( os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder, 'plots', 'DQR', filenm + "_DQR.png") )
-    #p.savefig(out_dqr)
+    p.savefig( os.path.join(der_dir, filenm + "_DQR.png") )
     p.close()
 
     
-    # Plot the GVTD Histograms
-    # thresh = make_gvtd_hist(rec.aux_ts['gvtd'], plot_thresh=True, stat_type='histogram_mode', n_std=10) # !!! why recalc thresh? do we need to?
-    # p.suptitle(fig_title)
-    # p.savefig( os.path.join(filepath, 'derivatives', 'plots', 'DQR','gvtd', fig_title + "_DQR_gvtd_hist.png") )
-    # p.close()
-    
-    # if 'gvtd_corrected' in rec.aux_ts.keys():
-        # thresh_corrected = make_gvtd_hist(rec.aux_ts['gvtd_corrected'], plot_thresh=True, stat_type='histogram_mode', n_std=10)
-        # p.suptitle(fig_title)
-        # p.savefig( os.path.join(filepath, 'derivatives', 'plots', 'DQR','gvtd', fig_title + "_DQR_gvtd_hist_corrected.png") )
-        # p.close()
-    
-    
     # GVTD plots
     if 'gvtd_corrected' in rec.aux_ts.keys():
-        der_dir = os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder, 'plots', 'DQR', 'gvtd')
-        os.makedirs(der_dir, exist_ok=True)
+        der_dir_gvtd = os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder, 'plots', 'DQR', 'gvtd')
+        os.makedirs(der_dir_gvtd, exist_ok=True)
         
         thresh_b4, thresh_corrected = make_gvtd_hist_compare_corrected(rec.aux_ts['gvtd'], rec.aux_ts['gvtd_corrected'], plot_thresh=True, stat_type='histogram_mode', n_std=10)
         p.suptitle(filenm)
-        p.savefig( os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder, 'plots', 'DQR','gvtd', filenm + "_DQR_gvtd_hist.png") )
-        #p.savefig(out_gvtd)
+        p.savefig( os.path.join(der_dir_gvtd, filenm + "_DQR_gvtd_hist.png") )
         p.close()
     
 

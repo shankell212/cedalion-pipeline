@@ -129,7 +129,7 @@ def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list):
     dms.common = dms.common.fillna(0)
 
     # 3. get betas and covariance
-    results = glm.fit(Y_all, dms, noise_model=cfg_GLM['noise_model']) # fit GLM to get betas and covariance
+    results = glm.fit(Y_all, dms, noise_model=cfg_GLM['noise_model'])  # fit GLM to get betas and covariance
     betas = results.sm.params  # this is the beta estimates for each regressor in the design matrix, it has dimensions regressor and measurement, 
     cov_params = results.sm.cov_params() # this is the covariance of the beta estimates, which we can use to get MSE of the HRF estimate. It has dimensions regressor_r and regressor_c, ctions
 

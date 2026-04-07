@@ -15,22 +15,17 @@ from cedalion.physunits import units
 import xarray as xr
 from cedalion.dataclasses.geometry import PointType
 from cedalion.sigproc.quality import measurement_variance
-import cedalion.dot as dot
 import cedalion.io as io
 from cedalion.dot import image_recon as ir
-import cedalion.vis as plots
+from cedalion.vis.anatomy import image_recon_multi_view
 import numpy as np
 import gzip
 import pickle
 import sys
 import pandas as pd
-script_dir = os.path.dirname(os.path.abspath(__file__))
-modules_path = os.path.join(script_dir, 'modules')
-sys.path.append(modules_path)
 
-# import module_image_recon as img_recon 
-#import module_spatial_basis_funs as sbf 
 import pyvista as pv
+
 pv.OFF_SCREEN = True
 
 # Turn off all warnings
@@ -40,7 +35,7 @@ warnings.filterwarnings('ignore')
 
 #%%
 
-def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[]):
+def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], root_dir=None, derivatives_subfolder=None):
 
     # Convert str vals to units from config
     cfg_mse = cfg_img_recon['mse']
@@ -65,11 +60,11 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[]):
             cfg_img_recon["lambda_spatial_depth"] = float(eval(cfg_img_recon["lambda_spatial_depth"]))
     
         
-    #%% Load head model and sensitivity matrix
+    #%% Load sensitivity matrix 
 
     Adot = io.forward_model.load_Adot(Adot_path)
-
     ec = cedalion.nirs.get_extinction_coefficients(cfg_img_recon['spectrum'], Adot.wavelength)
+    head = cedalion.dot.get_standard_headmodel(cfg_img_recon['generate_sensitivity']['head_model'])
 
     #%% run image recon
     
@@ -272,37 +267,36 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[]):
     #NOTE: we have Xmse for if using Cmeas or not, so do we save for both cases?
         # group avg would fail without. 
         # we just did not take in account the covariance of the data when reconstructing the image
-
-
-
-    # if mse_t is not None:
-    #     results = { 'Xs': all_trial_Xs,  
-    #                 'X_mse': all_trial_X_mse}
-    # else:
-    #     results = { 'Xs': Xs_parcel_weighted, 
-    #                'X_mse': X_mse,}
-                                
-    # # Save data to a compressed pickle file 
-    # print(f'   Saving to {out}')
-    # file = gzip.GzipFile(out, 'wb')
-    # file.write(pickle.dumps(results))
-    # file.close()     
     
     
-    #%% build and save plots
+    # #%% build and save plots
+
     # if cfg_img_recon['plot_image']['enable']:
+    #     save_dir_tmp = os.path.join(root_dir, derivatives_subfolder, 'cedalion', 'plots', 'image_recon')
+    #     os.makedirs(save_dir_tmp, exist_ok=True)
+
+    #     folder_name = out.removeprefix("Xs_").removesuffix(".nc")
+    #     suffix = out.split("Xs_")[1].split("_BS")[0]
+
+    #     intensity = np.log10(Adot[:,:,0].sum('channel')) # make non-sensitive vertices NaN / gray in image
+    #     mask = intensity > -2
+    #     sensitivity_mask = mask.drop_vars('wavelength')
+
+    #     all_trial_X_stderr = np.sqrt(all_trial_X_mse)
+    #     all_trial_X_tstat = all_trial_Xs / all_trial_X_stderr
+
+    #     all_trial_Xs_plot = all_trial_Xs.where(sensitivity_mask)
+    #     all_trial_X_stderr              = all_trial_X_stderr.where(sensitivity_mask)
+    #     all_trial_X_tstat               = all_trial_X_tstat.where(sensitivity_mask)
+
     #     plot_img = cfg_img_recon['plot_image']
-    #     threshold = -2 # log10 absolute
-    #     wl_idx = 1
-    #     M = sbf.get_sensitivity_mask(Adot, threshold, wl_idx)
-    #     flag_hbo_list = plot_img['flag_hbo_list']  #[True, False]
-    #     flag_brain_list = plot_img['flag_brain_list'] #[True]   #, False]
-    #     flag_img_list = plot_img['flag_img_list'] #['mag', 'tstat', 'noise'] #, 'noise'
+
+    #     flag_hbo_list = plot_img['flag_hbo_list']  
+    #     flag_brain_list = plot_img['flag_brain_list']
+    #     flag_img_list = plot_img['flag_img_list'] 
             
     #     flag_condition_list = cfg_hrf['stim_lst']
         
-        
-    #     # all_trial_X_hrf_mag = results['X_hrf_mag']
     #     for flag_hbo in flag_hbo_list:
             
     #         for flag_brain in flag_brain_list: 
@@ -330,7 +324,7 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[]):
     #                             foo_img = all_trial_X_tstat.sel(trial_type=flag_condition).copy()
     #                             title_str = title_str + ' t-stat'
     #                         elif flag_img == 'mag':
-    #                             foo_img = all_trial_X_hrf_mag_weighted.sel(trial_type=flag_condition).copy()
+    #                             foo_img = all_trial_Xs_plot.sel(trial_type=flag_condition).copy()
     #                             title_str = title_str + ' magnitude'
     #                         elif flag_img == 'noise':
     #                             foo_img = all_trial_X_stderr.sel(trial_type=flag_condition).copy()
@@ -340,84 +334,48 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[]):
     #                             foo_img = all_trial_X_tstat.copy()
     #                             title_str = title_str + ' t-stat'
     #                         elif flag_img == 'mag':
-    #                             foo_img = all_trial_X_hrf_mag_weighted.copy()
+    #                             foo_img = all_trial_Xs_plot.copy()
     #                             title_str = title_str + ' magnitude'
     #                         elif flag_img == 'noise':
     #                             foo_img = all_trial_X_stderr.copy()
     #                             title_str = title_str + ' noise'
                 
-    #                     foo_img = foo_img.pint.dequantify()
-    #                     foo_img = foo_img.transpose('vertex', 'chromo')
-    #                     foo_img[~M] = np.nan
-                        
-    #                  # 
+    #                     if 'reltime' in foo_img.dims:
+    #                         foo_img = foo_img.rename({"reltime": "time"})
+    #                         foo_img = foo_img.transpose("vertex", "chromo", "time")
     #                     clim = (-foo_img.sel(chromo='HbO').max(), foo_img.sel(chromo='HbO').max())
-    #                     # if flag_img == 'mag':
-    #                     #     clim = [-7.6e-4, 7.6e-4]
-    #                     p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (1,1), clim, hbx_brain_scalp, 'scale_bar',
-    #                                               None, title_str)
-    #                     p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (0,0), clim, hbx_brain_scalp, 'left', p0)
-    #                     p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (0,1), clim, hbx_brain_scalp, 'superior', p0)
-    #                     p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (0,2), clim, hbx_brain_scalp, 'right', p0)
-    #                     p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (1,0), clim, hbx_brain_scalp, 'anterior', p0)
-    #                     p0 = img_recon.plot_image_recon(foo_img, head, (2,3), (1,2), clim, hbx_brain_scalp, 'posterior', p0)
-                        
-    
-    #                     #img_folder = f'{direct_name}_aspatial-{cfg_img_recon["alpha_spatial"]}_ameas-{cfg_img_recon["alpha_meas"]}_{Cmeas_name}_{SB_name}'
-                        
-    #                     img_folder = (
-    #                                 #f"{cfg_dataset['root_dir']}/derivatives/{cfg_dataset['derivatives_subfolder']}/plots/image_recon/"
-    #                                 ("direct" if cfg_img_recon["DIRECT"]["enable"] else "indirect") 
-    #                                 + f"_aspatial-{cfg_img_recon['alpha_meas']}"
-    #                                 + f"_ameas-{cfg_img_recon['alpha_spatial']}"
-    #                                 + ("_Cmeas" if cfg_img_recon["Cmeas"]["enable"] else "_noCmeas")
-    #                                 + ("_SB" if cfg_img_recon["spatial_basis"]["enable"] else "_noSB")
-    #                                 )
-    #                     #pdb.set_trace()
-    #                     save_dir_tmp= os.path.join(cfg_dataset["root_dir"], 'derivatives', cfg_dataset['derivatives_subfolder'], 'plots', 'image_recon', img_folder)
-    #                     if not os.path.exists(save_dir_tmp):
-    #                         os.makedirs(save_dir_tmp)
-    #                     file_name = f'IMG_{flag_condition}_{flag_img}_{hbx_brain_scalp}.png'
-    #                     p0.screenshot( os.path.join(save_dir_tmp, file_name) )
-    #                     p0.close()
-                        
-                        
+
+    #                     filename = f'IMG_{flag_condition}_{flag_img}_{hbx_brain_scalp}'
+    #                     # create overall folder for current image recon params 
+    #                     save_dir_tmp_ful = os.path.join(save_dir_tmp, folder_name)
+    #                     os.makedirs(save_dir_tmp_ful, exist_ok=True) 
+
+
+    #                     save_dir_full = os.path.join(save_dir_tmp_ful, suffix)
+    #                     os.makedirs(save_dir_full, exist_ok=True)
+    #                     save_file_path = os.path.join(save_dir_full, filename )
+        
+    #                     print('plotting: ', filename)
+    #                     image_recon_multi_view(   #FIXME: add off_screen option to this function
+    #                         foo_img,  # time series data; can be 2D (static) or 3D (dynamic)
+    #                         head,
+    #                         cmap='jet',
+    #                         clim=clim,
+    #                         view_type=hbx_brain_scalp,
+    #                         title_str=f'{filename} / uM',
+    #                         filename=save_file_path,
+    #                         SAVE=True,
+    #                         #time_range=(foo_img.time.values[0],foo_img.time.values[-1],0.5)*units.s,
+    #                         fps=12,
+    #                         geo3d_plot = None, #  geo3d_plot
+    #                         wdw_size = (1024, 768)
+    #                     )
+    #                  #              
                      
-#%%
-
-# SAVING plots dummy code 
-
-# recon_plot_folder = (
-#             f"{ROOT}/derivatives/{DERIV}/plots/image_recon/"
-#             +("_direct" if config["image_recon"]["DIRECT"]["enable"] else "_indirect") 
-#             + f"_aspatial-{config['image_recon']['alpha_meas']}"
-#             + f"_ameas-{config['image_recon']['alpha_spatial']}"
-#             + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
-#             + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
-#             )
-
-# expand(recon_plot_folder + 'IMG_{flag_condition}_{flag_img}_{hbx}_{brain_scalp}.png', 
-#        flag_img = config['image_recon']['plot_image']['flag_img_list'], 
-#        flag_condition = config['hrf']['stim_lst'], 
-#        brain_scalp = config['image_recon']['plot_image']['flag_brain_list'],
-#        hbx = config['image_recon']['plot_image']['flag_hbo_list'], 
-#        )  
-            
-            
-#         #     + f"_cov_alpha_spatial_{config['image_recon']['alpha_spatial']}"
-#         #     + f"_alpha_meas_{config['image_recon']['alpha_meas']}"
-#         #     + ("_direct" if config["image_recon"]["DIRECT"]["enable"] else "_indirect")
-#         #     + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
-#         #     + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
-#         #     + ".pkl.gz"
-#         # )
-    
-
     
 
 
 #%%
-
 def main():    
     # get params
     cfg_img_recon = snakemake.params.cfg_img_recon
@@ -426,12 +384,14 @@ def main():
     hrf_data = snakemake.input.hrf_data
     Adot_path = snakemake.input.Adot
     SB_path = snakemake.input.SB
+    root_dir = snakemake.params.root_dir
+    derivatives_subfolder = snakemake.params.derivatives_subfolder
 
     Adot_path = str(Adot_path) if not isinstance(Adot_path, str) else Adot_path
     
     out = snakemake.output[0]
     
-    img_recon_func(cfg_img_recon, cfg_hrf, hrf_data, Adot_path, out, SB_path)
+    img_recon_func(cfg_img_recon, cfg_hrf, hrf_data, Adot_path, out, SB_path, root_dir, derivatives_subfolder)
     
             
 if __name__ == "__main__":

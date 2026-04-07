@@ -33,11 +33,12 @@ with open(config_path, 'r') as file:
     config = yaml.safe_load(file)
 
 cfg_dataset = config['dataset']
+
 cfg_hrf = config['hrf_estimation']
 
 # subjects = cfg_dataset['subject']   # sub idx you want to test
 dirs = os.listdir(cfg_dataset['root_dir'])
-subjects = [d.replace("sub-", "") for d in dirs if "sub" in d and d not in cfg_dataset["subjects_to_exclude"]]
+subjects = [d.replace("sub-", "") for d in dirs if "sub" in d and d.replace("sub-", "") not in config["dataset"]["subjects_to_exclude"]]
 tasks = cfg_dataset['task'] #[0]
 run = config["run"] = [f"{i:02d}" for i in range(1, int(config["dataset"]["num_runs"]) + 1)]
 # run = cfg_dataset['run']
@@ -60,7 +61,7 @@ for subj in subjects:
                 
         print(f"Processing sub-{subj}, task-{task} ...")
         
-        hrf.hrf_est_func(cfg_dataset, cfg_hrf_loop, run_files, data_quality_files, out_pkl) #, out_json, out_geo)
+        hrf.hrf_est_func(cfg_hrf_loop, run_files, data_quality_files, out_pkl)
         
         
 # %%

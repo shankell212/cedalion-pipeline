@@ -8,9 +8,9 @@ from pathlib import Path
 # Get the directory where the Snakefile is located
 SNAKEFILE_DIR = Path(workflow.snakefile).parent
 # Use --configfile to specify config, or use default
-default_config = join(SNAKEFILE_DIR, "config", "config.yaml")  # default config file in workflow/config folder
+# default_config = join(SNAKEFILE_DIR, "config", "config.yaml")  # default config file in workflow/config folder
 
-# default_config = "/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/derivatives/cedalion/test_new_file_struct_postcov_ced/test_1/config_test_1.yml" # have snakemake copy this file into derivatives folder
+default_config = "/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/derivatives/cedalion/test_new_folder_config_struct/test_1/config_test_1.yml" # have snakemake copy this file into derivatives folder
 # default_config = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_test_imgrecon_newnoise_2/config_STS_Q.yml" # have snakemake copy this file into derivatives folder
 # default_config = "/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/derivatives/cedalion/test/test_1/config_test_1.yml" # have snakemake copy this file into derivatives folder
 
@@ -46,7 +46,7 @@ def get_imagerecon_output(): # create file name for image recon output
 
 def get_groupavg_imagerecon_output():
     return (
-        f"{SAVE_DIR}/image_results/"
+        f"{SAVE_DIR}/group_results/"
         f"Xs_groupavg_{{task}}"
         f"_cov_alpha_spatial_{config['image_recon']['alpha_spatial']}"
         f"_alpha_meas_{config['image_recon']['alpha_meas']}"
@@ -69,7 +69,7 @@ rule all_default:
     input:
         # Groupaverage channel space 
         [expand(
-            f"{SAVE_DIR}/groupaverage/"
+            f"{SAVE_DIR}/group_results/"
             f"task-{{task}}_nirs_groupaverage_chanspace_{config['hrf_estimation']['rec_str']}.nc",
             task=config["dataset"]["task"],
         ),
@@ -111,7 +111,7 @@ rule all_hrf_estimation:
 rule all_groupaverage:
     input:
         expand([  
-            (f"{SAVE_DIR}/groupaverage/task-{{task}}_nirs_groupaverage_chanspace_{config['hrf_estimation']['rec_str']}.nc") # groupaverage
+            (f"{SAVE_DIR}/group_results/task-{{task}}_nirs_groupaverage_chanspace_{config['hrf_estimation']['rec_str']}.nc") # groupaverage
             ],
             task = config["dataset"]["task"],
             )      
@@ -188,11 +188,6 @@ def all_hrf_files(wc):
         for subject in config["dataset"]["subject"]
     ]
 
-    # geo_paths = [
-    #     f"{SAVE_DIR}/hrf_estimate/sub-{subject}/sub-{subject}_task-{wc.task}_nirs_geo.sidecar"
-    #     for subject in config["dataset"]["subject"]
-    # ]
-
     return {
         "hrf":  hrf_paths,
         # "geo": geo_paths
@@ -205,7 +200,7 @@ rule groupaverage:
         hrf_subs  = lambda wc: all_hrf_files(wc)["hrf"], # block avg data
     output:
         # group averaged data
-        (f"{SAVE_DIR}/groupaverage/task-{{task}}_nirs_groupaverage_chanspace_{config['hrf_estimation']['rec_str']}.nc")   
+        (f"{SAVE_DIR}/group_results/task-{{task}}_nirs_groupaverage_chanspace_{config['hrf_estimation']['rec_str']}.nc")   
     params:
         cfg_groupaverage = config["groupaverage"],
         cfg_dataset = config['dataset'],
@@ -221,12 +216,11 @@ rule generate_sensitivity:
         in1 = []
     output:
         Adot = protected(join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sensitivity.nc')),
-        #geometry = protected(join(config['dataset']['root_dir'], 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'probe_geometry.sidecar'),)
     resources:
         gpu=1
     params:
         cfg_dataset = config['dataset']["root_dir"],
-        head_model = config['image_recon']['head_model'],
+        head_model = config['image_recon']['generate_sensitivity']['head_model'],
         cfg_Adot = config['image_recon']['generate_sensitivity']
     script:
         "scripts/generate_sensitivity_matrix.py"
@@ -240,7 +234,7 @@ if config['image_recon']['spatial_basis']['enable']: # run generate sbf rule if 
             join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sbf.nc')
         params:
             cfg_sb = config['image_recon']['spatial_basis'],
-            head_model = config['image_recon']['head_model']
+            head_model = config['image_recon']['generate_sensitivity']['head_model']
         script:
             "scripts/generate_sbf.py"  #FIXME: this file is not finished
 
@@ -255,17 +249,14 @@ rule imagerecon:
     input:
         hrf_data = rules.hrf_estimation.output.net_hrf,
         Adot = ancient(rules.generate_sensitivity.output.Adot),
-        #geometry = ancient(rules.generate_sensitivity.output.geometry),
         SB = get_optional_input(config['image_recon']['spatial_basis']['enable']),
-        module4 = SNAKEFILE_DIR / "scripts/modules/module_image_recon.py",
-        module5 = SNAKEFILE_DIR / "scripts/modules/module_spatial_basis_funs.py"
-        # module4 = "scripts/modules/module_image_recon.py",
-        # module5 = "scripts/modules/module_spatial_basis_funs.py"
     output:
         get_imagerecon_output()
     params:
         cfg_img_recon = config['image_recon'],
-        cfg_hrf = config['hrf_estimation']
+        cfg_hrf = config['hrf_estimation'],
+        root_dir = ROOT,
+        derivatives_subfolder = config['dataset']['derivatives_subfolder']
     script:
         #"scripts/image_recon.py"
         SNAKEFILE_DIR / "scripts/image_recon.py"

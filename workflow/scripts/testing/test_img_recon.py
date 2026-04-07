@@ -37,14 +37,10 @@ cfg_dataset = config['dataset']
 cfg_img_recon = config['image_recon']
 cfg_hrf = config['hrf_estimation']
 task = cfg_dataset['task'][0]  # choose first task for testing
+dirs = os.listdir(cfg_dataset['root_dir'])
+subjects = [d.replace("sub-", "") for d in dirs if "sub" in d and d.replace("sub-", "") not in config["dataset"]["subjects_to_exclude"]]
 
-subjects = cfg_dataset['subject']
 
-        
-#Adot_path = os.path.join(cfg_dataset['root_dir'], "derivatives", "cedalion", "probe", "fw", cfg_img_recon['head_model'], 'sensitivity.nc')
-#Adot_path = os.path.join(cfg_dataset['root_dir'], "derivatives", "cedalion", "forward", cfg_img_recon['generate_sensitivity']['sub_folder'], "fw", "probe", 'sensitivity.nc')
-# data_quality_files = [os.path.join(hrf_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_nirs_dataquality.json") for subj in subjects ]
-# geo_files = [os.path.join(hrf_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_nirs_geo.sidecar") for subj in subjects ]
 
 Adot_path = os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sensitivity.nc')
 hrf_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", "cedalion", cfg_dataset['derivatives_subfolder'], "hrf_estimate")  #, f"sub-{subj}")

@@ -178,20 +178,7 @@ def preprocess_func(snirf_path, events_path, root_dir, derivatives_subfolder, cf
         elif step_name in ("wavelet", "motion_correct_wavelet"):
             rec['od_corrected'] = motion_correct.motion_correct_PCA_recurse( rec['od_corrected'], params['iqr'], 
                                                                                    params['wavelet'], params['level'])
-        
-
-        # # slope for Corrected OD before bandpass filtering  
-        # elif step_name in ("calc_slope_af", "calc_slope_after", "slope_after", "slope_af"):
-        #     slope_corrected = preproc.quant_slope(rec, "od_corrected")  # Get slopes after correction before bandpass filtering
-        
-        # # GVTD for Corrected OD before bandpass filtering  
-        # elif step_name in ("calc_gvtd_af", "calc_gvtd_after", "gvtd_after", "gvtd_af"):
-        #     amp_corrected = rec['od_corrected'].copy()  
-        #     amp_corrected.values = np.exp(-amp_corrected.pint.dequantify().values)
-        #     amp_corrected_masked = preproc.prune_mask_ts(amp_corrected, pruned_chans)  # get "pruned" amp data post tddr
-        #     rec.aux_ts['gvtd_corrected'], _ = quality.gvtd(amp_corrected_masked)  
-        #     rec.aux_ts['gvtd_corrected'].name = 'gvtd_corrected'
-        
+    
 
         #%%
         
