@@ -101,10 +101,7 @@ rule all_preprocess:
 rule all_hrf_estimation:
     input:
         expand([
-            get_hrf_output(),
-            #(f"{SAVE_DIR}/hrf_estimate/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_dataquality.json"),  # blockaverage dataqual
-            #(f"{SAVE_DIR}/hrf_estimate/sub-{{subject}}/sub-{{subject}}_task-{{task}}_nirs_geo.sidecar")
-            ],
+            get_hrf_output() ],
             subject = config["dataset"]["subject"],
             task = config["dataset"]["task"],
             )      
@@ -172,8 +169,7 @@ rule hrf_estimation:
         quality  = lambda wc: all_preprocessed_runs(wc)["quality"],
         module3 = SNAKEFILE_DIR / "scripts/modules/module_hrf_est.py",
     output:
-        # HRF for each task
-        net_hrf = get_hrf_output(),
+        net_hrf = get_hrf_output(),  
     params:
         cfg_hrf = config['hrf_estimation'],
     script:
@@ -191,7 +187,6 @@ def all_hrf_files(wc):
 
     return {
         "hrf":  hrf_paths,
-        # "geo": geo_paths
     }
     
 
@@ -209,7 +204,6 @@ rule groupaverage:
         flag_prune_channels = config['preprocess']['steps']['prune']['enable'],
     script:
         SNAKEFILE_DIR / "scripts/groupaverage.py"
-        #"scripts/groupaverage.py"
         
 
 rule generate_sensitivity:
@@ -224,20 +218,19 @@ rule generate_sensitivity:
         head_model = config['image_recon']['generate_sensitivity']['head_model'],
         cfg_Adot = config['image_recon']['generate_sensitivity']
     script:
-        "scripts/generate_sensitivity_matrix.py"
+        SNAKEFILE_DIR / "scripts/generate_sensitivity_matrix.py"
 
 if config['image_recon']['spatial_basis']['enable']: # run generate sbf rule if enable is true
     rule generate_sbf:
         input:
             Adot = ancient(rules.generate_sensitivity.output)
-            #Adot = ancient(join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'fw', 'probe', 'sensitivity.nc'))
         output: # CHANGE file ext when save and load sbf in ced updated
             join(ROOT, 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sbf.nc')
         params:
             cfg_sb = config['image_recon']['spatial_basis'],
             head_model = config['image_recon']['generate_sensitivity']['head_model']
         script:
-            "scripts/generate_sbf.py"  #FIXME: this file is not finished
+            SNAKEFILE_DIR / "scripts/generate_sbf.py"  #FIXME: this file is not finished
 
 def get_optional_input(SB_flag):
     if SB_flag:
@@ -251,8 +244,6 @@ rule imagerecon:
         hrf_data = rules.hrf_estimation.output.net_hrf,
         Adot = ancient(rules.generate_sensitivity.output.Adot),
         SB = get_optional_input(config['image_recon']['spatial_basis']['enable']),
-        module4 = SNAKEFILE_DIR / "scripts/modules/module_image_recon.py",
-        module5 = SNAKEFILE_DIR / "scripts/modules/module_spatial_basis_funs.py"
     output:
         get_imagerecon_output()
     params:

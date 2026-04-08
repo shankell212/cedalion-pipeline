@@ -3,6 +3,6 @@
 
 pysnirf2
 .snakemake
-__pycasche__
+__pycache__
 *.pyc
 pysnirf2.log
