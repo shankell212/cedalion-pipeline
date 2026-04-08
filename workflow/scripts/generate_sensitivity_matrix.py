@@ -9,10 +9,10 @@ import gzip
 import pickle
 
 
-def generate_Adot_func(cfg_Adot, cfg_dataset, head_model, save_dir_Adot, save_dir_geo):
+def generate_Adot_func(cfg_Adot, root_dir, sub, head_model, save_dir_Adot):
     #%%
     # Load recording obj from first subject/task/run
-    snirf_path = os.path.join(cfg_dataset['root_dir'], f"sub-{cfg_dataset['subject'][0]}", "nirs", f"sub-{cfg_dataset['subject'][0]}_task-{cfg_dataset['task'][0]}_run-{cfg_dataset['run'][0]}_nirs.snirf")
+    snirf_path = os.path.join(root_dir, f"sub-{sub}", "nirs", f"sub-{sub}_task-{cfg_Adot['task'][0]}_run-{cfg_Adot['run'][0]}_nirs.snirf")
     recordings = io.read_snirf(snirf_path)
     rec = recordings[0]
     geo3d_meas = rec.geo3d
@@ -45,14 +45,14 @@ def generate_Adot_func(cfg_Adot, cfg_dataset, head_model, save_dir_Adot, save_di
     sensitivity_fname = os.path.join(save_dir_Adot)
     fwm.compute_sensitivity(fluence_fname, sensitivity_fname)
 
-    # Save geometric 2d and 3d positions to sidecar file
-    geo_sidecar = {
-        'geo2d': rec.geo2d,
-        'geo3d': rec.geo3d
-        }
-    file = gzip.GzipFile(save_dir_geo, 'wb')
-    file.write(pickle.dumps(geo_sidecar))
-    file.close()
+    # # Save geometric 2d and 3d positions to sidecar file
+    # geo_sidecar = {
+    #     'geo2d': rec.geo2d,
+    #     'geo3d': rec.geo3d
+    #     }
+    # file = gzip.GzipFile(save_dir_geo, 'wb')
+    # file.write(pickle.dumps(geo_sidecar))
+    # file.close()
 
 
 #%%
@@ -62,13 +62,15 @@ def main():
     # get params
     #cfg_img_recon = snakemake.params.cfg_img_recon
     cfg_Adot = snakemake.params.cfg_Adot
-    cfg_dataset = snakemake.params.cfg_dataset
+    root_dir = snakemake.params.root_dir
     head_model = snakemake.params.head_model
 
+    dirs = sorted(d.replace("sub-", "")for d in os.listdir(root_dir)if d.startswith("sub-")) # get list of subject folders
+    sub = dirs[0] # grab first subject
+
     out_Adot = snakemake.output.Adot
-    out_geo = snakemake.output.geometry
     
-    generate_Adot_func(cfg_Adot, cfg_dataset, head_model, out_Adot, out_geo)
+    generate_Adot_func(cfg_Adot, root_dir, sub, head_model, out_Adot)
     
             
 if __name__ == "__main__":

@@ -71,30 +71,54 @@ def blockaverage(epochs_all, cfg_hrf_estimation):
     return all_trial_blockaverage, all_trial_mse, bad_chans_mse_lst
 
 
-def GLM(runs, rec_str, cfg_hrf_estimation, geo3d, pruned_chans_list):
+def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list):
     cfg_GLM = cfg_hrf_estimation['GLM']
+    rec_str = cfg_hrf_estimation['rec_str']
 
     # 1. need to concatenate runs 
     Y_all, stim_df_tmp, runs_updated = concatenate_runs(runs, rec_str)
 
+    target_units = Y_all.pint.units # grab units from data 
+    target_units_time = str(Y_all.time.attrs['units'])
+
     # grab only trial type of interest
     stim_df = stim_df_tmp[stim_df_tmp['trial_type'].isin(cfg_hrf_estimation['stim_lst'])].reset_index(drop=True)
+    
+    # basis function options
+    BASIS_FUNCTIONS = {
+    "gaussian_kernels": glm.GaussianKernels,
+    #"gaussian_kernels_with_tails": glm.GaussianKernelsWithTails, #FIXME: not currently in glm code?
+    "gamma": glm.Gamma,
+    # "gamma_deriv": glm.GammaDeriv, #FIXME: not currently in glm code?
+    # "afni_gamma": glm.AFNIGamma, #FIXME: not currently in glm code?
+    "dirac_delta": glm.DiracDelta, 
+    }
+    
+    basis_cls = BASIS_FUNCTIONS[cfg_GLM["basis_func"]] # bassis func class
+    if basis_cls is None:
+        raise ValueError(f"Unsupported basis function: {cfg_GLM['basis_func']}")
+    if cfg_GLM["basis_func_params"] is None:
+        raise ValueError(f"Missing parameters for basis function: {cfg_GLM['basis_func']}")
+
+    if cfg_GLM['basis_func'] == "gaussian_kernels_with_tails" or cfg_GLM['basis_func'] == "gaussian_kernels":
+        t_pre = cfg_hrf_estimation['t_pre']
+        t_post = cfg_hrf_estimation['t_post']
+    basis_params = cfg_GLM["basis_func_params"] # basis func params
+    basis_func = basis_cls(t_pre=t_pre, t_post=t_post, **basis_params)  # instantiate basis function with params
 
     # 2. define design matrix
     dms = glm.design_matrix.hrf_regressors(
                                     Y_all,
                                     stim_df,
-                                    glm.GaussianKernels(cfg_hrf_estimation['t_pre'], cfg_hrf_estimation['t_post'], cfg_GLM['t_delta'], cfg_GLM['t_std']) 
-                                    #NOTE: no option to choose basis funcs
+                                    basis_func
                                 )
 
-    # FIXME: one flag named do_drift and have a str for type, options: None, polynomial, legendres
     # Combine drift and short-separation regressors (if any)
-    if cfg_GLM['do_drift']:
+    if cfg_GLM['do_drift'] == 'polynomial': 
         drift_regressors = get_drift_regressors(runs_updated, cfg_GLM)
         dms &= reduce(operator.and_, drift_regressors)
 
-    if cfg_GLM['do_drift_legendre']:  #NOTE: possible for user to include both drift types
+    elif cfg_GLM['do_drift'] == 'legendre':  
         drift_regressors = get_drift_legendre_regressors(runs_updated, cfg_GLM)
         dms &= reduce(operator.and_, drift_regressors) # adds iteratively to dm 
 
@@ -105,15 +129,13 @@ def GLM(runs, rec_str, cfg_hrf_estimation, geo3d, pruned_chans_list):
     dms.common = dms.common.fillna(0)
 
     # 3. get betas and covariance
-    results = glm.fit(Y_all, dms, noise_model=cfg_GLM['noise_model']) 
-    betas = results.sm.params
-    cov_params = results.sm.cov_params()
+    results = glm.fit(Y_all, dms, noise_model=cfg_GLM['noise_model'])  # fit GLM to get betas and covariance
+    betas = results.sm.params  # this is the beta estimates for each regressor in the design matrix, it has dimensions regressor and measurement, 
+    cov_params = results.sm.cov_params() # this is the covariance of the beta estimates, which we can use to get MSE of the HRF estimate. It has dimensions regressor_r and regressor_c, ctions
 
     # 4. estimate HRF and MSE
-    #NOTE: HARD CODED
-    basis_hrf = glm.GaussianKernels(cfg_hrf_estimation['t_pre'], cfg_hrf_estimation['t_post'], cfg_GLM['t_delta'], cfg_GLM['t_std'])(Y_all) #NOTE: no option for diff basis
+    basis_hrf = basis_func(Y_all)
 
-    #trial_type_list = stim_df['trial_type'].unique()
     trial_type_list = cfg_hrf_estimation['stim_lst']
 
     hrf_mse_list = []
@@ -145,10 +167,10 @@ def GLM(runs, rec_str, cfg_hrf_estimation, geo3d, pruned_chans_list):
         bad_chans_mse_lst.append(bad_chans_mse)
 
     hrf_estimate = xr.concat(hrf_estimate_list, dim='trial_type')
-    hrf_estimate = hrf_estimate.pint.quantify('molar') #FIXME: HARDCODED
+    hrf_estimate = hrf_estimate.pint.quantify(target_units)
 
     hrf_mse = xr.concat(hrf_mse_list, dim='trial_type')
-    hrf_mse = hrf_mse.pint.quantify('molar**2')  #FIXME: HARD CODED
+    hrf_mse = hrf_mse.pint.quantify(target_units**2)  
 
     # set universal time so that all hrfs have the same time base 
     fs = frequency.sampling_rate(runs[0][rec_str]).to('Hz')
@@ -160,10 +182,10 @@ def GLM(runs, rec_str, cfg_hrf_estimation, geo3d, pruned_chans_list):
     reltime = np.linspace(-before_samples * dT, after_samples * dT, n_timepoints)
 
     hrf_mse = hrf_mse.assign_coords({'time': reltime})
-    hrf_mse.time.attrs['units'] = 'second' #FIXME: HARD CODED
+    hrf_mse.time.attrs['units'] = target_units_time 
 
     hrf_estimate = hrf_estimate.assign_coords({'time': reltime})
-    hrf_estimate.time.attrs['units'] = 'second'  #FIXME: HARD CODED
+    hrf_estimate.time.attrs['units'] = target_units_time  
 
     return results, hrf_estimate, hrf_mse, bad_chans_mse_lst
 
@@ -223,11 +245,18 @@ def get_short_regressors(runs, pruned_chans_list, geo3d, cfg_GLM):
     for run, pruned_chans in zip(runs, pruned_chans_list):
 
         rec_pruned = prune_mask_ts(run, pruned_chans) # !!! how is this affected when using pruned data
-        _, ts_short = cedalion.nirs.split_long_short_channels(
+        ts_long, ts_short = cedalion.nirs.split_long_short_channels(
                                 rec_pruned, geo3d, distance_threshold= cfg_GLM['distance_threshold']  # !!! change to rec_pruned once NaN prob fixed
                                 )
-        # FIXME: SSR method is hard coded
-        short = glm.design_matrix.average_short_channel_regressor(ts_short)
+        # SSR options
+        SSR_method = {
+        "average": glm.design_matrix.average_short_channel_regressor(ts_short),
+        "mean":  glm.design_matrix.average_short_channel_regressor(ts_short),
+        "closest": glm.design_matrix.closest_short_channel_regressor(ts_long, ts_short, geo3d), 
+        #'max_corr': glm.design_matrix.max_corr_short_channel_regressor(ts_long, ts_short), #FIXME: fails with NaNs
+        }
+
+        short = SSR_method[cfg_GLM['short_channel_method']]
         short.common = short.common.reset_coords('samples', drop=True)
         short.common = short.common.assign_coords({'regressor': [f'short run {i}']})
         ss_regressors.append(short)
@@ -261,7 +290,7 @@ def concatenate_runs(runs, rec_str):
         CURRENT_OFFSET = new_time[-1] + (time[1] - time[0])  # updating time offset
 
     Y_all = xr.concat(runs_updated, dim='time')
-    Y_all.time.attrs['units'] = units.s # FIXME hard coded. pull unit from top 
+    Y_all.time.attrs['units'] = ts.time.units 
     stim_df = pd.concat(stim_updated, ignore_index = True)
 
     return Y_all, stim_df, runs_updated
