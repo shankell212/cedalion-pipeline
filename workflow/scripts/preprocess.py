@@ -33,19 +33,19 @@ import cedalion
 import cedalion.nirs
 import cedalion.sigproc.quality as quality
 import cedalion.sigproc.motion as motion_correct
-import cedalion.sigproc.frequency as frequency
-import cedalion.xrutils as xrutils
-import cedalion.models.glm as glm
 import xarray as xr
 import numpy as np
 import pandas as pd
 import pint
 from cedalion.physunits import units
+import json
+import pickle
+import gzip
 
-# import my own functions from a different directory
 import sys
-#sys.path.append('scripts/modules/')
+# sys.path.append('scripts/modules/')
 script_dir = os.path.dirname(os.path.abspath(__file__))
+# sys.path.append("/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/modules/")
 modules_path = os.path.join(script_dir, 'modules')
 sys.path.append(modules_path)
 
@@ -53,28 +53,14 @@ import module_plot_DQR as plot_dqr
 import module_imu_glm_filter as imu_filt
 import module_preprocess as preproc
 
-import pdb
-import yaml
-import json
-import pickle
-import gzip
-import matplotlib.pyplot as plt
-
 #%% Load in data for current subject/task/run
 
-def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, stim_lst, mse_amp_thresh, out_files):
-    
+def preprocess_func(snirf_path, events_path, root_dir, derivatives_subfolder, cfg_preprocess, stim_lst, mse_amp_thresh, out_files):
     cedalion.xrutils.unit_stripping_is_error(True)
     # Load in snirf file
-    if not cfg_dataset['derivatives_subfolder']:   # !!! do we need this?
-        cfg_dataset['derivatives_subfolder'] = ''
     
-    records = cedalion.io.read_snirf( snirf_path ) 
+    records = cedalion.io.read_snirf( snirf_path, time_units = 'second') #FIXME: HARD CODED TIME UNITS
     rec = records[0]
-
-    # if no time units, then assume seconds and add units (ASSUMING SECONDS)
-    if not rec['amp'].time.attrs:
-        rec['amp'] = rec['amp'].assign_coords(time=rec['amp'].time.pint.quantify('second'))
 
     # Load in events.tsv file 
     if not os.path.exists( events_path ):  
@@ -144,28 +130,21 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
                 rec["od"] = cedalion.nirs.cw.int2od(rec['amp_pruned'])                
             else:
                 rec["od"] = cedalion.nirs.cw.int2od(rec['amp'])
-                #del rec.timeseries['amp_pruned']   # delete pruned amp from time series
             
             rec["od_corrected"] = rec["od"]
             units_od = rec["od"].pint.units
-         
-        elif step_name in ("calc_slope_b4", "calc_slope_before", "slope_b4", "slope_before"):
+
+            # calc slope and gctd of od ts before any correction
             slope_base = preproc.quant_slope(rec, "od") # Get the slope of 'od' before motion correction and bpf 
-            
-        elif step_name in ("calc_gvtd_b4", "calc_gvtd_before", "gvtd_b4", "gvtd_before"):
-            # Calculate GVTD on pruned data
-            #amp_masked = preproc.prune_mask_ts(rec['amp'], pruned_chans)  # use chs_pruned to get gvtd w/out pruned data (could also zscore in gvtd func)
-            rec.aux_ts["gvtd"], _ = quality.gvtd(rec['amp_pruned']) 
+            rec.aux_ts["gvtd"], _ = quality.gvtd(rec['amp_pruned'])  # Calculate GVTD on pruned data
             rec.aux_ts["gvtd"].name = "gvtd"
         
-        # Walking filter 
-        elif step_name == 'imu_glm': 
-            #print('Starting imu glm filtering step on walking portion of data.')
-            rec["od_corrected"] = imu_filt.filterWalking(rec, "od", params, filnm, cfg_dataset) 
+        # # Walking filter 
+        # elif step_name == 'imu_glm': 
+        #     rec["od_corrected"] = imu_filt.filterWalking(rec, "od", params, filnm, cfg_dataset) 
             
             
         #%% MOTION CORRECTION: 
-        # !!! each step could run on the last added time series. 
         # tddr
         elif step_name in ("tddr", "motion_correct_tddr"):
             rec['od_corrected'] = motion_correct.tddr( rec['od_corrected'] )  
@@ -199,20 +178,8 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
         elif step_name in ("wavelet", "motion_correct_wavelet"):
             rec['od_corrected'] = motion_correct.motion_correct_PCA_recurse( rec['od_corrected'], params['iqr'], 
                                                                                    params['wavelet'], params['level'])
-        
+    
 
-        # slope for Corrected OD before bandpass filtering  
-        elif step_name in ("calc_slope_af", "calc_slope_after", "slope_after", "slope_af"):
-            slope_corrected = preproc.quant_slope(rec, "od_corrected")  # Get slopes after correction before bandpass filtering
-        
-        # GVTD for Corrected OD before bandpass filtering  
-        elif step_name in ("calc_gvtd_af", "calc_gvtd_after", "gvtd_after", "gvtd_af"):
-            amp_corrected = rec['od_corrected'].copy()  
-            amp_corrected.values = np.exp(-amp_corrected.pint.dequantify().values)
-            amp_corrected_masked = preproc.prune_mask_ts(amp_corrected, pruned_chans)  # get "pruned" amp data post tddr
-            rec.aux_ts['gvtd_corrected'], _ = quality.gvtd(amp_corrected_masked)  
-            rec.aux_ts['gvtd_corrected'].name = 'gvtd_corrected'
-        
         #%%
         
         # Bandpass filter od
@@ -221,6 +188,8 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             cfg_preprocess["steps"]["freq_filter"]["fmin"] = units(cfg_preprocess["steps"]["freq_filter"]["fmin"])
             cfg_preprocess["steps"]["freq_filter"]["fmax"] = units(cfg_preprocess["steps"]["freq_filter"]["fmax"])
             
+            rec['od_unfiltered'] = rec['od_corrected'].copy() # save unfiltered od for dqr
+
             rec['od_corrected'] = cedalion.sigproc.frequency.freq_filter(rec['od_corrected'], 
                                                                             params['fmin'], 
                                                                             params['fmax'])  
@@ -243,17 +212,24 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
             snr1, _ = quality.snr(rec['amp_pruned'].sel(wavelength=lambda1), cfg_preprocess['steps']["prune"]['snr_thresh'])
             snr0 = np.nanmedian(snr0.pint.dequantify().values)
             snr1 = np.nanmedian(snr1.pint.dequantify().values)
-            
-            plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, cfg_dataset, stim_lst) #, out_files['out_dqr'], out_files['out_gvtd'] )
+
+            # calc slope and gvtd after correction but before bandpass
+            if 'od_unfiltered' in rec.timeseries.keys():
+                ts_name = 'od_unfiltered'
+            else:
+                ts_name = 'od_corrected'
+            rec = preproc.get_gvtd(rec, pruned_chans, ts_name, 'gvtd_corrected')    
+            slope_corrected = preproc.quant_slope(rec, ts_name)  # Get slopes after correction before bandpass filtering
+            if 'od_unfiltered' in rec.timeseries.keys():
+                del rec.timeseries["od_unfiltered"]
+
+            plot_dqr.plotDQR( rec, chs_pruned, cfg_preprocess['steps'], filnm, root_dir, derivatives_subfolder, stim_lst) #, out_files['out_dqr'], out_files['out_gvtd'] )
             
             # if MA correction was performed, plot slope b4 and after
             if not (rec["od_corrected"].data == rec["od"].data).all():
-                plot_dqr.plot_slope(rec, [slope_base, slope_corrected], cfg_preprocess['steps'], filnm, cfg_dataset) #, out_files['out_slope'])
-
+                plot_dqr.plot_slope(rec, [slope_base, slope_corrected], cfg_preprocess['steps'], filnm, root_dir, derivatives_subfolder) #, out_files['out_slope'])
             if os.path.exists( file_json_path ):
-                plot_dqr.plotDQR_sidecar(file_json, rec, cfg_dataset, filnm)
-
-            # !!! how to add in plot_group_DQR ?  - make separate rule?
+                plot_dqr.plotDQR_sidecar(file_json, rec, root_dir, derivatives_subfolder, filnm)
     
         # If you get here, that means this step is enabled but unrecognized. 
         else:
@@ -271,42 +247,54 @@ def preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess
     idx_amp = np.where(amp < mse_amp_thresh)[0]   # COMES FROM GROUP AVG CFG
     amp_ch_coords = chs_pruned.channel[idx_amp].values
 
-    data_quality = {       
-        "chs_pruned": chs_pruned,  # !!! cannot save matrix or xarray as json
-        "idx_sat": idx_sat.tolist(),
-        "bad_chans_sat": sat_ch_coords.tolist(),
-        "bad_chans_amp": amp_ch_coords.tolist(),
-        "idx_amp": idx_amp.tolist(),
-        'slope_base': slope_base,   # for group DQR plot
-        'slope_corrected': slope_corrected,  # for Group DQR plot
-        'gvtd_base': rec.aux_ts['gvtd'],
-        'gvtd_corrected': rec.aux_ts['gvtd_corrected'],
-        'snr0': snr0,
-        'snr1': snr1,
-        'geo2d': rec.geo2d,
-        'geo3d': rec.geo3d
-        }
-    # Save data quality dict as a sidecar json file
-    file = gzip.GzipFile(out_files['out_sidecar'], 'wb')
-    file.write(pickle.dumps(data_quality))
-    
+    # Concat bad indices
+    bad_channels = np.unique(np.concat([amp_ch_coords, sat_ch_coords]))
+
+    # build a data quality xr dataset 
+    ds = xr.Dataset()
+    if cfg_preprocess["steps"]["plot_dqr"]["enable"]:  # only add snr,gvtd_corr, and slope_corr if DQR is plotted, since snr is calculated in that step
+        ds.attrs['snr0'] = float(snr0)
+        ds.attrs['snr1'] = float(snr1)
+        ds['gvtd_corrected'] = rec.aux_ts['gvtd_corrected'].pint.dequantify()
+        ds = xr.merge([ds,slope_base.rename({'slope': 'slope_base'}),
+                    slope_corrected.rename({'slope': 'slope_corrected'})])
+    ds['chs_pruned'] = chs_pruned  
+    ds['bad_channels'] = xr.DataArray(bad_channels, dims='bad_channels') # both sat and amp bad channels
+    ds['pruned_channels'] = xr.DataArray(pruned_chans, dims='pruned_channels')  # same as chs_pruned but just the coordinates of bad channels 
+    ds['bad_chans_amp'] = xr.DataArray(amp_ch_coords, dims='bad_chans_amp') # make xarrays and add
+    ds['bad_chans_sat'] = xr.DataArray(sat_ch_coords, dims='bad_chans_sat')
+    ds['idx_amp'] = xr.DataArray(idx_amp, dims='idx_amp')
+    ds['idx_sat'] = xr.DataArray(idx_sat, dims='idx_sat')
+    ds['gvtd_base']      = rec.aux_ts['gvtd'].pint.dequantify()
+    geo2d_clean = rec.geo2d.pint.dequantify().rename({'pos': 'pos2d'}) # dequant to save, and rename pos to pos2d to avoid confusion with geo3d pos coords
+    geo2d_clean['type'] = geo2d_clean['type'].astype(str) # convert type to str
+    ds['geo2d'] = geo2d_clean
+    geo3d_clean = rec.geo3d.pint.dequantify().rename({'pos': 'pos3d'}) # dequant to save, and rename pos to pos3d to avoid confusion with geo2d pos coords
+    geo3d_clean['type'] = geo3d_clean['type'].astype(str) # convert type to str
+    ds['geo3d'] = geo3d_clean
+
+    # save quality info as netcdf file
+    ds.to_netcdf(out_files['out_sidecar'],  mode='w')
+
+
     # # Save preprocessed data as a snirf file
-    # cedalion.io.snirf.write_snirf(out_files['out_snirf'], rec)
-    file = gzip.GzipFile(out_files['out_snirf'], 'wb')
-    file.write(pickle.dumps([rec]))
+    cedalion.io.snirf.write_snirf(out_files['out_snirf'], rec)  
+        # this has a bug - untis for time do not save and od_corrected becomes od_02
+
+    # file = gzip.GzipFile(out_files['out_snirf'], 'wb')
+    # file.write(pickle.dumps([rec]))
     
     print("Snirf file saved successfuly")
 
 
 
 #%% 
-def main():
-    config = snakemake.config   # set variables to snakemake vars
-    
+def main():    
     snirf_path = snakemake.input.snirf
     events_path = snakemake.input.events
     
-    cfg_dataset = snakemake.params.cfg_dataset
+    root_dir = snakemake.params.root_dir
+    derivatives_subfolder = snakemake.params.derivatives_subfolder
     cfg_preprocess = snakemake.params.cfg_preprocess
     stim_lst = snakemake.params.stim_lst
     mse_amp_thresh = snakemake.params.mse_amp_thresh
@@ -316,7 +304,8 @@ def main():
         "out_snirf" : snakemake.output.snirf,
         "out_sidecar": snakemake.output.sidecar,
         }
-    preprocess_func(config, snirf_path, events_path, cfg_dataset, cfg_preprocess, stim_lst, mse_amp_thresh, out_files)
+    
+    preprocess_func(snirf_path, events_path, root_dir, derivatives_subfolder, cfg_preprocess, stim_lst, mse_amp_thresh, out_files)
  
     
 if __name__ == "__main__":

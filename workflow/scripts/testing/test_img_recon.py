@@ -26,7 +26,9 @@ importlib.reload(img_recon)
 # config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_IWHD_Q.yml"
 # config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/config_test_BS.yaml"
 #config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/scripts/testing/regression_testing/config_BS_reg_test.yml" # CHANGE if testing
-config_path = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_test_imgrecon_newnoise/config_STS_Q.yml"
+# config_path = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_test_imgrecon_newnoise/config_STS_Q.yml"
+config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
+
 
 with open(config_path, 'r') as file:
     config = yaml.safe_load(file)
@@ -35,24 +37,17 @@ cfg_dataset = config['dataset']
 cfg_img_recon = config['image_recon']
 cfg_hrf = config['hrf_estimation']
 task = cfg_dataset['task'][0]  # choose first task for testing
+dirs = os.listdir(cfg_dataset['root_dir'])
+subjects = [d.replace("sub-", "") for d in dirs if "sub" in d and d.replace("sub-", "") not in config["dataset"]["subjects_to_exclude"]]
 
-subjects = cfg_dataset['subject']
-# subjects = ["20", "21", "22", "23", "24", "25", "26", "28"]
 
-# # Get input file path input file
-# groupaverage_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", cfg_dataset['derivatives_subfolder'], "groupaverage")
-# groupaverage_path = os.path.join(groupaverage_dir, f"task-{task}_nirs_groupaverage.pkl")
-        
-#Adot_path = os.path.join(cfg_dataset['root_dir'], "derivatives", "cedalion", "probe", "fw", cfg_img_recon['head_model'], 'sensitivity.nc')
-Adot_path = os.path.join(cfg_dataset['root_dir'], "derivatives", "cedalion", "forward", cfg_img_recon['generate_sensitivity']['sub_folder'], "fw", "probe", 'sensitivity.nc')
 
+Adot_path = os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sensitivity.nc')
 hrf_dir = os.path.join(cfg_dataset['root_dir'], "derivatives", "cedalion", cfg_dataset['derivatives_subfolder'], "hrf_estimate")  #, f"sub-{subj}")
-blockavg_files = [os.path.join(hrf_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_nirs_hrf_estimate_{cfg_hrf['rec_str']}.pkl.gz") for subj in subjects ]
-data_quality_files = [os.path.join(hrf_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_nirs_dataquality.json") for subj in subjects ]
-geo_files = [os.path.join(hrf_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_nirs_geo.sidecar") for subj in subjects ]
+blockavg_files = [os.path.join(hrf_dir, f"sub-{subj}", f"sub-{subj}_task-{task}_nirs_hrf_estimate_{cfg_hrf['rec_str']}.nc") for subj in subjects ]
 
 if cfg_img_recon['spatial_basis']['enable']:
-    SB_path = os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', 'forward', cfg_img_recon['generate_sensitivity']['sub_folder'], 'sbf.pkl.gz')
+    SB_path = os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', 'forward', cfg_img_recon['generate_sensitivity']['sub_folder'], 'sbf.nc')
 else:
     SB_path= [] # Return an empty list if the input is not needed
 #%
@@ -73,7 +68,7 @@ for idx, subj in enumerate(subjects):
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
         + (f"_{config['image_recon']['mag']['t_win'][0]}_{config['image_recon']['mag']['t_win'][1]}" if config["image_recon"]["mag"]["enable"] else "")
-        + ".pkl.gz"
+        + ".nc"
     )
 
     out = os.path.join(der_dir, file_name)
