@@ -25,7 +25,7 @@ importlib.reload(groupavg)
 # root_dir = "/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/"
 # config_path = os.path.join(root_dir, 'derivatives', 'cedalion', 'test', 'test_3', 'config_test_3.yml')
 # config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
-config_path = '/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/derivatives/cedalion/test_0421/test_1/config_test_1.yml'
+config_path = '/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/derivatives/cedalion/test_0422_groupavg/test_1/config_test_1.yml'
 
 with open(config_path, 'r') as file:
     config = yaml.safe_load(file)
@@ -71,10 +71,10 @@ else:
 
 
 if blockavg:
-    save_path = os.path.join(cfg_dataset['root_dir'], "derivatives", "cedalion", cfg_dataset['derivatives_subfolder'], "groupaverage")
+    save_path = os.path.join(cfg_dataset['root_dir'], "derivatives", "cedalion", cfg_dataset['derivatives_subfolder'], "group_results")
     out = os.path.join(save_path, f"task-{task}_nirs_groupaverage_chanspace_{cfg_hrf['rec_str']}.nc")
 else:
-    save_path = os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'image_results')
+    save_path = os.path.join(cfg_dataset['root_dir'], 'derivatives', 'cedalion', cfg_dataset['derivatives_subfolder'], 'group_results')
     file_name = (
         f"Xs_groupavg_{task}"
         + f"_cov_alpha_spatial_{config['image_recon']['alpha_spatial']}"
@@ -84,8 +84,7 @@ else:
         + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
         + ("_mag" if config["image_recon"]["mag"]["enable"] else "_ts")
         + (f"_{config['image_recon']['mag']['t_win'][0]}_{config['image_recon']['mag']['t_win'][1]}" if config["image_recon"]["mag"]["enable"] else "")
-        #+"_20subs"
-        + ".pkl"
+        + ".nc"
     )
     out = os.path.join(save_path, file_name)
 der_dir = os.path.join(save_path)
