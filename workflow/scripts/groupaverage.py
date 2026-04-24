@@ -8,21 +8,15 @@ Created on Mon Jun  9 11:48:10 2025
 """
 import os
 import cedalion
-import cedalion.nirs
-
-import cedalion.models.glm as glm
-import cedalion.vis as plots
 from cedalion.vis.anatomy.scalp_plot import scalp_plot
 from cedalion.dataclasses.geometry import PointType
-
 from cedalion.physunits import units
 import pint
 import numpy as np
 import xarray as xr
-import matplotlib.pyplot as p
-import gzip
-import pickle
-import json
+import matplotlib
+matplotlib.use('Agg') # non interactive backend for plotting
+import matplotlib.pyplot as plt
 import pandas as pd
 
 #%%
@@ -114,7 +108,6 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, file_names, out):
         x = all_subj_hrf_est_tmp.copy() 
 
         # first round wted average (to calc between subj mse)
-        #groupaverage_weighted = (all_subj_hrf_est_tmp / all_subj_mse_tmp).sum('subj') / (1 / all_subj_mse_tmp).sum('subj') # weighted group average using within subject variance as weights
         mu_1 = (x * w).sum('subj') / w.sum('subj') # fixed effect mean
 
         Q = ( w * (x - mu_1)**2 ).sum('subj')  # heterogenuity statistic Q (for DL estimation of between subject variance)
@@ -152,9 +145,6 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, file_names, out):
             all_trial_all_subj_mse_within = xr.concat([all_trial_all_subj_mse_within, all_subj_mse_tmp], dim="trial_type")
     # DONE LOOP OVER TRIAL_TYPES
     
-    # FIXME: group DQR plots - Plot scalp plot of mean, tstat,rsme + Plot mse hist
-        # make own funcs for this and add to vis module? or create here? -- need rec (see funcs at end)
-    
     geo2d_clean = geo2d.pint.dequantify().rename({'pos': 'pos2d'}) # dequant to save, and rename pos to pos2d to avoid confusion with geo3d pos coords
     geo2d_clean['type'] = geo2d_clean['type'].astype(str) # convert type to str
     geo3d_clean = geo3d.pint.dequantify().rename({'pos': 'pos3d'}) # dequant to save, and rename pos to pos3d to avoid confusion with geo2d pos coords
@@ -179,18 +169,16 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, file_names, out):
     
     print(f"Group average data saved successfully to {out}!")
    
-#     # Plot scalp plot of mean, tstat,rsme + Plot mse hist
-#      # !!! need to add funcs to a module or at the end of this script 
-#     # !!! Do we want these plots still? Would need to also load in a rec ???  - or just load in saved geo2d and geo3d?    
+    # Plot scalp plot of mean, tstat, rsme + Plot mse hist  
     if 'hrf' in file_names[0]:  # if hrf variable names are this
         for trial_type in all_trial_groupaverage_weighted.trial_type.values:    
             plot_mean_stderr(hrf_est_tmp, trial_type, cfg_dataset, cfg_hrf, all_trial_groupaverage_weighted, 
-                            all_trial_total_stderr, all_trial_mse_mean_within_subj, all_trial_mse_weighted_between_subj, geo3d)
+                            all_trial_total_stderr, all_trial_mse_mean_within_subj, all_trial_mse_weighted_between_subj, cfg_mse['mse_val_for_bad_data'], geo3d)
             plot_mse_hist(trial_type, cfg_dataset, all_trial_all_subj_mse_within, cfg_mse['mse_val_for_bad_data'], cfg_mse['mse_min_thresh'])  
             
 
 #%% Plot funcs
-def plot_mean_stderr(ts, trial_type, cfg_dataset, cfg_blockavg, groupaverage_weighted, hrf_est_stderr_weighted, mse_mean_within_subject, mse_weighted_between_subjects, geo3d):
+def plot_mean_stderr(ts, trial_type, cfg_dataset, cfg_blockavg, groupaverage_weighted, hrf_est_stderr_weighted, mse_mean_within_subject, mse_weighted_between_subjects, mse_val_for_bad_data,geo3d):
     # scalp_plot the mean, stderr and t-stat
     #######################################################
     middle = (cfg_blockavg['t_pre'] + cfg_blockavg['t_post']) / 2
@@ -213,7 +201,7 @@ def plot_mean_stderr(ts, trial_type, cfg_dataset, cfg_blockavg, groupaverage_wei
         name_conc_od = 'od'
 
     for i_wav_chromo in range(n_wav_chromo):
-        f,ax = p.subplots(2,2,figsize=(10,10))
+        f,ax = plt.subplots(2,2,figsize=(10,10))
 
         # WEIGHTED GROUP AVG
         ax1 = ax[0,0]
@@ -221,7 +209,6 @@ def plot_mean_stderr(ts, trial_type, cfg_dataset, cfg_blockavg, groupaverage_wei
             foo_da = groupaverage_weighted_t.sel(time=slice(lower, upper)).mean('time')
         else:
             foo_da = groupaverage_weighted_t
-        #foo_da = foo_da[0,:,:]
         title_str = 'Mean_' + name_conc_od + '_' + trial_type
         if 'chromo' in foo_da.dims:
             foo_da_tmp = foo_da.isel(chromo=i_wav_chromo)
@@ -250,7 +237,6 @@ def plot_mean_stderr(ts, trial_type, cfg_dataset, cfg_blockavg, groupaverage_wei
             foo_da = foo_numer / foo_denom
         else:
             foo_da = groupaverage_weighted_t / hrf_est_stderr_weighted_t
-        #foo_da = foo_da[0,:,:]
         title_str = 'T-Stat_'+ name_conc_od + '_' + trial_type
         if 'chromo' in foo_da.dims:
             foo_da_tmp = foo_da.isel(chromo=i_wav_chromo)
@@ -277,14 +263,15 @@ def plot_mean_stderr(ts, trial_type, cfg_dataset, cfg_blockavg, groupaverage_wei
             foo_da = mse_mean_within_subject_t.sel(time=slice(lower, upper)).mean('time')
         else:
             foo_da = mse_mean_within_subject_t
-        #foo_da = foo_da[0,:,:]
         foo_da = foo_da**0.5
         title_str = 'log10(RMSE) within subjects ' + name_conc_od + ' ' + trial_type
         if 'chromo' in foo_da.dims:
             foo_da_tmp = foo_da.isel(chromo=i_wav_chromo)
             foo_da_tmp = foo_da_tmp.pint.dequantify()
+            foo_da_tmp = foo_da_tmp.where(foo_da_tmp != 0, mse_val_for_bad_data.magnitude) # remove any 0s that get through
         else:
             foo_da_tmp = foo_da.isel(wavelength=i_wav_chromo)
+            foo_da_tmp = foo_da_tmp.where(foo_da_tmp != 0, mse_val_for_bad_data)
         foo_da_tmp = np.log10(foo_da_tmp)
         foo_da_tmp = foo_da_tmp.sel(trial_type=trial_type)
         max_val = np.nanmax(foo_da_tmp.values)
@@ -308,14 +295,15 @@ def plot_mean_stderr(ts, trial_type, cfg_dataset, cfg_blockavg, groupaverage_wei
             foo_da = mse_weighted_between_subjects_t.sel(time=slice(lower, upper)).mean('time')
         else:
             foo_da = mse_weighted_between_subjects_t
-        #foo_da = foo_da[0,:,:]
         foo_da = foo_da**0.5
         title_str = 'log10(RMSE) between subjects ' + name_conc_od + ' ' + trial_type 
         if 'chromo' in foo_da.dims:
             foo_da_tmp = foo_da.isel(chromo=i_wav_chromo)
             foo_da_tmp = foo_da_tmp.pint.dequantify()
+            foo_da_tmp = foo_da_tmp.where(foo_da_tmp != 0, mse_val_for_bad_data.magnitude) # remove any 0s that get through
         else:
             foo_da_tmp = foo_da.isel(wavelength=i_wav_chromo)
+            foo_da_tmp = foo_da_tmp.where(foo_da_tmp != 0, mse_val_for_bad_data)
         foo_da_tmp = np.log10(foo_da_tmp)
         foo_da_tmp = foo_da_tmp.sel(trial_type=trial_type)
         max_val = np.nanmax(foo_da_tmp.values)
@@ -339,16 +327,16 @@ def plot_mean_stderr(ts, trial_type, cfg_dataset, cfg_blockavg, groupaverage_wei
             title_str = f"{dirnm} - {name_conc_od} {trial_type} {foo_da.chromo.values[i_wav_chromo]} ({lower} to {upper} s)"
         else:
             title_str = f"{dirnm} - {name_conc_od} {trial_type} {foo_da.wavelength.values[i_wav_chromo]:.0f}nm ({lower} to {upper} s)"
-        p.suptitle(title_str)
+        plt.suptitle(title_str)
 
         save_dir = os.path.join(cfg_dataset["root_dir"], 'derivatives', 'cedalion', cfg_dataset["derivatives_subfolder"], 'plots', 'DQR', 'group_weighted_avg')
         os.makedirs(save_dir, exist_ok=True)
         
         if 'chromo' in foo_da.dims:
-            p.savefig( os.path.join(save_dir, f'DQR_group_weighted_avg_{name_conc_od}_{trial_type}_{foo_da.chromo.values[i_wav_chromo]}.png') )
+            plt.savefig( os.path.join(save_dir, f'DQR_group_weighted_avg_{name_conc_od}_{trial_type}_{foo_da.chromo.values[i_wav_chromo]}.png') )
         else:
-            p.savefig( os.path.join(save_dir, f'DQR_group_weighted_avg_{name_conc_od}_{trial_type}_{foo_da.wavelength.values[i_wav_chromo]:.0f}nm.png') )
-        p.close()
+            plt.savefig( os.path.join(save_dir, f'DQR_group_weighted_avg_{name_conc_od}_{trial_type}_{foo_da.wavelength.values[i_wav_chromo]:.0f}nm.png') )
+        plt.close()
 
 
 def plot_mse_hist(trial_type, cfg_dataset, hrf_est_mse_subj, mse_val_for_bad_data, mse_min_thresh):
@@ -357,7 +345,7 @@ def plot_mse_hist(trial_type, cfg_dataset, hrf_est_mse_subj, mse_val_for_bad_dat
 
     hrf_est_mse_subj_t = hrf_est_mse_subj #.sel(trial_type = trial_type)
     
-    f,ax = p.subplots(2,1,figsize=(6,10))
+    f,ax = plt.subplots(2,1,figsize=(6,10))
 
     # plot the diagonals for all subjects
     ax1 = ax[0]
@@ -374,12 +362,12 @@ def plot_mse_hist(trial_type, cfg_dataset, hrf_est_mse_subj, mse_val_for_bad_dat
         name_conc_od = 'od'
 
     n_subjects = foo.shape[0]  
+    foo = foo.sel(trial_type=trial_type)  # select current trial type
 
-    for i in range(n_subjects):
-        ax1.semilogy(foo[i,:], linewidth=0.5,alpha=0.5)
+    ax1.semilogy(foo.values.T, linewidth=0.5, alpha=0.5)  # all subjects at once
     ax1.set_title('variance in the mean for all subjects')
     ax1.set_xlabel('channel')
-    ax1.legend()
+    # ax1.legend(loc="upper right")
 
     # histogram the diagonals
     ax1 = ax[1]
@@ -388,7 +376,7 @@ def plot_mse_hist(trial_type, cfg_dataset, hrf_est_mse_subj, mse_val_for_bad_dat
     if 'chromo' in hrf_est_mse_subj.dims:
         foo1 = np.where(foo1 == 0, mse_val_for_bad_data.magnitude, foo1) # some bad data gets through. amp=1e-6, but it is missed by the check above. Only 2 channels in 9 subjects. Seems to be channel 271
     else:
-        foo1 = np.where(foo1 == 0, mse_val_for_bad_data, foo1)
+        foo1 = np.where(foo1 == 0, mse_val_for_bad_data, foo1) # remove 0s
     ax1.hist(np.log10(foo1), bins=100)
     
     if 'chromo' in hrf_est_mse_subj.dims:
@@ -396,19 +384,19 @@ def plot_mse_hist(trial_type, cfg_dataset, hrf_est_mse_subj, mse_val_for_bad_dat
     else:
         ax1.axvline(np.log10(mse_min_thresh), color='r', linestyle='--', label=f'cov_min_thresh={mse_min_thresh:.2e}')
         
-    ax1.legend()
+    ax1.legend(loc="upper right")
     ax1.set_title(f'{name_conc_od} {trial_type} - histogram for all subjects of variance in the mean')
     ax1.set_xlabel('log10(cov_diag)')
 
     # give a title to the figure and save it
     dirnm = os.path.basename(os.path.normpath(cfg_dataset["root_dir"]))
-    p.suptitle(f'Data set - {dirnm}')
+    plt.suptitle(f'Data set - {dirnm}')
 
     save_dir = os.path.join(cfg_dataset["root_dir"], 'derivatives', 'cedalion', cfg_dataset["derivatives_subfolder"], 'plots', 'DQR', 'group_weighted_avg')
     os.makedirs(save_dir, exist_ok=True)
 
-    p.savefig( os.path.join(save_dir, f'DQR_group_mse_histogram_{name_conc_od}_{trial_type}.png') )
-    p.close()
+    plt.savefig( os.path.join(save_dir, f'DQR_group_mse_histogram_{name_conc_od}_{trial_type}.png') )
+    plt.close()
 
 
 
