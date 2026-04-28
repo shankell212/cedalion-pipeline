@@ -3,9 +3,12 @@
 
 import os
 import cedalion
-import cedalion.dot as dot
+# import cedalion.dot as dot
+import cedalion.imagereco.forward_model as fw
 import cedalion.io as io
 import glob
+
+from cedalion import datasets
 
 
 def generate_Adot_func(cfg_Adot, root_dir, sub, head_model, save_dir_Adot):
@@ -20,13 +23,25 @@ def generate_Adot_func(cfg_Adot, root_dir, sub, head_model, save_dir_Adot):
     meas_list = rec._measurement_lists["amp"]
 
     # Load head model
-    head = dot.get_standard_headmodel(head_model)
+    # head = dot.get_standard_headmodel(head_model)
+    SEG_DATADIR, mask_files, landmarks_file = datasets.get_icbm152_segmentation()
+    PARCEL_DIR = datasets.get_icbm152_parcel_file()
+    head = fw.TwoSurfaceHeadModel.from_surfaces(
+        segmentation_dir=SEG_DATADIR,
+        mask_files = mask_files,
+        brain_surface_file= os.path.join(SEG_DATADIR, "mask_brain.obj"),
+        scalp_surface_file= os.path.join(SEG_DATADIR, "mask_scalp.obj"),
+        landmarks_ras_file=landmarks_file,
+        smoothing=0,
+        fill_holes=True,
+        parcel_file=PARCEL_DIR
+    ) 
     # head_ras = head.apply_transform(head.t_ijk2ras) # change between coord systems
 
     geo3d_snapped_ijk = head.align_and_snap_to_scalp(geo3d_meas) # optode registration, snap optodes to nearest vertex on scalp
 
     # Construct forward model
-    fwm = dot.ForwardModel(head, geo3d_snapped_ijk, meas_list)
+    fwm = fw.ForwardModel(head, geo3d_snapped_ijk, meas_list)
 
     #%% Run the simulation
     save_dir_fl = save_dir_Adot.split("sensitivity")[0]

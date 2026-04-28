@@ -32,7 +32,7 @@ import os
 import cedalion
 import cedalion.nirs
 import cedalion.sigproc.quality as quality
-import cedalion.sigproc.motion as motion_correct
+import cedalion.sigproc.motion_correct as motion_correct
 import xarray as xr
 import numpy as np
 import pandas as pd
@@ -59,7 +59,7 @@ def preprocess_func(snirf_path, events_path, root_dir, derivatives_subfolder, cf
     cedalion.xrutils.unit_stripping_is_error(True)
     # Load in snirf file
     
-    records = cedalion.io.read_snirf( snirf_path, time_units = 'second') #FIXME: HARD CODED TIME UNITS
+    records = cedalion.io.read_snirf( snirf_path) #, time_units = 'second') #FIXME: HARD CODED TIME UNITS
     rec = records[0]
 
     # Load in events.tsv file 
@@ -94,7 +94,7 @@ def preprocess_func(snirf_path, events_path, root_dir, derivatives_subfolder, cf
     #%% Preprocess
     
     for step_name, params in cfg_preprocess["steps"].items():
-        
+        print(step_name)
         # If this step is disabled, skip it
         if not (params.get("enable", False))  and (step_name != "prune"): 
             continue
@@ -127,9 +127,9 @@ def preprocess_func(snirf_path, events_path, root_dir, derivatives_subfolder, cf
         # if flag pruned channels is True, then do rest of preprocessing on pruned amp, if not then do preprocessing on unpruned data
         elif step_name == "int2od":
             if cfg_preprocess['steps']['prune']['enable']:
-                rec["od"] = cedalion.nirs.cw.int2od(rec['amp_pruned'])                
+                rec["od"] = cedalion.nirs.int2od(rec['amp_pruned'])                
             else:
-                rec["od"] = cedalion.nirs.cw.int2od(rec['amp'])
+                rec["od"] = cedalion.nirs.int2od(rec['amp'])
             
             rec["od_corrected"] = rec["od"]
             units_od = rec["od"].pint.units
@@ -201,7 +201,7 @@ def preprocess_func(snirf_path, events_path, root_dir, derivatives_subfolder, cf
                 dims="wavelength",
                 coords={"wavelength": rec['amp'].wavelength},
             )
-            rec['conc'] = cedalion.nirs.cw.od2conc(rec['od_corrected'], rec.geo3d, dpf, spectrum="prahl")
+            rec['conc'] = cedalion.nirs.od2conc(rec['od_corrected'], rec.geo3d, dpf, spectrum="prahl")
         
         
         # Plot DQR

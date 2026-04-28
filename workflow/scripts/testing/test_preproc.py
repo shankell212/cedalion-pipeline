@@ -24,7 +24,8 @@ importlib.reload(preproc)
 
 # config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config_STS_Q.yml"
 # config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion_pipeline_regression_test/configs/ref/config_ref_1.yml" 
-config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
+# config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
+config_path = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/derivatives/cedalion/shannon/test_prevcedversion/config_test_1.yml" # have snakemake copy this file into derivatives folder
 
 with open(config_path, 'r') as file:  # open config file
     config = yaml.safe_load(file)
@@ -37,9 +38,9 @@ mse_amp_thresh = config['groupaverage']['mse']['mse_amp_thresh']
 # subjects = cfg_dataset['subject'] 
 dirs = os.listdir(cfg_dataset['root_dir'])
 subjects = [d.replace("sub-", "") for d in dirs if "sub" in d and d.replace("sub-", "") not in cfg_dataset["subjects_to_exclude"]]
-config["dataset"]["subject"] = subjects
-config["run"] = [f"{i:02d}" for i in range(1, int(config["dataset"]["num_runs"]) + 1)]
-runs = config["run"]
+cfg_dataset["subject"] = subjects
+cfg_dataset["run"] = [f"{i:02d}" for i in range(1, int(config["dataset"]["num_runs"]) + 1)]
+runs = cfg_dataset["run"]
 tasks = cfg_dataset['task'] 
 # runs = cfg_dataset['run']    
 
@@ -65,7 +66,7 @@ for subj in subjects:
 
             print(f"Processing sub-{subj}, task-{task}, run-{run}...")
             
-            preproc.preprocess_func(snirf_path, events_path, cfg_dataset, cfg_preprocess_loop, cfg_hrf_loop['stim_lst'], mse_amp_thresh_loop, out_files)
+            preproc.preprocess_func(snirf_path, events_path, cfg_dataset['root_dir'], cfg_dataset['derivatives_subfolder'], cfg_preprocess_loop, cfg_hrf_loop['stim_lst'], out_files)
             
 
 # %%

@@ -16,9 +16,6 @@ import xarray as xr
 import pint
 from cedalion import units
 from cedalion.dataclasses.geometry import PointType
-import gzip
-import pickle
-import json
 import pandas as pd
 import sys
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -56,7 +53,7 @@ def hrf_est_func(cfg_hrf, run_files, data_quality_files, out_file):
             continue   
         
         # # Load in snirf for curr subj and run
-        records = cedalion.io.read_snirf(fname = run, time_units = 'second' ) #FIXME: HARD CODED TIME UNITS
+        records = cedalion.io.read_snirf(fname = run) #, time_units = 'second' ) #FIXME: HARD CODED TIME UNITS
         rec = records[0]
         ts = rec[cfg_hrf['rec_str']].copy()
         stim = rec.stim.copy() # select the stim for the given file 

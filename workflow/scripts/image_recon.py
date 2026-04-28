@@ -207,11 +207,8 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], roo
         else:
             Xs = recon_obj.reconstruct(od_ts_mag)
         
-        # calculate image noise
-        #FIXME: HAVE OPTION IN CONFIG IF CALCULATING NORMAL OR POSTERIOR?
-            # is the old way just wrong or can it still be an option?
         if cfg_img_recon['noise_est_method'] == 'posterior':
-            X_mse = recon_obj.get_image_noise_posterior(C_meas) #FIXME: this gets rid of trial type coord somewhere
+            X_mse = recon_obj.get_image_noise_posterior(C_meas) #FIXME: this gets rid of trial type coord somewhere + hard coded moalr units
         elif cfg_img_recon['noise_est_method'] == 'measurement':
             X_mse = recon_obj.get_image_noise(C_meas)
         else:

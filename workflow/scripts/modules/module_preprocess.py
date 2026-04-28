@@ -12,9 +12,6 @@ import cedalion.xrutils as xrutils
 import cedalion.models.glm as glm
 import xarray as xr
 import cedalion.xrutils as xrutils
-import cedalion.data as datasets
-import matplotlib.pyplot as p
-import cedalion.vis as plots
 from cedalion import units
 import numpy as np
 import pandas as pd

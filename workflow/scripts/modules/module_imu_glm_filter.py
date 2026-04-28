@@ -15,14 +15,12 @@ Created on Fri Jan 24 14:37:57 2025
 
 import cedalion
 import cedalion.nirs
-import cedalion.xrutils as xrutils
-import cedalion.data as datasets
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
-import cedalion.vis as plots
-from cedalion.vis.blocks import plot_stim_markers
-from cedalion.vis.anatomy.scalp_plot import scalp_plot
+# import cedalion.vis as plots
+# from cedalion.vis.blocks import plot_stim_markers
+# from cedalion.vis.anatomy.scalp_plot import scalp_plot
 from cedalion import units
 import scipy.signal
 import os.path
@@ -36,7 +34,6 @@ from scipy import signal
 from scipy.interpolate import interp1d
 from sklearn.decomposition import FastICA
 from scipy.signal import butter, sosfilt
-import pdb
 
 
 #%%

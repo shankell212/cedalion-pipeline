@@ -29,7 +29,8 @@ importlib.reload(hrf)
 # config_path = "/projectnb/nphfnirs/s/users/shannon/Code/cedalion-pipeline/workflow/config/config.yaml"
 
 # config_path = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/final_ihope/config_STS_Q.yaml"
-config_path = '/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/derivatives/cedalion/test_0421/test_1/config_test_1.yml'
+# config_path = '/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/derivatives/cedalion/test_0421/test_1/config_test_1.yml'
+config_path = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/derivatives/cedalion/shannon/test_prevcedversion/config_test_1.yml" # have snakemake copy this file into derivatives folder
 
 
 with open(config_path, 'r') as file:

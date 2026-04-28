@@ -4,18 +4,15 @@ import cedalion
 import cedalion.nirs
 import cedalion.sigproc.quality as quality
 import cedalion.sigproc.frequency as frequency
-import cedalion.xrutils as xrutils
-import cedalion.data as datasets
 import xarray as xr
 import matplotlib
 matplotlib.use("Agg")   # Force non-interactive backend
 import matplotlib.pyplot as p
 import matplotlib.colors as clrs
-import cedalion.vis as vis
-from cedalion.vis.anatomy import scalp_plot
-import cedalion.vis as plots
-from cedalion.vis.blocks import plot_stim_markers
-from cedalion.vis.anatomy.scalp_plot import scalp_plot
+# import cedalion.vis as vis
+# from cedalion.vis.blocks import plot_stim_markers
+from cedalion.plots import plot_stim_markers, scalp_plot
+# from cedalion.vis.anatomy.scalp_plot import scalp_plot
 from cedalion import units
 import numpy as np
 
@@ -84,7 +81,7 @@ def plotDQR( rec, chs_pruned, cfg_preprocess, filenm, root_dir, derivatives_subf
             min_dist = cfg_preprocess['prune']['sd_thresh_min'],
             # max_dist = cfg_preprocess['prune']['sd_thresh_max'], #FIXME: Cedalion does not have this
             cmap=cmap, #'gist_rainbow',
-            #norm=norm,
+            norm=norm,
             vmin=0,
             vmax=1,
             optode_labels=False,
