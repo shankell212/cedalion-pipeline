@@ -3,80 +3,137 @@ import os
 import re
 import pickle
 import gzip
+import sys
 import time_series_gui
 from tkinter import filedialog
 import tkinter as tk
 #%% Define paths and extract data information
-# Smart path selection logic
-current_dir = os.getcwd()
 
-# Get root_dir (BIDS dataset root) and derivatives path
-root_dir = current_dir
-derivatives_path = os.path.join(current_dir, 'derivatives')
-cedalion_path = os.path.join(derivatives_path, 'cedalion')
-path_to_data = None
-initial_dir = current_dir
-title = "Select the data directory"
-
-# Check if 'derivatives/cedalion' path exists
-if os.path.isdir(cedalion_path):
-    # List subdirectories
-    subfolders = [d for d in os.listdir(cedalion_path) if os.path.isdir(os.path.join(cedalion_path, d))]
-    
-    # if len(subfolders) == 1:
-    #     # If only one folder, use it automatically
-    #     path_to_data = os.path.join(cedalion_path, subfolders[0])
-    #     print(f"Automatically selected data directory: {path_to_data}")
-    # else:
-    # If multiple or zero folders, set initial directory to cedalion_path
-
-    initial_dir = cedalion_path
-    title = "Select data directory from 'derivatives/cedalion'"
-
-# If path_to_data was not automatically set, open the file dialog
-if path_to_data is None:
+# ========================================
+# Check for command-line argument (pipeline path from relaunch)
+# ========================================
+if len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
+    # Pipeline path provided - skip folder selection dialogs
+    path_to_data = sys.argv[1]
     print("\n" + "="*70)
-    print("📁 FOLDER SELECTION DIALOG OPENED")
+    print("RELAUNCHING GUI WITH PIPELINE")
     print("="*70)
-    print("Please select the data directory from the dialog window.")
-    print("(The dialog window may be in the background - check your taskbar)")
+    print(f"Pipeline folder: {path_to_data}")
     print("="*70 + "\n")
     
-    root = tk.Tk() 
+    # Extract root_dir by going up from derivatives/cedalion/{pipeline}
+    # path_to_data should be: /path/to/bids/derivatives/cedalion/{pipeline}
+    normalized_path = os.path.normpath(path_to_data)
+    cedalion_path = os.path.dirname(normalized_path)  # derivatives/cedalion
+    derivatives_path = os.path.dirname(cedalion_path)  # derivatives
+    root_dir = os.path.dirname(derivatives_path)  # BIDS root
+    
+    print(f"✓ Extracted BIDS root: {root_dir}")
+    
+    # Change working directory to root_dir
+    os.chdir(root_dir)
+    print(f"✓ Changed working directory to: {os.getcwd()}")
+    
+else:
+    # No argument provided - run normal folder selection
+    # ========================================
+    # STEP 1: Select BIDS root directory
+    # ========================================
+    print("\n" + "="*70)
+    print("STEP 1: SELECT BIDS ROOT DIRECTORY")
+    print("="*70)
+    print("Please select the BIDS root directory (where sub-XXX folders are located)")
+    print("(The dialog window may be in the background - check your taskbar)")
+    print("="*70 + "\n")
+
+    current_dir = os.getcwd()
+    root = tk.Tk()
     root.withdraw()  # Hide the main window
+
+    root_dir = filedialog.askdirectory(
+        title="Step 1: Select BIDS Root Directory (where sub-XXX folders are)",
+        initialdir=current_dir
+    )
+    root.destroy()
+
+    # Check if user cancelled the dialog
+    if not root_dir:
+        print("No directory selected. Exiting...")
+        exit()
+
+    print(f"✓ BIDS root directory: {root_dir}")
+
+    # Change working directory to root_dir
+    os.chdir(root_dir)
+    print(f"✓ Changed working directory to: {os.getcwd()}")
+
+    # ========================================
+    # STEP 2: Check/create derivatives/cedalion
+    # ========================================
+    print("\n" + "="*70)
+    print("STEP 2: CHECKING DERIVATIVES STRUCTURE")
+    print("="*70)
+
+    derivatives_path = os.path.join(root_dir, 'derivatives')
+    cedalion_path = os.path.join(derivatives_path, 'cedalion')
+
+    if not os.path.exists(cedalion_path):
+        print(f"Creating: {cedalion_path}")
+        os.makedirs(cedalion_path, exist_ok=True)
+        print("✓ Created derivatives/cedalion/ directory")
+    else:
+        print(f"✓ Found existing: {cedalion_path}")
+
+    # ========================================
+    # STEP 3: Select/create pipeline folder
+    # ========================================
+    print("\n" + "="*70)
+    print("STEP 3: SELECT OR CREATE PIPELINE FOLDER")
+    print("="*70)
+    print("Select an existing pipeline folder OR create a new one")
+    print("inside 'derivatives/cedalion/'")
+    print("(The dialog window may be in the background - check your taskbar)")
+    print("="*70 + "\n")
+
+    root = tk.Tk()
+    root.withdraw()  # Hide the main window
+
     path_to_data = filedialog.askdirectory(
-        title=title,
-        initialdir=initial_dir
+        title="Step 3: Select or Create Pipeline Folder in derivatives/cedalion/",
+        initialdir=cedalion_path
     )
     root.destroy()
 
     # Check if user cancelled the dialog
     if not path_to_data:
-        print("No directory selected. Exiting...")
+        print("No pipeline folder selected. Exiting...")
         exit()
 
-print(f"Using data directory: {path_to_data}")
+    print(f"✓ Pipeline folder: {path_to_data}")
 
-# Derive root_dir (BIDS dataset root) from the selected path
-# Navigate up from path_to_data to find the BIDS root (where sub-XX folders are)
-# Typical structure: /path/to/dataset/derivatives/cedalion/pipeline_name
-# BIDS root should be: /path/to/dataset/
-path_parts = os.path.normpath(path_to_data).split(os.sep)
-if 'derivatives' in path_parts:
-    # Find index of 'derivatives' and go up to get BIDS root
-    derivatives_idx = path_parts.index('derivatives')
-    root_dir = os.sep.join(path_parts[:derivatives_idx])
-else:
-    # Fallback: assume path_to_data is already close to root, go up a few levels
-    root_dir = os.path.dirname(os.path.dirname(path_to_data))
+    # Verify the selected folder is within derivatives/cedalion
+    # Normalize paths for cross-platform comparison
+    normalized_path_to_data = os.path.normpath(path_to_data)
+    normalized_cedalion_path = os.path.normpath(cedalion_path)
 
-print(f"Derived BIDS root directory: {root_dir}")
+    if not normalized_path_to_data.startswith(normalized_cedalion_path):
+        print("\n⚠️  WARNING: Selected folder is not inside derivatives/cedalion/")
+        print(f"   Selected: {normalized_path_to_data}")
+        print(f"   Expected to be inside: {normalized_cedalion_path}")
+        print("   Continuing anyway, but this may cause issues...")
+
+    print("\n" + "="*70)
+    print("FOLDER SETUP COMPLETE")
+    print("="*70)
+    print(f"BIDS Root:       {root_dir}")
+print(f"Pipeline Folder: {path_to_data}")
+print("="*70 + "\n")
 
 # Construct the path to the preprocessed data
 if os.path.basename(path_to_data) == 'preprocessed_data':
     preprocessed_path = path_to_data
 else:
-    preprocessed_path = os.path.join(path_to_data, 'preprocessed_data')
+    preprocessed_path = os.path.join(path_to_data, 'Outputs', 'preprocessed_data')
 
 # List to store the extracted information
 all_data_info = []
@@ -153,10 +210,6 @@ for subject_folder in os.listdir(root_dir):
                         pkl_filename = filename.replace('.snirf', '_preprocessed.snirf')
                         pkl_path = os.path.join(preprocessed_path, subject_folder, pkl_filename)
                         
-                        print(f"DEBUG homer.py: SNIRF file: {filename}")
-                        print(f"DEBUG homer.py: PKL filename: {pkl_filename}")
-                        print(f"DEBUG homer.py: PKL path: {pkl_path}")
-                        print(f"DEBUG homer.py: PKL exists: {os.path.exists(pkl_path) if preprocessed_path else False}")
                         
                         # Check if pkl exists
                         pkl_exists = os.path.exists(pkl_path) if preprocessed_path else False
