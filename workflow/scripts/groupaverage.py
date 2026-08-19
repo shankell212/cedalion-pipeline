@@ -85,7 +85,7 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, file_names, out):
             hrf_est = hrf_est_tmp.sel(trial_type=trial_type).expand_dims('trial_type')  # select current trial type and ad back trial type as dim
             mse_t = mse_t_tmp.sel(trial_type=trial_type).expand_dims('trial_type')  
             
-            if 'vertex' not in hrf_est.dims:  # if group averaging chan space data, change values of bad chans (img recon does this)
+            if 'vertex' not in hrf_est.dims and 'parcel' not in hrf_est.dims:  # if group averaging chan space data, change values of bad chans (img recon does this)
                 hrf_est.loc[dict(channel=bad_channels)] = cfg_mse['hrf_val']
                 mse_t.loc[dict(channel=bad_channels)] = cfg_mse['mse_val_for_bad_data']  
                 mse_t = xr.where(mse_t < cfg_mse['mse_min_thresh'], cfg_mse['mse_min_thresh'], mse_t)  # !!! maybe can be removed when we have the between subject mse
