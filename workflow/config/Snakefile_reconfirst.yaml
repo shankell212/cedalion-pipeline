@@ -43,31 +43,6 @@ preprocess:
     plot_dqr:
       enable: true
 
-hrf_estimation:   # image-space HRF estimation (Snakefile_reconfirst runs image recon before this step)
-  rec_str: "conc"   # image-recon output is always molar concentration; leave as 'conc'
-  stim_lst: ["left", "right"]  # list of stims from events.tsv you want to estimate the HRF of
-  t_pre: "2 second"   # time before stim onset you want to model
-  t_post: "10 second" # time after stim onset you want to model
-  GLM:
-   enable: true  # if true do GLM, false do block averaging
-   do_drift: 'legendre'  # Options: None, 'polynomial', 'legendre'
-   drift_order: 3
-   do_short_sep: true  # computed from the channel-space preprocessed run and reused as a shared covariate across all parcels -- see module_hrf_est.GLM
-   distance_threshold: "20 mm"
-   short_channel_method : "mean"
-   noise_model: "ar_irls"    #  ols, rls, wls, ar_irls, gls, glsar
-   basis_func: "gaussian_kernels"
-   basis_func_params:
-    t_delta: "1 second"
-    t_std: "1 second"
-
-
-groupaverage:
-  mse:    # for changing bad values IDed in prune channels mask. change vals for conc or od
-   mse_val_for_bad_data: "1e7 micromolar**2"
-   mse_min_thresh: "1e0 micromolar**2"
-   hrf_val: "0 micromolar"
-
 
 image_recon:   # need to create sensitivity matrix first. Not included here yet.
   generate_sensitivity:
@@ -103,3 +78,28 @@ image_recon:   # need to create sensitivity matrix first. Not included here yet.
     flag_hbo_list: ['hbo', 'hbr']
     flag_brain_list: ['brain', 'scalp']  # 'brain', 'scalp' - if you want to plot either
     flag_img_list:  ['mag', 'tstat', 'noise']
+
+hrf_estimation:   # image-space HRF estimation (Snakefile_reconfirst runs image recon before this step)
+  rec_str: "conc"   # image-recon output is always molar concentration; leave as 'conc'
+  stim_lst: ["left", "right"]  # list of stims from events.tsv you want to estimate the HRF of
+  t_pre: "2 second"   # time before stim onset you want to model
+  t_post: "10 second" # time after stim onset you want to model
+  GLM:
+   enable: true  # if true do GLM, false do block averaging
+   do_drift: 'legendre'  # Options: None, 'polynomial', 'legendre'
+   drift_order: 3
+   do_short_sep: true  # computed from the channel-space preprocessed run and reused as a shared covariate across all parcels -- see module_hrf_est.GLM
+   distance_threshold: "20 mm"
+   short_channel_method : "mean"
+   noise_model: "ar_irls"    #  ols, rls, wls, ar_irls, gls, glsar
+   basis_func: "gaussian_kernels"
+   basis_func_params:
+    t_delta: "1 second"
+    t_std: "1 second"
+
+
+groupaverage:
+  mse:    # for changing bad values IDed in prune channels mask. change vals for conc or od
+   mse_val_for_bad_data: "1e7 micromolar**2"
+   mse_min_thresh: "1e0 micromolar**2"
+   hrf_val: "0 micromolar"
