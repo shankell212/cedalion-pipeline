@@ -55,7 +55,62 @@ import module_preprocess as preproc
 
 #%% Load in data for current subject/task/run
 
-def preprocess_func(snirf_path, events_path, root_dir, derivatives_subfolder, cfg_preprocess, stim_lst, mse_amp_thresh, out_files):
+def _parse_dpf_values(dpf_config, wavelengths):
+    """Parse DPF values from YAML and align them to the wavelength coordinate."""
+    if dpf_config is None:
+        dpf_config = [1, 1]
+
+    if not isinstance(dpf_config, (list, tuple)):
+        dpf_config = [dpf_config]
+
+    dpf_values = [float(value) for value in dpf_config]
+    if len(dpf_values) == 1:
+        dpf_values = dpf_values * len(wavelengths)
+
+    if len(dpf_values) != len(wavelengths):
+        raise ValueError(
+            f"DPF must have one value per wavelength: got {len(dpf_values)} "
+            f"values for {len(wavelengths)} wavelengths."
+        )
+
+    return dpf_values
+
+
+def _validate_preprocess_dependencies(cfg_preprocess):
+    """Fail early when enabled preprocessing steps depend on disabled upstream steps."""
+    steps = cfg_preprocess.get("steps", {})
+    int2od_enabled = steps.get("int2od", {}).get("enable", False)
+    od_dependent_steps = (
+        "tddr",
+        "splineSG",
+        "motion_correct_splineSG",
+        "PCA_recurse",
+        "motion_correct_PCA_recurse",
+        "wavelet",
+        "motion_correct_wavelet",
+        "freq_filter",
+        "od2conc",
+        "DQR_plot",
+        "plot_DQR",
+        "plot_dqr",
+        "dqr_plot",
+    )
+    enabled_dependents = [
+        step_name
+        for step_name in od_dependent_steps
+        if steps.get(step_name, {}).get("enable", False)
+    ]
+    if enabled_dependents and not int2od_enabled:
+        raise ValueError(
+            "Invalid preprocess configuration: "
+            f"{', '.join(enabled_dependents)} require optical density data. "
+            "Enable preprocess.steps.int2od or disable the downstream OD/conc steps."
+        )
+
+
+def preprocess_func(snirf_path, events_path, root_dir, derivatives_subfolder, cfg_preprocess, stim_lst, out_files):
+    _validate_preprocess_dependencies(cfg_preprocess)
+
     cedalion.xrutils.unit_stripping_is_error(True)
     # Load in snirf file
     
@@ -195,12 +250,13 @@ def preprocess_func(snirf_path, events_path, root_dir, derivatives_subfolder, cf
                                                                             params['fmax'])  
         # Convert OD to Conc
         elif step_name == "od2conc":
-         
+            dpf_values = _parse_dpf_values(params.get("dpf", [1, 1]), rec['amp'].wavelength)
             dpf = xr.DataArray(
-                [1, 1],
+                dpf_values,
                 dims="wavelength",
                 coords={"wavelength": rec['amp'].wavelength},
             )
+            print(f"Using DPF values for od2conc: {dpf_values}")
             rec['conc'] = cedalion.nirs.cw.od2conc(rec['od_corrected'], rec.geo3d, dpf, spectrum="prahl")
         
         
@@ -238,13 +294,13 @@ def preprocess_func(snirf_path, events_path, root_dir, derivatives_subfolder, cf
     if not rec['od_corrected'].pint.units:
         rec['od_corrected'] = rec['od_corrected'].pint.quantify(units_od)  # make sure od has units 
         
-    if isinstance(mse_amp_thresh,str):
-        mse_amp_thresh = float(mse_amp_thresh)
+    min_amp_thresh = cfg_preprocess['steps']['prune']["amp_thresh_min"]
+    if isinstance(min_amp_thresh,str):
+        min_amp_thresh = float(min_amp_thresh)  
     idx_sat = np.where(chs_pruned == 0.92)[0]
     sat_ch_coords = chs_pruned.channel[idx_sat].values  # get channel coords
     amp = rec['amp'].mean('time').min('wavelength') # take the minimum across wavelengths
-    #idx_amp = np.where(amp < cfg_preprocess["steps"]["prune"]["amp_thresh"][0])[0]
-    idx_amp = np.where(amp < mse_amp_thresh)[0]   # COMES FROM GROUP AVG CFG
+    idx_amp = np.where(amp < min_amp_thresh)[0]   
     amp_ch_coords = chs_pruned.channel[idx_amp].values
 
     # Concat bad indices
@@ -277,9 +333,20 @@ def preprocess_func(snirf_path, events_path, root_dir, derivatives_subfolder, cf
     ds.to_netcdf(out_files['out_sidecar'],  mode='w')
 
 
+    # Publish only user-facing preprocessed series. Cedalion's SNIRF reader maps
+    # repeated dOD/amplitude data blocks to od_02/amp_02, so store the final OD
+    # as "od" and keep pruning details in the quality sidecar.
+    if 'od_corrected' in rec.timeseries:
+        rec['od'] = rec['od_corrected']
+        del rec.timeseries['od_corrected']
+    if 'amp_pruned' in rec.timeseries:
+        del rec.timeseries['amp_pruned']
+    if 'od_unfiltered' in rec.timeseries:
+        del rec.timeseries['od_unfiltered']
+
     # # Save preprocessed data as a snirf file
     cedalion.io.snirf.write_snirf(out_files['out_snirf'], rec)  
-        # this has a bug - untis for time do not save and od_corrected becomes od_02
+        # this has a bug - units for time do not save
 
     # file = gzip.GzipFile(out_files['out_snirf'], 'wb')
     # file.write(pickle.dumps([rec]))
@@ -296,16 +363,14 @@ def main():
     root_dir = snakemake.params.root_dir
     derivatives_subfolder = snakemake.params.derivatives_subfolder
     cfg_preprocess = snakemake.params.cfg_preprocess
-    stim_lst = snakemake.params.stim_lst
-    mse_amp_thresh = snakemake.params.mse_amp_thresh
-    
+    stim_lst = snakemake.params.stim_lst    
     
     out_files = {
         "out_snirf" : snakemake.output.snirf,
         "out_sidecar": snakemake.output.sidecar,
         }
     
-    preprocess_func(snirf_path, events_path, root_dir, derivatives_subfolder, cfg_preprocess, stim_lst, mse_amp_thresh, out_files)
+    preprocess_func(snirf_path, events_path, root_dir, derivatives_subfolder, cfg_preprocess, stim_lst, out_files)
  
     
 if __name__ == "__main__":

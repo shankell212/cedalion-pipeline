@@ -35,7 +35,7 @@ warnings.filterwarnings('ignore')
 
 #%%
 
-def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], root_dir=None, derivatives_subfolder=None):
+def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], root_dir=None, derivatives_subfolder=None, dataquality_path=None):
 
     # Convert str vals to units from config
     cfg_mse = cfg_img_recon['mse']
@@ -68,14 +68,6 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], roo
 
     #%% run image recon
     
-    """
-    do the image reconstruction of each subject independently 
-    - this is the unweighted subject block average magnitude 
-    - then reconstruct their individual MSE
-    - then get the weighted average in image space 
-    - get the total standard error using between + within subject MSE 
-    """
-    
     # load files
     if 'hrf' in file_name:
         results = xr.open_dataset(file_name) # load in data
@@ -96,33 +88,52 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], roo
     elif 'preprocess' in file_name:
         records = cedalion.io.read_snirf(fname = file_name, time_units = 'second' ) #FIXME: HARD CODED TIME UNITS
         rec = records[0]
-        if 'od_corrected' in rec.timeseries.keys(): #naming conventions change based on what file we load
+        if 'od' in rec.timeseries.keys():
+            ts = rec['od'].copy()
+        elif 'od_corrected' in rec.timeseries.keys(): #naming conventions change based on what file we load
             ts = rec['od_corrected'].copy()
         else:
              ts = rec['od_02'].copy()  # name if saved as snirf
         mse_t = None
 
-        # FIXME: add bad_indices to file that also has rec in it (FOR IMG RECON ON PREPROC TIME SERIES)
-            # FIXME: ADD optional input to img recon rule in snakefile 
-            # this also has geo coords so no longer have to save in with sens mat
-            # ds = xr.open_dataset(data_quality_files)
-            # pruned_channels = ds['pruned_channels'].values
-            # bad_channels = ds['bad_channels'].values
-            # geo2d = ds['geo2d']
-            # geo3d = ds['geo3d']
-            # ds.close()
+        # Continuous per-run reconstruction (preprocessing -> image recon -> HRF order):
+        # bad_channels/geo2d/geo3d aren't embedded in the preprocessed snirf the way
+        # they are in an hrf-estimate file, so load them from the matching dataquality
+        # sidecar produced by the preprocess rule.
+        if dataquality_path is None:
+            raise ValueError("dataquality_path is required to reconstruct images directly from preprocessed data.")
+        ds_dq = xr.open_dataset(dataquality_path)
+        bad_channels = ds_dq['bad_channels'].values
+        geo2d = ds_dq['geo2d']
+        geo3d = ds_dq['geo3d']
+        ds_dq.close()
+
+        geo2d = geo2d.pint.quantify().rename({'pos2d': 'pos'}) # re-cast type coord from string back to PointType enum
+        geo2d['type'] = xr.DataArray(pd.Series(geo2d['type'].values).map(lambda s: PointType[s.split('.')[-1]]).values,
+            dims=geo2d['type'].dims)
+        geo3d = geo3d.pint.quantify().rename({'pos3d': 'pos'})
+        geo3d['type'] = xr.DataArray(pd.Series(geo3d['type'].values).map(lambda s: PointType[s.split('.')[-1]]).values,
+            dims=geo3d['type'].dims)
 
     print(f'Performing image recon on subject = {file_name}')
 
-    # Loop through trial types
+    # Loop through trial types. This only applies to channel-space HRF-estimate input,
+    # which is already epoched per trial type. Continuous preprocessed data has no
+    # trial_type dim yet -- that's introduced downstream during HRF estimation -- so
+    # it gets a single reconstruction pass over the full time series instead.
     all_trial_Xs = None
-    for trial_type in cfg_hrf['stim_lst']: #NOTE: do we still need to loop through trial types here?
-        
-        print( f'   Getting images for trial type = {trial_type}')       
 
-        ts_trial = ts.sel(trial_type=trial_type) 
-        if mse_t is not None: # if hrf data loaded in
-            mse_trial = mse_t.sel(trial_type=trial_type)
+    trial_type_iter = cfg_hrf['stim_lst'] if mse_t is not None else [None]
+    for trial_type in trial_type_iter:
+
+        if trial_type is not None:
+            print( f'   Getting images for trial type = {trial_type}')
+            ts_trial = ts.sel(trial_type=trial_type)
+            if mse_t is not None: # if hrf data loaded in
+                mse_trial = mse_t.sel(trial_type=trial_type)
+        else:
+            print('   Getting images for full continuous time series')
+            ts_trial = ts
 
         # Convert conc to od and units for cfg
         if 'chromo' in ts.dims:
@@ -142,16 +153,18 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], roo
             if mse_t is not None: # if mse variable exists, i.e. loading in hrf not ts
                 od_mse = mse_trial.copy()
             else:
-                mse = measurement_variance(od_ts, calc_covariance=False) #NOTE: CHECK DIMS 
-                od_mse = mse.sel(trial_type=trial_type)
+                mse = measurement_variance(od_ts, calc_covariance=False) #NOTE: CHECK DIMS
+                od_mse = mse if trial_type is None else mse.sel(trial_type=trial_type)
 
         # replace bad vals #FIXME: this will fail if running on preprocessed time series and not hrf
         od_ts.loc[dict(channel=bad_channels)] = cfg_mse['hrf_val']
         od_mse.loc[dict(channel=bad_channels)] = cfg_mse['mse_val_for_bad_data']
         od_mse = xr.where(od_mse < cfg_mse['mse_min_thresh'], cfg_mse['mse_min_thresh'], od_mse)  # !!! maybe can be removed when we have the between subject mse
         
-        # if doing magnitude image
-        if cfg_img_recon['mag']['enable']:
+        # if doing magnitude image (only applies to HRF-estimate input; continuous
+        # per-run reconstruction always keeps the full time series, since epoching
+        # happens downstream during HRF estimation for this pipeline order)
+        if cfg_img_recon['mag']['enable'] and trial_type is not None:
             if 'reltime' in od_ts.dims:
                 od_ts_mag = od_ts.sel(reltime=slice(cfg_img_recon['mag']['t_win'][0], cfg_img_recon['mag']['t_win'][1])).mean('reltime')
             else:
@@ -169,12 +182,8 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], roo
              od_mse_mag = od_mse.copy() # if mse not loaded in, copy od_mse
 
         C_meas = od_mse_mag.pint.dequantify()
-       
-        #FIXME: save G (spatial basis) in derivatives/cedalion/forward_model  -> for brain and scalp separately and sigma
-       
-        if cfg_sb['enable'] and SB:  # do I need both
-            #fil_path, after = Adot_path.split("fw", 1)
-            #print(  'Performing image recon with SB')
+              
+        if cfg_sb['enable'] and SB: 
             with gzip.open(SB, 'rb') as f:
                 sbf = pickle.load(f)
 
@@ -208,8 +217,8 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], roo
             Xs = recon_obj.reconstruct(od_ts_mag)
         
         # calculate image noise
+
         #FIXME: HAVE OPTION IN CONFIG IF CALCULATING NORMAL OR POSTERIOR?
-            # is the old way just wrong or can it still be an option?
         if cfg_img_recon['noise_est_method'] == 'posterior':
             X_mse = recon_obj.get_image_noise_posterior(C_meas) #FIXME: this gets rid of trial type coord somewhere
         elif cfg_img_recon['noise_est_method'] == 'measurement':
@@ -217,13 +226,17 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], roo
         else:
             X_mse = recon_obj.get_image_noise(C_meas) # estimate from this if not specified. 
         
-        if 'trial_type' not in X_mse.coords:
-            X_mse = X_mse.assign_coords(trial_type=trial_type) # add back trial type coord  
+        if trial_type is not None and 'trial_type' not in X_mse.coords:
+            X_mse = X_mse.assign_coords(trial_type=trial_type) # add back trial type coord
 
         X_mse = X_mse.pint.to('molar**2')
         Xs = Xs.pint.to('molar')
-        
-        if all_trial_Xs is None:
+
+        if trial_type is None:
+            # continuous per-run reconstruction: single pass, no trial_type dim to accumulate
+            all_trial_Xs = Xs
+            all_trial_X_mse = X_mse
+        elif all_trial_Xs is None:
             all_trial_Xs = Xs.expand_dims(trial_type=[trial_type])
             all_trial_X_mse = X_mse.expand_dims(trial_type=[trial_type])
         else:
@@ -231,17 +244,16 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], roo
             all_trial_X_mse = xr.concat([all_trial_X_mse, X_mse], dim='trial_type')
 
 
-    # IF loading in time series, save in parcel space instead of vertex for smaller file size
+    # IF loading in time series, save in parcel space instead of vertex for smaller file size.
+    # Parcel value = plain mean of the vertex estimates in that parcel; parcel variance is
+    # propagated for that mean assuming independent per-vertex estimates:
+    #   Var(mean of N) = sum(Var_i) / N**2
     if mse_t is None: # if time series data loaded in
-         Xs_parcel_weighted = (
-                    (all_trial_Xs / all_trial_X_mse)            # numerator weights: X * (1/var)
-                    .groupby("parcel")
-                    .sum("vertex")
-                    /
-                    (1 / all_trial_X_mse)
-                    .groupby("parcel")
-                    .sum("vertex")
-                )
+        Xs_parcel = all_trial_Xs.groupby("parcel").mean("vertex")
+        X_mse_parcel = (
+            all_trial_X_mse.groupby("parcel").sum("vertex")
+            / all_trial_X_mse.groupby("parcel").count()**2
+        )
 
     # END OF TRIAL TYPE LOOP
 
@@ -257,120 +269,133 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], roo
         ds_results['geo2d'] = geo2d_clean
         ds_results['geo3d'] = geo3d_clean
     else:
-        ds_results['Xs'] = Xs_parcel_weighted.pint.dequantify()   # IF loading in time series, save in parcel space instead of vertex for smaller file size
-        ds_results['X_mse'] = all_trial_X_mse.pint.dequantify() 
+        ds_results['Xs'] = Xs_parcel.pint.dequantify()   # IF loading in time series, save in parcel space instead of vertex for smaller file size
+        ds_results['X_mse'] = X_mse_parcel.pint.dequantify()
         ds_results['geo2d'] = geo2d_clean
         ds_results['geo3d'] = geo3d_clean
 
     ds_results.to_netcdf(out, mode='w') # save as netcdf file 
-
-    #NOTE: we have Xmse for if using Cmeas or not, so do we save for both cases?
-        # group avg would fail without. 
-        # we just did not take in account the covariance of the data when reconstructing the image
-    
+ 
     
     # #%% build and save plots
 
-    # if cfg_img_recon['plot_image']['enable']:
-    #     save_dir_tmp = os.path.join(root_dir, derivatives_subfolder, 'cedalion', 'plots', 'image_recon')
-    #     os.makedirs(save_dir_tmp, exist_ok=True)
+    if cfg_img_recon['plot_image']['enable'] and 'trial_type' not in all_trial_Xs.dims:
+        print('Skipping image plots: continuous per-run reconstruction has no trial_type dim to plot per-condition.')
 
-    #     folder_name = out.removeprefix("Xs_").removesuffix(".nc")
-    #     suffix = out.split("Xs_")[1].split("_BS")[0]
-
-    #     intensity = np.log10(Adot[:,:,0].sum('channel')) # make non-sensitive vertices NaN / gray in image
-    #     mask = intensity > -2
-    #     sensitivity_mask = mask.drop_vars('wavelength')
-
-    #     all_trial_X_stderr = np.sqrt(all_trial_X_mse)
-    #     all_trial_X_tstat = all_trial_Xs / all_trial_X_stderr
-
-    #     all_trial_Xs_plot = all_trial_Xs.where(sensitivity_mask)
-    #     all_trial_X_stderr              = all_trial_X_stderr.where(sensitivity_mask)
-    #     all_trial_X_tstat               = all_trial_X_tstat.where(sensitivity_mask)
-
-    #     plot_img = cfg_img_recon['plot_image']
-
-    #     flag_hbo_list = plot_img['flag_hbo_list']  
-    #     flag_brain_list = plot_img['flag_brain_list']
-    #     flag_img_list = plot_img['flag_img_list'] 
-            
-    #     flag_condition_list = cfg_hrf['stim_lst']
+    if cfg_img_recon['plot_image']['enable'] and 'trial_type' in all_trial_Xs.dims:
+        # Extract subject ID from output path (e.g., "sub-756" from path)
+        out_dir = os.path.dirname(out)  # Get directory of output file
+        subject_folder = os.path.basename(out_dir)  # Get last folder name (should be "sub-XXX")
         
-    #     for flag_hbo in flag_hbo_list:
+        # Create plots directory: derivatives/cedalion/{subfolder}/plots/image_results/sub-XXX/
+        save_dir_tmp = os.path.join(root_dir, 'derivatives', 'cedalion', derivatives_subfolder, 'plots', 'image_results', subject_folder)
+        os.makedirs(save_dir_tmp, exist_ok=True)
+
+        # Extract filename info for organizing plots
+        out_basename = os.path.basename(out)  # Just the filename
+        folder_name = out_basename.removeprefix("Xs_").removesuffix(".nc")
+        
+        # Extract parameter portion of filename (everything after subject_task up to _noSB or _SB)
+        if "_noSB" in out_basename:
+            suffix = out_basename.split("_noSB")[0].split("_", 2)[-1] if "_" in out_basename else ""
+        elif "_SB" in out_basename:
+            suffix = out_basename.split("_SB")[0].split("_", 2)[-1] if "_" in out_basename else ""
+        else:
+            suffix = folder_name
+
+        intensity = np.log10(Adot[:,:,0].sum('channel')) # make non-sensitive vertices NaN / gray in image
+        mask = intensity > -2
+        sensitivity_mask = mask.drop_vars('wavelength')
+
+        all_trial_X_stderr = np.sqrt(all_trial_X_mse)
+        all_trial_X_tstat = all_trial_Xs / all_trial_X_stderr
+
+        all_trial_Xs_plot = all_trial_Xs.where(sensitivity_mask)
+        all_trial_X_stderr              = all_trial_X_stderr.where(sensitivity_mask)
+        all_trial_X_tstat               = all_trial_X_tstat.where(sensitivity_mask)
+
+        plot_img = cfg_img_recon['plot_image']
+
+        flag_hbo_list = plot_img['flag_hbo_list']  
+        flag_brain_list = plot_img['flag_brain_list']
+        flag_img_list = plot_img['flag_img_list'] 
             
-    #         for flag_brain in flag_brain_list: 
+        flag_condition_list = cfg_hrf['stim_lst']
+        
+        for flag_hbo in flag_hbo_list:
+            
+            for flag_brain in flag_brain_list: 
                 
-    #             for flag_condition in flag_condition_list:
+                for flag_condition in flag_condition_list:
                     
-    #                 for flag_img in flag_img_list:
+                    for flag_img in flag_img_list:
                         
-    #                     if flag_hbo in ['hbo', 'HbO']:
-    #                         title_str = flag_condition + ' ' + 'HbO'
-    #                         hbx_brain_scalp = 'hbo'
-    #                     else:
-    #                         title_str = flag_condition + ' ' + 'HbR'
-    #                         hbx_brain_scalp = 'hbr'
+                        if flag_hbo in ['hbo', 'HbO']:
+                            title_str = flag_condition + ' ' + 'HbO'
+                            hbx_brain_scalp = 'hbo'
+                        else:
+                            title_str = flag_condition + ' ' + 'HbR'
+                            hbx_brain_scalp = 'hbr'
                         
-    #                     if flag_brain in ['brain', 'Brain']:
-    #                         title_str = title_str + ' brain'
-    #                         hbx_brain_scalp = hbx_brain_scalp + '_brain'
-    #                     else:
-    #                         title_str = title_str + ' scalp'
-    #                         hbx_brain_scalp = hbx_brain_scalp + '_scalp'
+                        if flag_brain in ['brain', 'Brain']:
+                            title_str = title_str + ' brain'
+                            hbx_brain_scalp = hbx_brain_scalp + '_brain'
+                        else:
+                            title_str = title_str + ' scalp'
+                            hbx_brain_scalp = hbx_brain_scalp + '_scalp'
                         
-    #                     if len(flag_condition_list) > 1:
-    #                         if flag_img == 'tstat':
-    #                             foo_img = all_trial_X_tstat.sel(trial_type=flag_condition).copy()
-    #                             title_str = title_str + ' t-stat'
-    #                         elif flag_img == 'mag':
-    #                             foo_img = all_trial_Xs_plot.sel(trial_type=flag_condition).copy()
-    #                             title_str = title_str + ' magnitude'
-    #                         elif flag_img == 'noise':
-    #                             foo_img = all_trial_X_stderr.sel(trial_type=flag_condition).copy()
-    #                             title_str = title_str + ' noise'
-    #                     else:
-    #                         if flag_img == 'tstat':
-    #                             foo_img = all_trial_X_tstat.copy()
-    #                             title_str = title_str + ' t-stat'
-    #                         elif flag_img == 'mag':
-    #                             foo_img = all_trial_Xs_plot.copy()
-    #                             title_str = title_str + ' magnitude'
-    #                         elif flag_img == 'noise':
-    #                             foo_img = all_trial_X_stderr.copy()
-    #                             title_str = title_str + ' noise'
+                        if len(flag_condition_list) > 1:
+                            if flag_img == 'tstat':
+                                foo_img = all_trial_X_tstat.sel(trial_type=flag_condition).copy()
+                                title_str = title_str + ' t-stat'
+                            elif flag_img == 'mag':
+                                foo_img = all_trial_Xs_plot.sel(trial_type=flag_condition).copy()
+                                title_str = title_str + ' magnitude'
+                            elif flag_img == 'noise':
+                                foo_img = all_trial_X_stderr.sel(trial_type=flag_condition).copy()
+                                title_str = title_str + ' noise'
+                        else:
+                            if flag_img == 'tstat':
+                                foo_img = all_trial_X_tstat.copy()
+                                title_str = title_str + ' t-stat'
+                            elif flag_img == 'mag':
+                                foo_img = all_trial_Xs_plot.copy()
+                                title_str = title_str + ' magnitude'
+                            elif flag_img == 'noise':
+                                foo_img = all_trial_X_stderr.copy()
+                                title_str = title_str + ' noise'
                 
-    #                     if 'reltime' in foo_img.dims:
-    #                         foo_img = foo_img.rename({"reltime": "time"})
-    #                         foo_img = foo_img.transpose("vertex", "chromo", "time")
-    #                     clim = (-foo_img.sel(chromo='HbO').max(), foo_img.sel(chromo='HbO').max())
+                        if 'reltime' in foo_img.dims:
+                            foo_img = foo_img.rename({"reltime": "time"})
+                            foo_img = foo_img.transpose("vertex", "chromo", "time")
+                        clim = (-foo_img.sel(chromo='HbO').max(), foo_img.sel(chromo='HbO').max())
 
-    #                     filename = f'IMG_{flag_condition}_{flag_img}_{hbx_brain_scalp}'
-    #                     # create overall folder for current image recon params 
-    #                     save_dir_tmp_ful = os.path.join(save_dir_tmp, folder_name)
-    #                     os.makedirs(save_dir_tmp_ful, exist_ok=True) 
+                        filename = f'IMG_{flag_condition}_{flag_img}_{hbx_brain_scalp}'
+                        # create overall folder for current image recon params 
+                        save_dir_tmp_ful = os.path.join(save_dir_tmp, folder_name)
+                        os.makedirs(save_dir_tmp_ful, exist_ok=True) 
 
 
-    #                     save_dir_full = os.path.join(save_dir_tmp_ful, suffix)
-    #                     os.makedirs(save_dir_full, exist_ok=True)
-    #                     save_file_path = os.path.join(save_dir_full, filename )
+                        save_dir_full = os.path.join(save_dir_tmp_ful, suffix)
+                        os.makedirs(save_dir_full, exist_ok=True)
+                        save_file_path = os.path.join(save_dir_full, filename )
         
-    #                     print('plotting: ', filename)
-    #                     image_recon_multi_view(   #FIXME: add off_screen option to this function
-    #                         foo_img,  # time series data; can be 2D (static) or 3D (dynamic)
-    #                         head,
-    #                         cmap='jet',
-    #                         clim=clim,
-    #                         view_type=hbx_brain_scalp,
-    #                         title_str=f'{filename} / uM',
-    #                         filename=save_file_path,
-    #                         SAVE=True,
-    #                         #time_range=(foo_img.time.values[0],foo_img.time.values[-1],0.5)*units.s,
-    #                         fps=12,
-    #                         geo3d_plot = None, #  geo3d_plot
-    #                         wdw_size = (1024, 768)
-    #                     )
-    #                  #              
+                        print('plotting: ', filename)
+                        image_recon_multi_view(
+                            foo_img,  # time series data; can be 2D (static) or 3D (dynamic)
+                            head,
+                            cmap='jet',
+                            clim=clim,
+                            view_type=hbx_brain_scalp,
+                            title_str=f'{filename} / uM',
+                            filename=save_file_path,
+                            SAVE=True,
+                            #time_range=(foo_img.time.values[0],foo_img.time.values[-1],0.5)*units.s,
+                            fps=12,
+                            geo3d_plot = None, #  geo3d_plot
+                            wdw_size = (1024, 768)
+                        )
+                     #              
                      
     
 
@@ -386,12 +411,16 @@ def main():
     SB_path = snakemake.input.SB
     root_dir = snakemake.params.root_dir
     derivatives_subfolder = snakemake.params.derivatives_subfolder
+    # Only present for rules reconstructing directly from preprocessed data
+    # (e.g. imagerecon_perrun in Snakefile_reconfirst); absent for the default
+    # Snakefile's imagerecon rule, which reconstructs from an hrf-estimate file.
+    dataquality_path = getattr(snakemake.input, 'dataquality', None)
 
     Adot_path = str(Adot_path) if not isinstance(Adot_path, str) else Adot_path
-    
+
     out = snakemake.output[0]
-    
-    img_recon_func(cfg_img_recon, cfg_hrf, hrf_data, Adot_path, out, SB_path, root_dir, derivatives_subfolder)
+
+    img_recon_func(cfg_img_recon, cfg_hrf, hrf_data, Adot_path, out, SB_path, root_dir, derivatives_subfolder, dataquality_path)
     
             
 if __name__ == "__main__":

@@ -1,0 +1,245 @@
+# Snakefile_reconfirst
+#
+# Optional alternate order of operations:
+#   preprocessing -> image reconstruction -> HRF estimation -> group average
+#
+# This is a reversal of the default Snakefile's order (preprocessing -> HRF
+# estimation -> image reconstruction -> group average): image recon runs on the
+# full continuous preprocessed time series per run (reconstructed into parcel
+# space), and HRF estimation (block-average or GLM) then runs on that reconstructed
+# image-space data instead of on channel-space optical density.
+#
+# `preprocess`, `generate_sensitivity`, and `generate_sbf` are unchanged from the
+# default Snakefile and shared with it via `include: "common.smk"` below, rather
+# than being duplicated here.
+#
+# IMPORTANT: point this Snakefile's config at a `derivatives_subfolder` that isn't
+# also used by the default Snakefile -- output filenames overlap between the two
+# pipeline orders (e.g. Outputs/hrf_estimate/) but mean different things.
+
+from snakemake.io import glob_wildcards
+import os
+from os.path import join
+from pathlib import Path
+
+# Get the directory where the Snakefile is located
+SNAKEFILE_DIR = Path(workflow.snakefile).parent
+# Use --configfile to specify config, or use default
+
+default_config = join(SNAKEFILE_DIR, "config", "Snakefile_reconfirst.yaml")  # default config file in workflow/config folder
+
+if not workflow.overwrite_configfiles:
+    configfile: default_config
+
+# Allow overriding root directory from command line with --config root_dir=path
+ROOT = config.get('root_dir', config['dataset']["root_dir"])
+ROOT = os.fspath(ROOT)
+ROOT_FOR_LISTING = ROOT if ROOT else "."
+ROOT_PREFIX = "" if ROOT in ("", ".") else ROOT.rstrip("/\\")
+
+
+def root_join(*parts):
+    """Join paths under ROOT without adding a leading './' for relative Windows runs."""
+    path_parts = [str(part).strip("/\\") for part in parts if str(part) not in ("", ".")]
+    if ROOT_PREFIX:
+        return "/".join([ROOT_PREFIX] + path_parts)
+    return "/".join(path_parts)
+
+
+if not config['dataset']["derivatives_subfolder"]:   # if derivatives_subfolder is not specified in config, set to empty string to avoid issues with path construction
+    config['dataset']["derivatives_subfolder"] = ''
+DERIV = config.get('deriv_dir', config['dataset']["derivatives_subfolder"])
+SAVE_DIR = root_join('derivatives', 'cedalion', DERIV)
+
+# Get subject list from BIDS directory, excluding any subjects in the exclude list in config
+dirs = os.listdir(ROOT_FOR_LISTING)
+subject_list = [d.replace("sub-", "") for d in dirs if os.path.isdir(os.path.join(ROOT_FOR_LISTING, d)) and "sub-" in d and d.replace("sub-", "") not in config["dataset"]["subjects_to_exclude"]]
+config["dataset"]["subject"] = subject_list
+# Use run_list directly from config if specified, otherwise fall back to num_runs for backward compatibility
+if "run_list" in config["dataset"]:
+    config["dataset"]["run"] = config["dataset"]["run_list"]
+else:
+    # Backward compatibility: generate from num_runs if run_list not provided
+    config["dataset"]["run"] = [f"{i:02d}" for i in range(1, int(config["dataset"]["num_runs"]) + 1)]
+
+
+def _imagerecon_perrun_suffix():
+    """Filename suffix encoding the image-recon params a per-run reconstruction used.
+    Deliberately has no mag/_ts marker -- per-run reconstruction always keeps the
+    full continuous time series regardless of image_recon.mag.enable (epoching
+    happens downstream during HRF estimation, not at recon time)."""
+    return (
+        "_parcelspace"
+        f"_cov_alpha_spatial_{config['image_recon']['alpha_spatial']}"
+        f"_alpha_meas_{config['image_recon']['alpha_meas']}"
+        f"_recon_mode_{config['image_recon']['recon_mode']}"
+        + ("_Cmeas" if config["image_recon"]["Cmeas"]["enable"] else "_noCmeas")
+        + ("_SB" if config["image_recon"]["spatial_basis"]["enable"] else "_noSB")
+    )
+
+
+def get_imagerecon_perrun_output():  # create file name for per-run continuous image recon output
+    return (
+        f"{SAVE_DIR}/Outputs/image_results_perrun/sub-{{subject}}/"
+        f"Xraw_sub-{{subject}}_{{task}}_run-{{run}}{_imagerecon_perrun_suffix()}.nc"
+    )
+
+
+def _hrf_imgspace_suffix():
+    """Filename suffix for image-space HRF estimates: must encode both the HRF
+    config and the image-recon params it was reconstructed from, since (unlike the
+    default Snakefile) the same subject/task now has one HRF file per image-recon
+    parameter combination."""
+    return f"{config['hrf_estimation']['rec_str']}_imgHRF" + _imagerecon_perrun_suffix()
+
+
+def get_hrf_imgspace_output():  # create file name for image-space HRF estimation output
+    return (
+        f"{SAVE_DIR}/Outputs/hrf_estimate/sub-{{subject}}/"
+        f"sub-{{subject}}_task-{{task}}_nirs_hrf_estimate_{_hrf_imgspace_suffix()}.nc"
+    )
+
+
+def get_groupavg_imgspace_hrf_output():  # create file name for group average of image-space HRF estimates
+    return (
+        f"{SAVE_DIR}/Outputs/group_results/"
+        f"task-{{task}}_nirs_groupaverage_imgspace_hrf_{_hrf_imgspace_suffix()}.nc"
+    )
+
+
+def get_optional_input(SB_flag):
+    if SB_flag:
+        return root_join('derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sbf.nc')
+    else:
+        return [] # Return an empty list if the input is not needed
+
+
+# Rules shared with the default Snakefile: preprocess, generate_sensitivity, generate_sbf
+include: "common.smk"
+
+rule all_default:
+    input:
+        expand(get_groupavg_imgspace_hrf_output(), task=config["dataset"]["task"])
+
+
+rule all_preprocess:
+    input:
+        expand([
+            (f"{SAVE_DIR}/Outputs/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.snirf"),  #  preprocessed snirf
+            (f"{SAVE_DIR}/Outputs/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_dataquality.nc"), # data qual sidecar
+            ],
+            subject = config["dataset"]["subject"],
+            task = config["dataset"]["task"],
+            run = config["dataset"]["run"]
+            )
+
+rule all_imagerecon:
+    input:
+        expand(get_imagerecon_perrun_output(),
+            subject = config["dataset"]["subject"],
+            task = config["dataset"]["task"],
+            run = config["dataset"]["run"],
+            )
+
+rule all_hrf_estimation:
+    input:
+        expand([
+            get_hrf_imgspace_output() ],
+            subject = config["dataset"]["subject"],
+            task = config["dataset"]["task"],
+            )
+
+rule all_groupaverage:
+    input:
+        expand([
+            get_groupavg_imgspace_hrf_output() ],
+            task = config["dataset"]["task"],
+            )
+
+if config['image_recon']['spatial_basis']['enable']: # run generate sbf rule if enable is true
+    rule all_generate_sbf:
+        input:
+            root_join('derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sbf.nc')
+
+
+rule imagerecon_perrun:
+    input:
+        # named hrf_data (not preproc_snirf) so this reuses image_recon.py's main()
+        # unchanged -- the script tells channel-space HRF input from continuous
+        # preprocessed input apart by filename content ('hrf' vs 'preprocess'), not
+        # by the snakemake input field name.
+        hrf_data = (f"{SAVE_DIR}/Outputs/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.snirf"),
+        dataquality = (f"{SAVE_DIR}/Outputs/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_dataquality.nc"),
+        Adot = ancient(rules.generate_sensitivity.output.Adot),
+        SB = get_optional_input(config['image_recon']['spatial_basis']['enable']),
+    output:
+        get_imagerecon_perrun_output()
+    params:
+        cfg_img_recon = config['image_recon'],
+        cfg_hrf = config['hrf_estimation'],
+        root_dir = ROOT,
+        derivatives_subfolder = config['dataset']['derivatives_subfolder'],
+    script:
+        SNAKEFILE_DIR / "scripts/image_recon.py"
+
+
+def all_imagerecon_perrun(wc):
+    ''' Return, for this subject/task (i.e. all runs): the per-run parcel-space
+    image-recon outputs (primary HRF-estimation input), the raw events.tsv (stim
+    timing, since a .nc file carries no cedalion Record/.stim), and the dataquality
+    sidecar + original channel-space preprocessed snirf (only used when GLM's
+    do_short_sep is enabled, to compute the short-separation nuisance regressor). '''
+
+    img_paths = [
+        f"{SAVE_DIR}/Outputs/image_results_perrun/sub-{wc.subject}/"
+        f"Xraw_sub-{wc.subject}_{wc.task}_run-{run}{_imagerecon_perrun_suffix()}.nc"
+        for run in config["dataset"]["run"]
+    ]
+    events_paths = [
+        root_join("sub-{}".format(wc.subject), "nirs", f"sub-{wc.subject}_task-{wc.task}_run-{run}_events.tsv")
+        for run in config["dataset"]["run"]
+    ]
+    preproc_paths = [
+        f"{SAVE_DIR}/Outputs/preprocessed_data/sub-{wc.subject}/"
+        f"sub-{wc.subject}_task-{wc.task}_run-{run}_nirs_preprocessed.snirf"
+        for run in config["dataset"]["run"]
+    ]
+    quality_paths = [
+        f"{SAVE_DIR}/Outputs/preprocessed_data/sub-{wc.subject}/"
+        f"sub-{wc.subject}_task-{wc.task}_run-{run}_nirs_dataquality.nc"
+        for run in config["dataset"]["run"]
+    ]
+    return {
+        "preproc": img_paths,               # matches hrf_estimation.py's run_files param name
+        "events": events_paths,
+        "preproc_channelspace": preproc_paths,
+        "quality": quality_paths,
+    }
+
+
+rule hrf_estimation:
+    input:
+        unpack(all_imagerecon_perrun),
+    output:
+        net_hrf = get_hrf_imgspace_output(),
+    params:
+        cfg_hrf = config['hrf_estimation'],
+    script:
+        SNAKEFILE_DIR / "scripts/hrf_estimation.py"
+
+
+rule groupaverage:
+    input:
+        hrf_subs = lambda wc: [
+            get_hrf_imgspace_output().format(subject=subject, task=wc.task)
+            for subject in config["dataset"]["subject"]
+        ],
+    output:
+        get_groupavg_imgspace_hrf_output()
+    params:
+        cfg_groupaverage = config["groupaverage"],
+        cfg_dataset = config['dataset'],
+        cfg_hrf = config['hrf_estimation'],
+        flag_prune_channels = config['preprocess']['steps']['prune']['enable'],
+    script:
+        SNAKEFILE_DIR / "scripts/groupaverage.py"
