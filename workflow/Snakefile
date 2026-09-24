@@ -9,12 +9,8 @@ SNAKEFILE_DIR = Path(workflow.snakefile).parent
 # Use --configfile to specify config, or use default
 
 # default_config = join(SNAKEFILE_DIR, "config", "config.yaml")  # default config file in workflow/config folder
-default_config = "C:\\Users\\sreek\\Documents\\software\\fnirs_data\\Interactive_Walking_HD\\derivatives\\snakemake_config.yaml"
-# default_config = "/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/derivatives/cedalion/test_new_folder_config_struct/test_1/config_test_1.yml" # have snakemake copy this file into derivatives folder
-# default_config = "/projectnb/nphfnirs/s/datasets/Interactive_Walking_HD/derivatives/cedalion/new_inclQ_test_imgrecon_newnoise_2/config_STS_Q.yml" # have snakemake copy this file into derivatives folder
-# default_config = "/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/derivatives/cedalion/test/test_1/config_test_1.yml" # have snakemake copy this file into derivatives folder
-# default_config = '/projectnb/nphfnirs/s/users/shannon/Data/test_data_cedalion_smk/data/derivatives/cedalion/test_0422_groupavg/test_1/config_test_1.yml'
-default_config = "/projectnb/nphfnirs/s/datasets/BSMW_Laura_Miray_2025/BS/derivatives/cedalion/shannon/config_test_1.yml"
+# default_config = "C:\\Users\\sreek\\Documents\\software\\fnirs_data\\Interactive_Walking_HD\\derivatives\\snakemake_config.yaml"
+default_config = r"/Users/shannonkelley/Documents/GitHub/cedalion-pipeline/workflow/config/config_test_1.yml"
 
 if not workflow.overwrite_configfiles:
     configfile: default_config
@@ -86,6 +82,9 @@ def get_hrf_output():
         f"sub-{{subject}}_task-{{task}}_nirs_hrf_estimate_{config['hrf_estimation']['rec_str']}.nc"
     )
 
+# Rules shared with Snakefile_reconfirst: preprocess, generate_sensitivity, generate_sbf
+include: "common.smk"
+
 rule all_default:
     input:
         # Groupaverage channel space 
@@ -142,26 +141,6 @@ if config['image_recon']['spatial_basis']['enable']: # run generate sbf rule if 
     rule all_generate_sbf:
         input:
             root_join('derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sbf.nc')
-
-rule preprocess:
-    input:
-        # raw .snirf and events.tsv
-        snirf = root_join("sub-{subject}", "nirs", "sub-{subject}_task-{task}_run-{run}_nirs.snirf"),
-        events = root_join("sub-{subject}", "nirs", "sub-{subject}_task-{task}_run-{run}_events.tsv"),
-        module1 = SNAKEFILE_DIR / "scripts/modules/module_preprocess.py",
-        module2 = SNAKEFILE_DIR / "scripts/modules/module_plot_DQR.py"
-    output:
-        snirf = (f"{SAVE_DIR}/Outputs/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_preprocessed.snirf"), # preprocessed snirf
-        sidecar = (f"{SAVE_DIR}/Outputs/preprocessed_data/sub-{{subject}}/sub-{{subject}}_task-{{task}}_run-{{run}}_nirs_dataquality.nc"), # data qual sidecar
-    params:
-        cfg_preprocess = config['preprocess'],
-        root_dir = ROOT,
-        derivatives_subfolder = config['dataset']['derivatives_subfolder'],
-        stim_lst = config['hrf_estimation']['stim_lst'],
-    script:
-        SNAKEFILE_DIR / "scripts/preprocess.py"
-
-
 
 def all_preprocessed_runs(wc):
     ''' Return a list of all preprocessed .snirf files for this subject and task (i.e. all runs)'''  
@@ -224,32 +203,6 @@ rule groupaverage:
     script:
         SNAKEFILE_DIR / "scripts/groupaverage.py"
         
-
-rule generate_sensitivity:
-    input:
-        in1 = []
-    output:
-        Adot = protected(root_join('derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sensitivity.nc')),
-    resources:
-        gpu=1
-    params:
-        root_dir = config['dataset']["root_dir"],
-        head_model = config['image_recon']['generate_sensitivity']['head_model'],
-        cfg_Adot = config['image_recon']['generate_sensitivity']
-    script:
-        SNAKEFILE_DIR / "scripts/generate_sensitivity_matrix.py"
-
-if config['image_recon']['spatial_basis']['enable']: # run generate sbf rule if enable is true
-    rule generate_sbf:
-        input:
-            Adot = ancient(rules.generate_sensitivity.output)
-        output: # CHANGE file ext when save and load sbf in ced updated
-            root_join('derivatives', 'cedalion', 'forward', config['image_recon']['generate_sensitivity']['sub_folder'], 'sbf.nc')
-        params:
-            cfg_sb = config['image_recon']['spatial_basis'],
-            head_model = config['image_recon']['generate_sensitivity']['head_model']
-        script:
-            SNAKEFILE_DIR / "scripts/generate_sbf.py"  #FIXME: this file is not finished
 
 def get_optional_input(SB_flag):
     if SB_flag:

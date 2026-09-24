@@ -6,6 +6,7 @@ import cedalion
 import cedalion.nirs
 import cedalion.sigproc.frequency as frequency
 import cedalion.models.glm as glm
+import cedalion.dataclasses as cdc
 import xarray as xr
 from cedalion import units
 import numpy as np
@@ -17,6 +18,7 @@ import operator
 
 def blockaverage(epochs_all, cfg_hrf_estimation):
     all_trial_blockaverage = None
+    spatial_dim = cdc.get_spatial_dimension(epochs_all)  # 'channel' or 'parcel'
     # Block Average
     baseline = epochs_all.sel(reltime=(epochs_all.reltime < 0)).mean('reltime')
     epochs = epochs_all - baseline  # baseline subtract
@@ -36,22 +38,22 @@ def blockaverage(epochs_all, cfg_hrf_estimation):
         blockaverage = blockaverage1.copy()
         
         if 'chromo' in blockaverage.dims:
-            epochs_zeromean_tmp = epochs_zeromean_tmp.stack(measurement=['channel','chromo']).sortby('chromo')
-            blockaverage = blockaverage.transpose('trial_type', 'channel', 'chromo', 'reltime')
+            epochs_zeromean_tmp = epochs_zeromean_tmp.stack(measurement=[spatial_dim,'chromo']).sortby('chromo')
+            blockaverage = blockaverage.transpose('trial_type', spatial_dim, 'chromo', 'reltime')
         else:
-            epochs_zeromean_tmp = epochs_zeromean_tmp.stack(measurement=['channel','wavelength']).sortby('wavelength')
-            blockaverage = blockaverage.transpose('trial_type', 'channel', 'wavelength', 'reltime')
-    
+            epochs_zeromean_tmp = epochs_zeromean_tmp.stack(measurement=[spatial_dim,'wavelength']).sortby('wavelength')
+            blockaverage = blockaverage.transpose('trial_type', spatial_dim, 'wavelength', 'reltime')
+
         n_epochs = len(epochs_zeromean_tmp.epoch)
 
-        epochs_zeromean_tmp = epochs_zeromean_tmp.transpose('trial_type', 'measurement', 'reltime', 'epoch')  
+        epochs_zeromean_tmp = epochs_zeromean_tmp.transpose('trial_type', 'measurement', 'reltime', 'epoch')
         # calc mse
         mse_t = (epochs_zeromean_tmp**2).sum('epoch') / (n_epochs - 1)**2 # this is squared to get variance of the mean, aka MSE of the mean
-                
-        # retrieve channels where mse_t = 0
+
+        # retrieve channels/parcels where mse_t = 0
         bad_mask = mse_t.sel(trial_type=trial_type).data == 0
         bad_any = bad_mask.any(axis=1)
-        bad_chans_mse = mse_t.channel[bad_any].values
+        bad_chans_mse = mse_t[spatial_dim][bad_any].values
     
         bad_chans_mse_lst.append(bad_chans_mse)
 
@@ -70,11 +72,42 @@ def blockaverage(epochs_all, cfg_hrf_estimation):
     return all_trial_blockaverage, all_trial_mse, bad_chans_mse_lst
 
 
-def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list):
+def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list, short_sep_runs=None, posterior_var=None):
+    """Fit the HRF GLM.
+
+    ``runs`` is the data being modeled -- channel-space (rec_str = 'od'/'conc') for
+    the default pipeline order, or parcel-space image-recon output (rec_str = 'conc',
+    always molar) for the reconfirst pipeline order. Either way it's a list of either
+    cedalion Records or (ts, stim) tuples -- see concatenate_runs().
+
+    ``short_sep_runs``, if given, is a separate list of channel-space Records used
+    only to compute the short-separation-channel nuisance regressor when
+    cfg_GLM['do_short_sep'] is enabled. Short-separation regression needs real
+    source/detector geometry, which parcel-space data doesn't have, so when ``runs``
+    itself is parcel-space, the caller must supply the original channel-space
+    preprocessed runs here instead; this regressor is then a single shared covariate
+    applied uniformly across all parcels, not a per-parcel geometric regressor.
+    Defaults to ``runs`` (today's channel-space behavior, unchanged).
+
+    ``posterior_var``, if given, is the parcel-space Bayesian posterior variance of
+    the reconstructed input Y (dims: spatial_dim, chromo; dequantified, same
+    magnitude scale as Y), averaged across runs by the caller. When supplied, the
+    GLM's beta covariance is inflated by ``weight = (var_resid + posterior_var) /
+    var_resid`` before being projected into HRF-MSE, to account for the fact that Y
+    itself is an uncertain, reconstructed quantity rather than a direct measurement
+    (only meaningful for the reconfirst pipeline order, where image recon runs before
+    the GLM). When ``None`` (default, channel-space GLM), no correction is applied
+    and the corrected HRF-MSE return value is ``None``.
+
+    ``cfg_GLM['do_global_signal']``, if true, adds a single nuisance regressor equal
+    to the mean of ``Y_all`` across its spatial dimension (parcels, for the reconfirst
+    pipeline order) at every timepoint, via
+    ``cedalion.models.glm.design_matrix.global_mean_regressor``. Defaults to false.
+    """
     cfg_GLM = cfg_hrf_estimation['GLM']
     rec_str = cfg_hrf_estimation['rec_str']
 
-    # 1. need to concatenate runs 
+    # 1. need to concatenate runs
     Y_all, stim_df_tmp, runs_updated = concatenate_runs(runs, rec_str)
 
     target_units = Y_all.pint.units # grab units from data 
@@ -122,15 +155,36 @@ def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list):
         dms &= reduce(operator.and_, drift_regressors) # adds iteratively to dm 
 
     if cfg_GLM['do_short_sep']:
-        ss_regressors = get_short_regressors(runs_updated, pruned_chans_list, geo3d, cfg_GLM)
+        if short_sep_runs is not None:
+            # Parcel-space Y_all has no source/detector geometry for split_long_short_channels,
+            # so build the short-sep regressor from the channel-space preprocessed runs instead,
+            # concatenated with the same per-run time offsets as Y_all.
+            # _, _, short_sep_runs_updated = concatenate_runs(short_sep_runs, 'od')
+            _, _, short_sep_runs_updated = concatenate_runs(short_sep_runs, rec_str)
+        else:
+            short_sep_runs_updated = runs_updated
+        ss_regressors = get_short_regressors(short_sep_runs_updated, pruned_chans_list, geo3d, cfg_GLM)
         dms &= reduce(operator.and_, ss_regressors)
+
+    if cfg_GLM.get('do_global_signal', False):
+        dms &= glm.design_matrix.global_mean_regressor(Y_all)
 
     dms.common = dms.common.fillna(0)
 
     # 3. get betas and covariance
     results = glm.fit(Y_all, dms, noise_model=cfg_GLM['noise_model'])  # fit GLM to get betas and covariance
-    betas = results.sm.params  # this is the beta estimates for each regressor in the design matrix, it has dimensions regressor and measurement, 
+    betas = results.sm.params  # this is the beta estimates for each regressor in the design matrix, it has dimensions regressor and measurement,
     cov_params = results.sm.cov_params() # this is the covariance of the beta estimates, which we can use to get MSE of the HRF estimate. It has dimensions regressor_r and regressor_c, ctions
+
+    # 3b. reweight the beta covariance by the image-recon posterior variance, if given
+    # (dequantify Y first so this is a plain-magnitude computation, matching how
+    # posterior_var is stored -- see docstring)
+    if posterior_var is not None:
+        Y_plain = Y_all.pint.dequantify()
+        posterior_var_plain = posterior_var.pint.dequantify() if hasattr(posterior_var, 'pint') else posterior_var
+        resid = Y_plain - xr.dot(dms.common, betas, dim='regressor') # residuals of the GLM fit, dims: time, spatial_dim, chromo
+        var_resid = resid.var('time')  # time-varying variance of the residuals, dims: spatial_dim, chromo
+        weight = (var_resid + posterior_var_plain) / var_resid  # >= 1 elementwise
 
     # 4. estimate HRF and MSE
     basis_hrf = basis_func(Y_all)
@@ -138,6 +192,7 @@ def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list):
     trial_type_list = cfg_hrf_estimation['stim_lst']
 
     hrf_mse_list = []
+    hrf_mse_corrected_list = []
     hrf_estimate_list = []
     bad_chans_mse_lst = []
 
@@ -151,12 +206,18 @@ def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list):
                                     )
         hrf_mse = estimate_HRF_cov(cov_hrf, basis_hrf)
 
-        # get bad mse channels 
+        if posterior_var is not None:
+            cov_hrf_reweighted = weight * cov_hrf
+            hrf_mse_corrected = estimate_HRF_cov(cov_hrf_reweighted, basis_hrf)
+            hrf_mse_corrected_list.append(hrf_mse_corrected.expand_dims({'trial_type': [trial_type]}))
+
+        # get bad mse channels/parcels
+        spatial_dim = cdc.get_spatial_dimension(hrf_mse)
         if 'chromo' in hrf_mse.dims:
             bad_mask = (hrf_mse == 0).any(dim=["time", "chromo"])
         else:
             bad_mask = (hrf_mse == 0).any(dim=["time", "wavelength"])
-        bad_chans_mse = hrf_mse.channel[bad_mask].values
+        bad_chans_mse = hrf_mse[spatial_dim][bad_mask].values
 
         hrf_estimate = hrf_estimate.expand_dims({'trial_type': [ trial_type ] })
         hrf_mse = hrf_mse.expand_dims({'trial_type': [ trial_type ] })
@@ -169,10 +230,18 @@ def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list):
     hrf_estimate = hrf_estimate.pint.quantify(target_units)
 
     hrf_mse = xr.concat(hrf_mse_list, dim='trial_type')
-    hrf_mse = hrf_mse.pint.quantify(target_units**2)  
+    hrf_mse = hrf_mse.pint.quantify(target_units**2)
 
-    # set universal time so that all hrfs have the same time base 
-    fs = frequency.sampling_rate(runs[0][rec_str]).to('Hz')
+    if posterior_var is not None:
+        hrf_mse_corrected = xr.concat(hrf_mse_corrected_list, dim='trial_type')
+        hrf_mse_corrected = hrf_mse_corrected.pint.quantify(target_units**2)
+    else:
+        hrf_mse_corrected = None
+
+    # set universal time so that all hrfs have the same time base
+    # (runs_updated is always a plain DataArray regardless of whether the caller
+    # passed cedalion Records or (ts, stim) tuples -- see concatenate_runs())
+    fs = frequency.sampling_rate(runs_updated[0]).to('Hz')
     before_samples = int(np.ceil((cfg_hrf_estimation['t_pre'] * fs).magnitude))
     after_samples = int(np.ceil((cfg_hrf_estimation['t_post'] * fs).magnitude))
 
@@ -181,12 +250,16 @@ def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list):
     reltime = np.linspace(-before_samples * dT, after_samples * dT, n_timepoints)
 
     hrf_mse = hrf_mse.assign_coords({'time': reltime})
-    hrf_mse.time.attrs['units'] = target_units_time 
+    hrf_mse.time.attrs['units'] = target_units_time
+
+    if hrf_mse_corrected is not None:
+        hrf_mse_corrected = hrf_mse_corrected.assign_coords({'time': reltime})
+        hrf_mse_corrected.time.attrs['units'] = target_units_time
 
     hrf_estimate = hrf_estimate.assign_coords({'time': reltime})
-    hrf_estimate.time.attrs['units'] = target_units_time  
+    hrf_estimate.time.attrs['units'] = target_units_time
 
-    return results, hrf_estimate, hrf_mse, bad_chans_mse_lst
+    return results, hrf_estimate, hrf_mse, hrf_mse_corrected, bad_chans_mse_lst
 
 
 def estimate_HRF_cov(cov, basis_hrf):
@@ -264,22 +337,39 @@ def get_short_regressors(runs, pruned_chans_list, geo3d, cfg_GLM):
     return ss_regressors
 
 def concatenate_runs(runs, rec_str):
+    """Concatenate per-run time series into one continuous timeline.
+
+    Each element of ``runs`` is either a cedalion Record (channel-space runs, loaded
+    from a preprocessed snirf) or a plain (ts, stim) tuple (parcel-space runs, loaded
+    from an image-recon .nc file, which has no Record to carry ``rec_str``/``.stim``).
+    """
 
     CURRENT_OFFSET = 0
     runs_updated = []
     stim_updated = []
 
-    for rec in runs:
+    for run in runs:
 
-        ts = rec[rec_str]
+        if isinstance(run, tuple):
+            ts, stim = run
+        else:
+            rec = run
+            ts = rec[rec_str]
+            stim = rec.stim
+        
+        units_attr = ts.time.attrs.get('units') # grab units
+
         time = ts.time.values
         new_time = time + CURRENT_OFFSET
 
         ts_new = ts.copy(deep=True)
-        ts_new = ts_new.pint.to('molar')
+        if rec_str == 'conc':
+            ts_new = ts_new.pint.to('molar')
         ts_new = ts_new.assign_coords(time=new_time)
 
-        stim = rec.stim
+        if units_attr is not None:
+            ts_new.time.attrs['units'] = units_attr # reassign units
+
         stim_shift = stim.copy()
         stim_shift['onset'] += CURRENT_OFFSET
 

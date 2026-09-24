@@ -1,8 +1,6 @@
-  GNU nano 8.0                       .gitignore
-
-
 pysnirf2
 .snakemake
 __pycache__
 *.pyc
 pysnirf2.log
+.DS_Store
