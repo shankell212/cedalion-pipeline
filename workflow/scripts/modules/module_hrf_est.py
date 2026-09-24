@@ -73,7 +73,7 @@ def blockaverage(epochs_all, cfg_hrf_estimation):
     return all_trial_blockaverage, all_trial_mse, bad_chans_mse_lst
 
 
-def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list, short_sep_runs=None):
+def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list, short_sep_runs=None, posterior_var=None):
     """Fit the HRF GLM.
 
     ``runs`` is the data being modeled -- channel-space (rec_str = 'od'/'conc') for
@@ -89,6 +89,21 @@ def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list, short_sep_runs=None)
     preprocessed runs here instead; this regressor is then a single shared covariate
     applied uniformly across all parcels, not a per-parcel geometric regressor.
     Defaults to ``runs`` (today's channel-space behavior, unchanged).
+
+    ``posterior_var``, if given, is the parcel-space Bayesian posterior variance of
+    the reconstructed input Y (dims: spatial_dim, chromo; dequantified, same
+    magnitude scale as Y), averaged across runs by the caller. When supplied, the
+    GLM's beta covariance is inflated by ``weight = (var_resid + posterior_var) /
+    var_resid`` before being projected into HRF-MSE, to account for the fact that Y
+    itself is an uncertain, reconstructed quantity rather than a direct measurement
+    (only meaningful for the reconfirst pipeline order, where image recon runs before
+    the GLM). When ``None`` (default, channel-space GLM), no correction is applied
+    and the corrected HRF-MSE return value is ``None``.
+
+    ``cfg_GLM['do_global_signal']``, if true, adds a single nuisance regressor equal
+    to the mean of ``Y_all`` across its spatial dimension (parcels, for the reconfirst
+    pipeline order) at every timepoint, via
+    ``cedalion.models.glm.design_matrix.global_mean_regressor``. Defaults to false.
     """
     cfg_GLM = cfg_hrf_estimation['GLM']
     rec_str = cfg_hrf_estimation['rec_str']
@@ -152,12 +167,25 @@ def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list, short_sep_runs=None)
         ss_regressors = get_short_regressors(short_sep_runs_updated, pruned_chans_list, geo3d, cfg_GLM)
         dms &= reduce(operator.and_, ss_regressors)
 
+    if cfg_GLM.get('do_global_signal', False):
+        dms &= glm.design_matrix.global_mean_regressor(Y_all)
+
     dms.common = dms.common.fillna(0)
 
     # 3. get betas and covariance
     results = glm.fit(Y_all, dms, noise_model=cfg_GLM['noise_model'])  # fit GLM to get betas and covariance
-    betas = results.sm.params  # this is the beta estimates for each regressor in the design matrix, it has dimensions regressor and measurement, 
+    betas = results.sm.params  # this is the beta estimates for each regressor in the design matrix, it has dimensions regressor and measurement,
     cov_params = results.sm.cov_params() # this is the covariance of the beta estimates, which we can use to get MSE of the HRF estimate. It has dimensions regressor_r and regressor_c, ctions
+
+    # 3b. reweight the beta covariance by the image-recon posterior variance, if given
+    # (dequantify Y first so this is a plain-magnitude computation, matching how
+    # posterior_var is stored -- see docstring)
+    if posterior_var is not None:
+        Y_plain = Y_all.pint.dequantify()
+        posterior_var_plain = posterior_var.pint.dequantify() if hasattr(posterior_var, 'pint') else posterior_var
+        resid = Y_plain - xr.dot(dms.common, betas, dim='regressor') # residuals of the GLM fit, dims: time, spatial_dim, chromo
+        var_resid = resid.var('time')  # time-varying variance of the residuals, dims: spatial_dim, chromo
+        weight = (var_resid + posterior_var_plain) / var_resid  # >= 1 elementwise
 
     # 4. estimate HRF and MSE
     basis_hrf = basis_func(Y_all)
@@ -165,6 +193,7 @@ def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list, short_sep_runs=None)
     trial_type_list = cfg_hrf_estimation['stim_lst']
 
     hrf_mse_list = []
+    hrf_mse_corrected_list = []
     hrf_estimate_list = []
     bad_chans_mse_lst = []
 
@@ -177,6 +206,11 @@ def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list, short_sep_runs=None)
                             regressor_c=cov_params.regressor_c.str.startswith(f"HRF {trial_type}") 
                                     )
         hrf_mse = estimate_HRF_cov(cov_hrf, basis_hrf)
+
+        if posterior_var is not None:
+            cov_hrf_reweighted = weight * cov_hrf
+            hrf_mse_corrected = estimate_HRF_cov(cov_hrf_reweighted, basis_hrf)
+            hrf_mse_corrected_list.append(hrf_mse_corrected.expand_dims({'trial_type': [trial_type]}))
 
         # get bad mse channels/parcels
         spatial_dim = cdc.get_spatial_dimension(hrf_mse)
@@ -197,7 +231,13 @@ def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list, short_sep_runs=None)
     hrf_estimate = hrf_estimate.pint.quantify(target_units)
 
     hrf_mse = xr.concat(hrf_mse_list, dim='trial_type')
-    hrf_mse = hrf_mse.pint.quantify(target_units**2)  
+    hrf_mse = hrf_mse.pint.quantify(target_units**2)
+
+    if posterior_var is not None:
+        hrf_mse_corrected = xr.concat(hrf_mse_corrected_list, dim='trial_type')
+        hrf_mse_corrected = hrf_mse_corrected.pint.quantify(target_units**2)
+    else:
+        hrf_mse_corrected = None
 
     # set universal time so that all hrfs have the same time base
     # (runs_updated is always a plain DataArray regardless of whether the caller
@@ -211,12 +251,16 @@ def GLM(runs, cfg_hrf_estimation, geo3d, pruned_chans_list, short_sep_runs=None)
     reltime = np.linspace(-before_samples * dT, after_samples * dT, n_timepoints)
 
     hrf_mse = hrf_mse.assign_coords({'time': reltime})
-    hrf_mse.time.attrs['units'] = target_units_time 
+    hrf_mse.time.attrs['units'] = target_units_time
+
+    if hrf_mse_corrected is not None:
+        hrf_mse_corrected = hrf_mse_corrected.assign_coords({'time': reltime})
+        hrf_mse_corrected.time.attrs['units'] = target_units_time
 
     hrf_estimate = hrf_estimate.assign_coords({'time': reltime})
-    hrf_estimate.time.attrs['units'] = target_units_time  
+    hrf_estimate.time.attrs['units'] = target_units_time
 
-    return results, hrf_estimate, hrf_mse, bad_chans_mse_lst
+    return results, hrf_estimate, hrf_mse, hrf_mse_corrected, bad_chans_mse_lst
 
 
 def estimate_HRF_cov(cov, basis_hrf):

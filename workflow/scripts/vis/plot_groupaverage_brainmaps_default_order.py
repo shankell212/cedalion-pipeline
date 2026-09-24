@@ -47,6 +47,7 @@ matplotlib):
 Edit the CONFIG block below if your paths/params differ.
 """
 
+#%%
 import os
 import numpy as np
 import xarray as xr
@@ -68,7 +69,7 @@ warnings.filterwarnings('ignore')
 # -----------------------------------------------------------------------------
 
 ROOT_DIR = "/Users/shannonkelley/Documents/fNIRS/Data/test_data_cedalion_smk/data"
-DERIV_SUBFOLDER = "test_order2"
+DERIV_SUBFOLDER = "test_norm"
 TASK = "BS"
 HEAD_MODEL = "icbm152"          # image_recon.generate_sensitivity.head_model in config
 
@@ -110,6 +111,14 @@ CHROMO_LIST = ["HbO", "HbR"]
 VIEW_LIST = ["brain", "scalp"]         # this data spans both, unlike reconfirst's
 TRIAL_TYPES = None                     # None = plot every trial_type found in the file
 
+# Only used if the loaded file actually has a time/reltime dimension -- i.e.
+# image_recon.mag.enable was false upstream, so image_recon.py reconstructed the
+# full HRF curve instead of a pre-averaged magnitude. Averages over this (t0, t1)
+# window (seconds relative to stim onset) before plotting. If the file has no time
+# dimension (mag.enable=true, the usual case -- GROUPAVG_SUFFIX's _mag_<t0>_<t1>
+# already tells you the window that was used upstream), this is ignored entirely.
+TIME_WINDOW_S = (5.0, 8.0)
+
 
 # %% ------------------------------------------------------------------------------
 # LOAD DATA
@@ -126,12 +135,13 @@ else:
 n_vertex = ds.sizes.get("vertex")
 print(f"Trial types found: {trial_types}")
 print(f"Vertices: {n_vertex}, chromo: {list(ds['chromo'].values)}")
-if "time" in ds.dims or "reltime" in ds.dims:
-    print("WARNING: this file has a time/reltime dimension after all -- the "
-          "assumption that image_recon.mag.enable=true (static, no time axis) "
-          "doesn't hold for your config. This script doesn't handle that case; "
-          "see plot_groupaverage_brainmaps.py's ANIMATE handling for the pattern "
-          "to adapt.")
+
+TIME_DIM = "time" if "time" in ds.dims else ("reltime" if "reltime" in ds.dims else None)
+if TIME_DIM is not None:
+    print(f"File has a '{TIME_DIM}' dimension -- image_recon.mag.enable must be "
+          f"false upstream, so this is the full HRF curve, not a pre-averaged "
+          f"magnitude. Will average over TIME_WINDOW_S={TIME_WINDOW_S} before "
+          f"plotting (full range: 0 to {float(ds[TIME_DIM].max()):.2f}s).")
 
 
 # %% ------------------------------------------------------------------------------
@@ -192,6 +202,20 @@ for var_key, var_name in VARS_TO_PLOT.items():
         # internally regardless of view_type.
         data_tt = data_tt.transpose("vertex", ...)
 
+        if TIME_DIM is not None:
+            t0, t1 = TIME_WINDOW_S
+            data_tt_win = data_tt.sel({TIME_DIM: slice(t0, t1)})
+            if data_tt_win.sizes[TIME_DIM] == 0:
+                raise ValueError(
+                    f"No '{TIME_DIM}' samples found in TIME_WINDOW_S={TIME_WINDOW_S}s "
+                    f"-- check the window against the file's actual range (0 to "
+                    f"{float(ds[TIME_DIM].max()):.2f}s)."
+                )
+            data_tt = data_tt_win.mean(TIME_DIM)
+            window_label = f"_{t0:g}-{t1:g}s"
+        else:
+            window_label = ""
+
         for chromo in CHROMO_LIST:
             clim_max = float(
                 np.nanmax(np.abs(
@@ -203,7 +227,7 @@ for var_key, var_name in VARS_TO_PLOT.items():
             for view in VIEW_LIST:
                 hbx = f"{'hbo' if chromo == 'HbO' else 'hbr'}_{view}"
                 title_str = f"{trial_type} {chromo} {var_key} {view}"
-                filename = f"GROUPAVG_{trial_type}_{var_key}_{hbx}"
+                filename = f"GROUPAVG_{trial_type}_{var_key}_{hbx}{window_label}"
                 save_file_path = os.path.join(SAVE_DIR, filename)
 
                 print(f"Rendering: {filename}")
@@ -221,3 +245,5 @@ for var_key, var_name in VARS_TO_PLOT.items():
                 )
 
 print(f"\nDone. Plots saved under:\n  {SAVE_DIR}")
+
+# %%

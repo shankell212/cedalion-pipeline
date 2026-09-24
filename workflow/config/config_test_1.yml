@@ -1,6 +1,6 @@
 dataset:
   root_dir: "/Users/shannonkelley/Documents/fNIRS/Data/test_data_cedalion_smk/data"
-  derivatives_subfolder: "test_order2"
+  derivatives_subfolder: "test_norm"
   #subject: ["586", "587", "592", "618", "621"] 
   subjects_to_exclude: ["587", "618"]
   task: ["BS"]                    

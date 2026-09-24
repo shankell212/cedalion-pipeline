@@ -40,7 +40,7 @@ matplotlib) -- run it on your machine, e.g.:
 
 Edit the CONFIG block below if your paths/params differ.
 """
-
+#%%
 import os
 import numpy as np
 import xarray as xr
@@ -62,7 +62,7 @@ warnings.filterwarnings('ignore')
 # -----------------------------------------------------------------------------
 
 ROOT_DIR = "/Users/shannonkelley/Documents/fNIRS/Data/test_data_cedalion_smk/data"
-DERIV_SUBFOLDER = "test_new_ced_reconfirst"
+DERIV_SUBFOLDER = "test_reconfirst_newstat_newparams" #"test_norm"  # must match Snakefile_reconfirst.yaml's dataset.derivatives_subfolder
 TASK = "BS"
 HEAD_MODEL = "icbm152"          # image_recon.generate_sensitivity.head_model in config
 
@@ -101,16 +101,20 @@ SAVE_DIR = os.path.join(
 # saved dataset, so no recomputation needed (unlike image_recon.py's per-run plots).
 VARS_TO_PLOT = {
     "mag": "group_average_weighted",
-    "tstat": "tstat",
+    # "tstat": "tstat",
+    # "stderr": "total_stderr"
 }
 
 CHROMO_LIST = ["HbO", "HbR"]          # which chromophores to render
 TRIAL_TYPES = None                    # None = plot every trial_type found in the file
 
 ANIMATE = False   # True -> one .gif per condition/chromo/var, animated across the
-                   # full epoch (t_pre..t_post). False -> a single static .png at
-                   # PEAK_TIME_S (faster; good for a first look).
-PEAK_TIME_S = 5.0  # only used when ANIMATE = False; picks the nearest time sample
+                   # full epoch (t_pre..t_post). False -> a single static .png,
+                   # averaged over TIME_WINDOW_S (faster; good for a first look).
+TIME_WINDOW_S = (5.0, 8.0)  # only used when ANIMATE = False. (t0, t1) seconds
+                             # relative to stim onset -- the time series is averaged
+                             # over this window before plotting, same convention as
+                             # the default order's image_recon `mag.t_win`.
 
 
 # %% ------------------------------------------------------------------------------
@@ -237,18 +241,28 @@ for var_key, var_name in VARS_TO_PLOT.items():
         data_vertex = parcel_to_vertex(data_tt)
         data_vertex = data_vertex.where(sensitivity_mask)
 
-        # pick the time frame (or full time range for animation) once, before the
+        # pick the time window (or full time range for animation) once, before the
         # chromo loop, so both chromo plots use the exact same underlying data
         if not ANIMATE:
-            data_vertex = data_vertex.sel(time=PEAK_TIME_S, method="nearest")
-            plotted_time = float(data_vertex.time)
+            t0, t1 = TIME_WINDOW_S
+            data_vertex = data_vertex.sel(time=slice(t0, t1))
+            if data_vertex.sizes.get("time", 0) == 0:
+                raise ValueError(
+                    f"No time samples found in TIME_WINDOW_S={TIME_WINDOW_S}s -- "
+                    "check the window against the file's actual time range "
+                    f"(0 to {float(data.time.max()):.2f}s)."
+                )
+            data_vertex = data_vertex.mean("time")
+            window_label = f"{t0:g}-{t1:g}s"
         else:
-            plotted_time = None
+            window_label = None
 
         for chromo in CHROMO_LIST:
             hbx = "hbo_brain" if chromo == "HbO" else "hbr_brain"
             title_str = f"{trial_type} {chromo} {var_key}"
             filename = f"GROUPAVG_{trial_type}_{var_key}_{hbx}"
+            if not ANIMATE:
+                filename += f"_{window_label}"
             save_file_path = os.path.join(SAVE_DIR, filename)
 
             clim_max = float(
@@ -256,8 +270,8 @@ for var_key, var_name in VARS_TO_PLOT.items():
                     data_vertex.sel(chromo=chromo).pint.dequantify().values
                 ))
             )
-            # clim = (-clim_max, clim_max)
-            clim = (-1.3e-6, 1.3e-6)  # hard-coded to match the per-run plots for now
+            clim = (-clim_max, clim_max)
+            # clim = (-1.3e-6, 1.3e-6)  # hard-coded to match the per-run plots for now
 
             if ANIMATE:
                 print(f"Rendering GIF: {filename}")
@@ -275,7 +289,7 @@ for var_key, var_name in VARS_TO_PLOT.items():
                     wdw_size=(1024, 768),
                 )
             else:
-                print(f"Rendering static frame ({plotted_time:.2f}s): {filename}")
+                print(f"Rendering static frame (avg {window_label}): {filename}")
                 image_recon_multi_view(
                     data_vertex,
                     head,
@@ -290,3 +304,5 @@ for var_key, var_name in VARS_TO_PLOT.items():
                 )
 
 print(f"\nDone. Plots saved under:\n  {SAVE_DIR}")
+
+# %%

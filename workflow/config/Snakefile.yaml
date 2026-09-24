@@ -55,6 +55,7 @@ hrf_estimation:   #  !!! make these constants instead?
    do_short_sep: true
    distance_threshold: "20 mm"
    short_channel_method : "mean"
+   do_global_signal: false  # add a nuisance regressor = mean of Y_all across the spatial dim (channels here) at each timepoint -- see module_hrf_est.GLM
    noise_model: "ar_irls"    #  ols, rls, wls, ar_irls, gls, glsar
    basis_func: "gaussian_kernels"
    basis_func_params:

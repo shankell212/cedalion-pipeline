@@ -66,6 +66,7 @@ def hrf_est_func(cfg_hrf, run_files, data_quality_files, out_file, event_files=N
     pruned_chans_lst = []
     bad_channels_runs = []
     preproc_runs = []  # channel-space Records, only populated for parcel-space + do_short_sep GLM
+    posterior_var_runs = []  # parcel-space image-recon posterior variance (X_mse), only populated for parcel-space input
 
     for file_idx, run in enumerate(run_files):        # loop through files and concatinate runs for GLM and epochs for blockaverage
 
@@ -79,6 +80,7 @@ def hrf_est_func(cfg_hrf, run_files, data_quality_files, out_file, event_files=N
             # Parcel-space per-run reconstruction (Snakefile_reconfirst: image recon -> HRF estimation)
             ds_run = xr.open_dataset(run)
             ts = ds_run['Xs'].pint.quantify()
+            posterior_var_runs.append(ds_run['X_mse'].pint.quantify())
             geo2d = ds_run['geo2d']
             geo3d = ds_run['geo3d']
             ds_run.close()
@@ -180,16 +182,26 @@ def hrf_est_func(cfg_hrf, run_files, data_quality_files, out_file, event_files=N
     # bad_chans_amp = list(set(bad_chans_amp_flat))
     
 
+    # Average posterior variance (image-recon uncertainty) across runs, since the GLM
+    # concatenates all runs into a single fit. None for channel-space input (default
+    # Snakefile), where image recon hasn't happened yet at GLM time.
+    posterior_var = (
+        xr.concat(posterior_var_runs, dim='run').mean('run')
+        if posterior_var_runs else None
+    )
+
     if cfg_hrf['GLM']['enable']:
         print('Running GLM HRF estimation')
-        glm_results, hrf_estimate, hrf_mse, bad_chans_mse_lst = mhrf.GLM(
+        glm_results, hrf_estimate, hrf_mse, hrf_mse_corrected, bad_chans_mse_lst = mhrf.GLM(
             all_runs, cfg_hrf, geo3d, pruned_chans_lst,
             short_sep_runs = preproc_runs if preproc_runs else None,
+            posterior_var = posterior_var,
         )
     else:
         print('Running Block Average HRF estimation')
         hrf_estimate, hrf_mse, bad_chans_mse_lst = mhrf.blockaverage(epochs_all, cfg_hrf)
         glm_results = None
+        hrf_mse_corrected = None
 
     #weights = glm_results.sm.
     
@@ -202,6 +214,9 @@ def hrf_est_func(cfg_hrf, run_files, data_quality_files, out_file, event_files=N
     ds_results = xr.Dataset()
     ds_results['hrf_est'] = hrf_estimate.pint.dequantify()  # dequant to save, will re-quant in groupaverage
     ds_results['mse_t'] = hrf_mse.pint.dequantify() # dequant to save, will re-quant in groupaverage
+    if hrf_mse_corrected is not None:
+        # HRF MSE reweighted by image-recon posterior variance (see module_hrf_est.GLM)
+        ds_results['mse_t_corrected'] = hrf_mse_corrected.pint.dequantify()
     ds_results['bad_channels'] = xr.DataArray(bad_channels_all, dims='bad_channel')
     # geo2d/geo3d from the last processed run (same as before -- previously read via
     # rec.geo2d/rec.geo3d, which is undefined for parcel-space input since there's no

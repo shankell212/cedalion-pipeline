@@ -229,7 +229,6 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], roo
         
         # calculate image noise
         #FIXME: HAVE OPTION IN CONFIG IF CALCULATING NORMAL OR POSTERIOR?
-            # is the old way just wrong or can it still be an option?
         if cfg_img_recon['noise_est_method'] == 'posterior':
             X_mse = recon_obj.get_image_noise_posterior(C_meas) #FIXME: this gets rid of trial type coord somewhere
         elif cfg_img_recon['noise_est_method'] == 'measurement':
@@ -286,11 +285,7 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], roo
         ds_results['geo3d'] = geo3d_clean
 
     ds_results.to_netcdf(out, mode='w') # save as netcdf file 
-
-    #NOTE: we have Xmse for if using Cmeas or not, so do we save for both cases?
-        # group avg would fail without. 
-        # we just did not take in account the covariance of the data when reconstructing the image
-    
+ 
     
     # #%% build and save plots
 

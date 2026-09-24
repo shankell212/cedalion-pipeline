@@ -72,8 +72,12 @@ def groupaverage_func(cfg_dataset, cfg_groupaverage, cfg_hrf, file_names, out):
                 dims=geo3d['type'].dims)
 
             if 'hrf' in file_names[0]:  # if hrf variable names are this
-                hrf_est_tmp = results['hrf_est'].pint.quantify() 
-                mse_t_tmp = results['mse_t'].pint.quantify()      
+                # "corrected" selects mse_t_corrected (reweighted by image-recon
+                # posterior variance, see module_hrf_est.GLM), only present when
+                # hrf_estimation ran the GLM on parcel-space (reconfirst) input.
+                mse_var = 'mse_t_corrected' if cfg_groupaverage.get('mse_source') == 'corrected' else 'mse_t'
+                hrf_est_tmp = results['hrf_est'].pint.quantify()
+                mse_t_tmp = results[mse_var].pint.quantify()
             else:
                 hrf_est_tmp = results['Xs'].pint.quantify()
                 mse_t_tmp = results['X_mse'].pint.quantify()
