@@ -7,7 +7,6 @@ import cedalion.nirs
 import cedalion.sigproc.frequency as frequency
 import cedalion.models.glm as glm
 import xarray as xr
-import matplotlib.pyplot as p
 from cedalion import units
 import numpy as np
 import pandas as pd

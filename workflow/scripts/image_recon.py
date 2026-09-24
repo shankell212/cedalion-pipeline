@@ -68,14 +68,6 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], roo
 
     #%% run image recon
     
-    """
-    do the image reconstruction of each subject independently 
-    - this is the unweighted subject block average magnitude 
-    - then reconstruct their individual MSE
-    - then get the weighted average in image space 
-    - get the total standard error using between + within subject MSE 
-    """
-    
     # load files
     if 'hrf' in file_name:
         results = xr.open_dataset(file_name) # load in data
@@ -118,7 +110,7 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], roo
 
     # Loop through trial types
     all_trial_Xs = None
-    for trial_type in cfg_hrf['stim_lst']: #NOTE: do we still need to loop through trial types here?
+    for trial_type in cfg_hrf['stim_lst']:
         
         print( f'   Getting images for trial type = {trial_type}')       
 
@@ -171,12 +163,8 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], roo
              od_mse_mag = od_mse.copy() # if mse not loaded in, copy od_mse
 
         C_meas = od_mse_mag.pint.dequantify()
-       
-        #FIXME: save G (spatial basis) in derivatives/cedalion/forward_model  -> for brain and scalp separately and sigma
-       
-        if cfg_sb['enable'] and SB:  # do I need both
-            #fil_path, after = Adot_path.split("fw", 1)
-            #print(  'Performing image recon with SB')
+              
+        if cfg_sb['enable'] and SB: 
             with gzip.open(SB, 'rb') as f:
                 sbf = pickle.load(f)
 
@@ -210,8 +198,6 @@ def img_recon_func(cfg_img_recon, cfg_hrf, file_name, Adot_path, out, SB=[], roo
             Xs = recon_obj.reconstruct(od_ts_mag)
         
         # calculate image noise
-        #FIXME: HAVE OPTION IN CONFIG IF CALCULATING NORMAL OR POSTERIOR?
-            # is the old way just wrong or can it still be an option?
         if cfg_img_recon['noise_est_method'] == 'posterior':
             X_mse = recon_obj.get_image_noise_posterior(C_meas) #FIXME: this gets rid of trial type coord somewhere
         elif cfg_img_recon['noise_est_method'] == 'measurement':
